@@ -310,6 +310,35 @@ def _toolchain_gn():
         shutil.copy2(out / 'gn', gn)
 
 
+WINSYSROOT = BUILD / 'winsysroot'
+WINSYSROOT_STORE = BUILD / 'winsysroot.ciopfs'
+
+
+def ensure_winsysroot():
+    """Mount the Windows toolchain on a case-insensitive file system.
+
+    Windows headers are included with arbitrary casing (`ObjBase.h` for
+    `objbase.h`...), which only works on a case-insensitive file system.
+    Like Chromium's own cross-build, we use ciopfs (FUSE): files live
+    lower-cased in winsysroot.ciopfs and are served at winsysroot. A FUSE mount
+    does not survive a reboot, so every step that needs it calls this.
+    """
+    if os.path.ismount(WINSYSROOT):
+        return
+    ciopfs = TOOLS / 'ciopfs'
+    if not ciopfs.exists():
+        sha1 = (SRC / 'build/ciopfs.sha1').read_text().strip()
+        download(_gcs('chromium-browser-clang/ciopfs', sha1), ciopfs)
+        if hashlib.sha1(ciopfs.read_bytes()).hexdigest() != sha1:
+            ciopfs.unlink()
+            raise SystemExit('ciopfs: sha1 mismatch')
+        ciopfs.chmod(0o755)
+    WINSYSROOT.mkdir(parents=True, exist_ok=True)
+    WINSYSROOT_STORE.mkdir(parents=True, exist_ok=True)
+    # Needs libfuse2 (Ubuntu: libfuse2t64).
+    run([ciopfs, '-o', 'use_ino', WINSYSROOT_STORE, WINSYSROOT])
+
+
 def _toolchain_msvc():
     """MSVC CRT + Windows SDK via xwin, laid out the way vs_toolchain.py expects.
 
@@ -321,13 +350,15 @@ def _toolchain_msvc():
     vs = (SRC / 'build/vs_toolchain.py').read_text()
     sdk_version = vs.split("SDK_VERSION = '")[1].split("'")[0]          # e.g. 10.0.28000.0
     short_sdk = '.'.join(sdk_version.split('.')[:3])                    # xwin drops the last .0
-    root = BUILD / 'winsysroot'
+    ensure_winsysroot()
+    root = WINSYSROOT
     kits = root / 'Windows Kits' / '10'
     msvc_root = root / 'VC/Tools/MSVC'
     complete = (kits / 'Include' / sdk_version).exists() and msvc_root.exists() and all(
         (d / 'lib' / cpu).exists() for d in msvc_root.iterdir() for cpu in ('x64', 'x86', 'arm64'))
     if not complete:
-        shutil.rmtree(root, ignore_errors=True)
+        for child in root.iterdir():
+            shutil.rmtree(child) if child.is_dir() else child.unlink()
         if os.environ.get('XWIN_ACCEPT_LICENSE') != '1':
             raise SystemExit('The MSVC CRT and Windows SDK are covered by the Microsoft Visual Studio license '
                              '(https://visualstudio.microsoft.com/license-terms/). Set XWIN_ACCEPT_LICENSE=1 to '
@@ -343,7 +374,10 @@ def _toolchain_msvc():
             text = vsman.read_text()
             if '/w kits2/' in text:
                 vsman.write_text(text.replace('/w kits2/', '/w%20kits2/'))
-        run(cmd + ['splat', '--use-winsysroot-style', '--preserve-ms-arch-notation', '--output', root])
+        # No casing symlinks: the case-insensitive mount makes them useless
+        # (and a symlink to its own lower-case name would loop).
+        run(cmd + ['splat', '--use-winsysroot-style', '--preserve-ms-arch-notation', '--disable-symlinks',
+                   '--output', root])
         for sub in ('Include', 'Lib'):
             src_dir = kits / sub / short_sdk
             if src_dir.exists():
@@ -569,6 +603,7 @@ def gn_args():
 
 
 def step_configure(args):
+    ensure_winsysroot()
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / 'args.gn').write_text(gn_args())
     env = {**os.environ, 'DEPOT_TOOLS_WIN_TOOLCHAIN': '1'}
@@ -581,6 +616,7 @@ def args_jobs():
 
 
 def step_build(args):
+    ensure_winsysroot()
     env = {**os.environ, 'DEPOT_TOOLS_WIN_TOOLCHAIN': '1'}
     targets = args.targets or ['chrome', 'mini_installer']
     cmd = [TOOLS / 'ninja', '-C', OUT, '-j', str(args_jobs())] + targets

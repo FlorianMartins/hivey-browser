@@ -14,6 +14,7 @@ Visual Studio installation is needed.
 | `msitools` (`msiextract`, `msiinfo`) | unpack two Windows SDK MSIs |
 | Python `cairosvg`, `Pillow` | render the icons |
 | [`xwin`](https://github.com/Jake-Shadle/xwin) (`cargo install --locked xwin`) | MSVC CRT + Windows SDK |
+| `libfuse2` (Ubuntu: `libfuse2t64`) | case-insensitive mount of the Windows toolchain (ciopfs) |
 | `systemd-run` (optional) | memory-capped build |
 
 Accepting the Microsoft license is required for the MSVC/SDK download: set
@@ -62,6 +63,13 @@ Microsoft's public sources instead, verifying every file:
 | clang, Rust, `rc`, sysroot, Node, PGO profile | Chromium's own storage buckets | sha1/sha256/md5 pinned by Chromium |
 
 Known quirks the script handles:
+
+- Windows code includes headers with arbitrary casing (`ObjBase.h` for
+  `objbase.h`). As in Chromium's own cross-build, the toolchain is served
+  from a case-insensitive FUSE mount (ciopfs, binary pinned by Chromium):
+  files are stored lower-cased in `winsysroot.ciopfs/` and mounted at
+  `winsysroot/`. The mount is (re)created automatically before
+  `toolchain`, `configure` and `build`, e.g. after a reboot.
 
 - Microsoft's July 2026 SDK manifest has a raw space in one URL path
   (`w kits2`), which xwin rejects; the cached manifest is percent-encoded.
