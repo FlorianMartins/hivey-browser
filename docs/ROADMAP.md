@@ -16,7 +16,7 @@ on a real Windows machine before moving on.
 
 ## Phase 1: Privacy
 
-- [x] Built-in ad/tracker blocker (EasyList + EasyPrivacy, request blocking), compiled; ruleset generation and Windows test pending
+- [x] Built-in ad/tracker blocker (EasyList + EasyPrivacy, request blocking): ruleset generated (4.1 MB), browser side compiled; Windows test pending
 - [ ] Cosmetic filtering (hide empty ad boxes)
 - [ ] Blocked-requests counter in the toolbar
 - [x] Fingerprinting deception on by default (Canvas, measureText, ClientRects)
