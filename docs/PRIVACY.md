@@ -30,11 +30,20 @@ Hivey Browser build flags additionally keep crash/usage reporting
 
 | Protection | Default | How to change it | Patch |
 | --- | --- | --- | --- |
+| Built-in ad and tracker blocker: EasyList + EasyPrivacy, applied to every site by Chromium's own subresource filter; nothing is downloaded at runtime and no per-site record is kept | **On** | Address bar icon > *Always allow on this site*, or Settings > Site settings > Ads | `privacy/builtin-adblock` |
 | Fingerprinting deception: tiny noise in Canvas image data, `measureText()` and `get*ClientRects()`, recomputed on every page load | **On** | `chrome://flags/#disable-fingerprinting-noise` | `privacy/fingerprinting-noise-on-by-default` |
 | Global Privacy Control: `Sec-GPC: 1` header and `navigator.globalPrivacyControl` tell sites not to sell or share your data | **On** | `chrome://flags/#enable-global-privacy-control` | `privacy/hardened-defaults` |
 | Always use secure connections (strict): warns before loading any page over plain HTTP | **On** | Settings > Privacy and security > Security | `privacy/hardened-defaults` |
 | Encrypted DNS (DNS-over-HTTPS, secure mode) through Quad9: your network provider no longer sees the sites you visit | **On** | Settings > Privacy and security > Security > Use secure DNS | `privacy/secure-dns-quad9` |
 | GPU vendor and model hidden from WebGL (`WEBGL_debug_renderer_info` returns a blank value, the same for every Hivey user) | **On** | `chrome://flags/#spoof-webgl-info` | `privacy/webgl-gpu-info-hidden` |
+
+About the blocker: the rules are converted at build time from EasyList and
+EasyPrivacy (their version and sha256 are logged in
+`$HB_BUILD_DIR/adblock-lists.json`) and ship inside the browser, so they
+update with each release. It blocks requests (ads, trackers); hiding the
+empty boxes left by ads (cosmetic filtering) is not supported by Chromium
+154 yet. EasyList and EasyPrivacy are maintained by The EasyList authors
+(https://easylist.to) and licensed under GPLv3 / CC BY-SA 3.0.
 
 Why Quad9: a Swiss non-profit, no IP address logging, and it refuses to
 resolve known malicious domains. Captive portals (hotel or airport Wi-Fi)

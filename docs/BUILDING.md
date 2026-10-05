@@ -12,6 +12,7 @@ Visual Studio installation is needed.
 | ~120 GB free disk, 32 GB RAM | source (11 GB) + build output |
 | `python3` ≥ 3.12, `git`, `curl`, `xz` | scripts and downloads |
 | `msitools` (`msiextract`, `msiinfo`) | unpack two Windows SDK MSIs |
+| `pkg-config` | configure the Linux host tools (blocker ruleset converter) |
 | Python `cairosvg`, `Pillow` | render the icons |
 | [`xwin`](https://github.com/Jake-Shadle/xwin) (`cargo install --locked xwin`) | MSVC CRT + Windows SDK |
 | `libfuse2` (Ubuntu: `libfuse2t64`) | case-insensitive mount of the Windows toolchain (ciopfs) |
@@ -40,6 +41,7 @@ progress. Any single step can be re-run with `hb.py <step> --force`.
 | `toolchain` | Fetches **build-only** tools (never shipped): Chromium's pinned clang + Windows runtime, Rust, the Linux sysroot, `rc`, Node, ninja, gn (built from source), the Windows PGO profile, Windows-only sources missing from the lite tarball, and the MSVC CRT + Windows SDK. Must run before `domsub`. |
 | `patch` | Applies ungoogled-chromium's patches, the product patches of ungoogled-chromium-windows, then `patches/series`. |
 | `brand` | Applies `brand/brand.json` (see below). |
+| `adblock` | Builds Chromium's `ruleset_converter` for the Linux host (`out/HostTools`), downloads EasyList and EasyPrivacy, converts them into the blocker ruleset embedded in `resources.pak`. Re-run with `--force` to refresh the lists. |
 | `domsub` | ungoogled-chromium's domain substitution. |
 | `configure` | Writes `out/Default/args.gn` and runs `gn gen`. |
 | `build` | `ninja chrome mini_installer`. |

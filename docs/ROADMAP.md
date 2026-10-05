@@ -16,7 +16,9 @@ on a real Windows machine before moving on.
 
 ## Phase 1: Privacy
 
-- [ ] Built-in content blocker (filter lists, no extension needed)
+- [x] Built-in ad/tracker blocker (EasyList + EasyPrivacy, request blocking), compiled; ruleset generation and Windows test pending
+- [ ] Cosmetic filtering (hide empty ad boxes)
+- [ ] Blocked-requests counter in the toolbar
 - [x] Fingerprinting deception on by default (Canvas, measureText, ClientRects)
 - [x] Global Privacy Control on by default
 - [x] GPU vendor/model hidden from WebGL

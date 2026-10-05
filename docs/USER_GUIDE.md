@@ -12,6 +12,10 @@ separate from Chrome or Chromium. Nothing is sent anywhere at startup.
 
 These protections are on without any setup:
 
+- **Ads and trackers blocked** on every site, with no extension. When
+  something was blocked, an icon appears in the address bar; click it and
+  choose *Always allow on this site* if a site breaks. All exceptions are in
+  *Settings > Privacy and security > Site settings > Ads*.
 - **Third-party cookies blocked.**
 - **Secure connections only.** Before loading a page over plain HTTP, the
   browser shows a warning; you can continue or go back. To relax it:

@@ -1,0 +1,219 @@
+# Built-in ad and tracker blocker: Chromium's subresource filter on every site with an EasyList + EasyPrivacy ruleset shipped in resources.pak, no Safe Browsing needed, no per-site trail, exceptions in Settings > Site settings > Ads.
+--- a/chrome/browser/browser_process_impl.cc
++++ b/chrome/browser/browser_process_impl.cc
+@@ -100,6 +100,8 @@
+ #include "chrome/common/pref_names.h"
+ #include "chrome/common/url_constants.h"
+ #include "chrome/grit/branded_strings.h"
++#include "chrome/grit/browser_resources.h"
++#include "chrome/browser/hivey/adblock_ruleset_version.h"
+ #include "chrome/installer/util/google_update_settings.h"
+ #include "components/activity_reporter/activity_reporter.h"
+ #include "components/application_locale_storage/application_locale_storage.h"
+@@ -1857,6 +1859,14 @@
+           subresource_filter::kSafeBrowsingRulesetConfig, local_state(),
+           user_data_dir,
+           subresource_filter::SafeBrowsingRulesetPublisher::Factory());
++
++  // Hivey: publish the ad/tracker ruleset shipped in resources.pak. A no-op
++  // when this version is already indexed in the profile.
++  subresource_filter::UnindexedRulesetInfo hivey_ruleset;
++  hivey_ruleset.content_version = HIVEY_ADBLOCK_RULESET_VERSION;
++  hivey_ruleset.resource_id = IDR_HIVEY_ADBLOCK_RULESET;
++  subresource_filter_ruleset_service_->IndexAndStoreAndPublishRulesetIfNeeded(
++      hivey_ruleset);
+ }
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+--- a/chrome/browser/browser_resources.grd
++++ b/chrome/browser/browser_resources.grd
+@@ -89,6 +89,9 @@
+       </if>
+     </structures>
+     <includes>
++      <!-- Hivey: built-in ad/tracker blocker ruleset, generated at build time by
++           scripts/hb.py (step "adblock") from EasyList and EasyPrivacy. -->
++      <include name="IDR_HIVEY_ADBLOCK_RULESET" file="hivey\adblock_ruleset.bin" type="BINDATA" compress="gzip" />
+       <if expr="is_win or is_macosx or is_linux">
+         <!-- First Run audio resources -->
+         <include name="IDR_INTRO_SOUND_ALL_SET_FLAC" file="resources\intro\sounds\all_set.flac" type="BINDATA" />
+--- a/chrome/browser/resources/settings/site_settings/site_settings_page.ts
++++ b/chrome/browser/resources/settings/site_settings/site_settings_page.ts
+@@ -60,8 +60,8 @@
+       icon: 'privacy:web-asset',
+       enabledLabel: 'siteSettingsAdsAllowed',
+       disabledLabel: 'siteSettingsAdsBlocked',
+-      shouldShow: () =>
+-          false,
++      // Hivey: built-in blocker exceptions are managed here.
++      shouldShow: () => true,
+     },
+     {
+       route: routes.SITE_SETTINGS_AUTO_VERIFY,
+--- a/components/subresource_filter/content/browser/content_subresource_filter_throttle_manager.cc
++++ b/components/subresource_filter/content/browser/content_subresource_filter_throttle_manager.cc
+@@ -560,7 +560,9 @@
+   CHECK(!navigation_handle.IsSameDocument());
+   CHECK(!ShouldInheritActivation(navigation_handle.GetURL()));
+ 
+-  if (IsInSubresourceFilterRoot(&navigation_handle) && database_manager_) {
++  // Hivey: the built-in blocker activates without a Safe Browsing database
++  // (the throttle then only applies the configurations, see its constructor).
++  if (IsInSubresourceFilterRoot(&navigation_handle)) {
+     registry.AddThrottle(std::make_unique<SafeBrowsingPageActivationThrottle>(
+         registry, profile_interaction_manager_.get(), database_manager_));
+   }
+--- a/components/subresource_filter/content/browser/profile_interaction_manager.cc
++++ b/components/subresource_filter/content/browser/profile_interaction_manager.cc
+@@ -109,13 +109,9 @@
+     *decision = ActivationDecision::ACTIVATED;
+   }
+ 
++  // Hivey: no per-site activation metadata. With filtering on every site it
++  // would record each site visited in the profile, outside of history.
+   const GURL& url(navigation_handle->GetURL());
+-  if (url.SchemeIsHTTPOrHTTPS()) {
+-    profile_context_->settings_manager()->SetSiteMetadataBasedOnActivation(
+-        url, effective_activation_level == mojom::ActivationLevel::kEnabled,
+-        SubresourceFilterContentSettingsManager::ActivationSource::
+-            kSafeBrowsing);
+-  }
+ 
+   if (profile_context_->settings_manager()->GetSitePermission(url) ==
+       CONTENT_SETTING_ALLOW) {
+@@ -134,37 +130,28 @@
+   CHECK(page_);
+   CHECK(page_->IsPrimary());
+ 
+-  const GURL& top_level_url = page_->GetMainDocument().GetLastCommittedURL();
+-  if (profile_context_->settings_manager()->ShouldShowUIForSite(
+-          top_level_url)) {
++  // Hivey: show the "blocked" icon in the address bar on every page where
++  // something was blocked (its bubble offers "Always allow on this site"),
++  // without recording per site when it was last shown.
+ #if BUILDFLAG(IS_ANDROID)
+-    if (messages::MessageDispatcherBridge::Get()
+-            ->IsMessagesEnabledForEmbedder()) {
+-      subresource_filter::AdsBlockedMessageDelegate::CreateForWebContents(
+-          GetWebContents());
+-      ads_blocked_message_delegate_ =
+-          subresource_filter::AdsBlockedMessageDelegate::FromWebContents(
+-              GetWebContents());
+-      ads_blocked_message_delegate_->ShowMessage();
+-    }
++  if (messages::MessageDispatcherBridge::Get()
++          ->IsMessagesEnabledForEmbedder()) {
++    subresource_filter::AdsBlockedMessageDelegate::CreateForWebContents(
++        GetWebContents());
++    ads_blocked_message_delegate_ =
++        subresource_filter::AdsBlockedMessageDelegate::FromWebContents(
++            GetWebContents());
++    ads_blocked_message_delegate_->ShowMessage();
++  }
+ #endif
+ 
+-    // TODO(crbug.com/40139135): Plumb the actual frame reference here
+-    // (it comes from
+-    // ContentSubresourceFilterThrottleManager::DidDisallowFirstSubresource,
+-    // which comes from a specific frame).
+-    content_settings::PageSpecificContentSettings* content_settings =
+-        content_settings::PageSpecificContentSettings::GetForFrame(
+-            &page_->GetMainDocument());
+-    content_settings->OnContentBlocked(ContentSettingsType::ADS);
+-
+-    ContentSubresourceFilterThrottleManager::LogAction(
+-        SubresourceFilterAction::kUIShown);
+-    profile_context_->settings_manager()->OnDidShowUI(top_level_url);
+-  } else {
+-    ContentSubresourceFilterThrottleManager::LogAction(
+-        SubresourceFilterAction::kUISuppressed);
+-  }
++  content_settings::PageSpecificContentSettings* content_settings =
++      content_settings::PageSpecificContentSettings::GetForFrame(
++          &page_->GetMainDocument());
++  content_settings->OnContentBlocked(ContentSettingsType::ADS);
++
++  ContentSubresourceFilterThrottleManager::LogAction(
++      SubresourceFilterAction::kUIShown);
+ }
+ 
+ content_settings::CookieSettings*
+--- a/components/subresource_filter/content/browser/safe_browsing_page_activation_throttle.cc
++++ b/components/subresource_filter/content/browser/safe_browsing_page_activation_throttle.cc
+@@ -91,10 +91,14 @@
+     : NavigationThrottle(registry),
+       database_client_(nullptr),
+       delegate_(delegate) {
+-  database_client_.reset(new SubresourceFilterSafeBrowsingClient(
+-      std::move(database_manager), this,
+-      base::SingleThreadTaskRunner::GetCurrentDefault(),
+-      delegate_ ? delegate_->GetV5GetHashProtocolManager() : nullptr));
++  // Hivey: without Safe Browsing there is no database; every URL is then
++  // reported as safe right away and only all-sites configurations apply.
++  if (database_manager) {
++    database_client_.reset(new SubresourceFilterSafeBrowsingClient(
++        std::move(database_manager), this,
++        base::SingleThreadTaskRunner::GetCurrentDefault(),
++        delegate_ ? delegate_->GetV5GetHashProtocolManager() : nullptr));
++  }
+ 
+   CHECK(IsInSubresourceFilterRoot(&registry.GetNavigationHandle()));
+   CheckCurrentUrl();
+@@ -165,9 +169,14 @@
+ SafeBrowsingPageActivationThrottle::ConfigResult::~ConfigResult() = default;
+ 
+ void SafeBrowsingPageActivationThrottle::CheckCurrentUrl() {
+-  CHECK(database_client_);
+   check_results_.emplace_back();
+   size_t id = check_results_.size() - 1;
++  if (!database_client_) {
++    check_results_.back().request_id = id;
++    check_results_.back().start_time = base::TimeTicks::Now();
++    check_results_.back().finished = true;
++    return;
++  }
+   database_client_->CheckUrl(navigation_handle()->GetURL(), id,
+                              base::TimeTicks::Now());
+ }
+--- a/components/subresource_filter/content/browser/subresource_filter_content_settings_manager.cc
++++ b/components/subresource_filter/content/browser/subresource_filter_content_settings_manager.cc
+@@ -248,6 +248,10 @@
+ 
+ bool SubresourceFilterContentSettingsManager::GetSiteActivationFromMetadata(
+     const GURL& url) {
++  // Hivey: the built-in blocker is active on every site.
++  if (url.SchemeIsHTTPOrHTTPS()) {
++    return true;
++  }
+   std::optional<base::DictValue> dict = GetSiteMetadata(url);
+ 
+   // If there is no dict, this is metadata V1, absence of metadata
+--- a/components/subresource_filter/core/browser/subresource_filter_features.cc
++++ b/components/subresource_filter/core/browser/subresource_filter_features.cc
+@@ -118,6 +118,15 @@
+   return result;
+ }
+ 
++// Hivey: the built-in blocker filters every site (EasyList + EasyPrivacy).
++// Priority 900: above the ad tagging dry run (500), so pages are enforced.
++Configuration MakePresetForHiveyLiveRunOnAllSites() {
++  Configuration config(mojom::ActivationLevel::kEnabled,
++                       ActivationScope::ALL_SITES);
++  config.activation_conditions.priority = 900;
++  return config;
++}
++
+ std::vector<Configuration> FillEnabledPresetConfigurations(
+     std::map<std::string, std::string>* params) {
+   // If ad tagging is enabled, turn on the dryrun automatically.
+@@ -132,7 +141,9 @@
+       {kPresetPerformanceTestingDryRunOnAllSites, ad_tagging_enabled,
+        &Configuration::MakePresetForPerformanceTestingDryRunOnAllSites},
+       {kPresetLiveRunForBetterAds, true,
+-       &Configuration::MakePresetForLiveRunForBetterAds}};
++       &Configuration::MakePresetForLiveRunForBetterAds},
++      {"hivey_liverun_on_all_sites", true,
++       &MakePresetForHiveyLiveRunOnAllSites}};
+ 
+   CommaSeparatedStrings enabled_presets(
+       TakeVariationParamOrReturnEmpty(params, kEnablePresetsParameterName));
