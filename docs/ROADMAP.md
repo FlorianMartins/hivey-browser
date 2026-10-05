@@ -28,7 +28,9 @@ on a real Windows machine before moving on.
 
 ## Phase 2: Resource control
 
-- [ ] RAM and CPU limits for the browser, configurable
+- [x] Memory Saver on by default
+- [~] RAM limiter (`chrome://flags/#hivey-memory-limit`, 2 to 12 GB) — written, waiting for its first compile
+- [ ] RAM limit in Settings > Performance, CPU limit
 - [ ] Tab sleeping with per-site exceptions
 - [ ] Memory saver
 - [ ] Live per-tab resource panel

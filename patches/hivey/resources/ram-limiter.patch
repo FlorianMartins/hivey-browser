@@ -1,0 +1,261 @@
+# RAM limiter (like Opera GX): keep the browser under a user-chosen memory limit by putting background tabs to sleep. chrome://flags/#hivey-memory-limit.
+--- a/chrome/browser/about_flags.cc
++++ b/chrome/browser/about_flags.cc
+@@ -307,6 +307,7 @@
+ #include "ui/android/ui_android_features.h"
+ #include "ui/base/device_form_factor.h"
+ #else  // BUILDFLAG(IS_ANDROID)
++#include "chrome/browser/performance_manager/policies/hivey_memory_limit_policy.h"
+ #include "chrome/browser/component_updater/iwa_key_distribution_component_installer.h"
+ #include "chrome/browser/media/router/discovery/access_code/access_code_cast_sink_service.h"
+ #include "chrome/browser/media/router/media_router_feature.h"
+@@ -4985,11 +4986,13 @@
+ // When adding a new choice, add it to the end of the list.
+ #include "chrome/browser/ungoogled_flag_choices.h"
+ #include "chrome/browser/bromite_flag_choices.h"
++#include "chrome/browser/hivey_flag_choices.h"
+ #include "chrome/browser/ungoogled_platform_flag_choices.h"
+ #include "chrome/browser/existing_switch_flag_choices.h"
+ const FeatureEntry kFeatureEntries[] = {
+ #include "chrome/browser/ungoogled_flag_entries.h"
+ #include "chrome/browser/bromite_flag_entries.h"
++#include "chrome/browser/hivey_flag_entries.h"
+ #include "chrome/browser/ungoogled_platform_flag_entries.h"
+ #include "chrome/browser/existing_switch_flag_entries.h"
+ // Include generated flags for flag unexpiry; see //docs/flag_expiry.md and
+--- a/chrome/browser/hivey_flag_choices.h
++++ b/chrome/browser/hivey_flag_choices.h
+@@ -0,0 +1,21 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_FLAG_CHOICES_H_
++#define CHROME_BROWSER_HIVEY_FLAG_CHOICES_H_
++#if !BUILDFLAG(IS_ANDROID)
++const FeatureEntry::FeatureParam kHiveyMemoryLimit2GB[] = {{"limit_mb", "2048"}};
++const FeatureEntry::FeatureParam kHiveyMemoryLimit4GB[] = {{"limit_mb", "4096"}};
++const FeatureEntry::FeatureParam kHiveyMemoryLimit6GB[] = {{"limit_mb", "6144"}};
++const FeatureEntry::FeatureParam kHiveyMemoryLimit8GB[] = {{"limit_mb", "8192"}};
++const FeatureEntry::FeatureParam kHiveyMemoryLimit12GB[] = {{"limit_mb", "12288"}};
++const FeatureEntry::FeatureVariation kHiveyMemoryLimitChoices[] = {
++    {"2 GB", kHiveyMemoryLimit2GB, nullptr},
++    {"4 GB", kHiveyMemoryLimit4GB, nullptr},
++    {"6 GB", kHiveyMemoryLimit6GB, nullptr},
++    {"8 GB", kHiveyMemoryLimit8GB, nullptr},
++    {"12 GB", kHiveyMemoryLimit12GB, nullptr},
++};
++#endif  // !BUILDFLAG(IS_ANDROID)
++#endif  // CHROME_BROWSER_HIVEY_FLAG_CHOICES_H_
+--- a/chrome/browser/hivey_flag_entries.h
++++ b/chrome/browser/hivey_flag_entries.h
+@@ -0,0 +1,16 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_FLAG_ENTRIES_H_
++#define CHROME_BROWSER_HIVEY_FLAG_ENTRIES_H_
++#if !BUILDFLAG(IS_ANDROID)
++    {"hivey-memory-limit",
++     "RAM limiter",
++     "Keep the browser under a memory limit: when all its processes together use more than the limit, background tabs are put to sleep (least recently used first; tabs playing audio or with unsaved forms are kept). Hivey Browser flag.",
++     kOsDesktop,
++     FEATURE_WITH_PARAMS_VALUE_TYPE(performance_manager::policies::kHiveyMemoryLimit,
++                                    kHiveyMemoryLimitChoices,
++                                    "HiveyMemoryLimit")},
++#endif  // !BUILDFLAG(IS_ANDROID)
++#endif  // CHROME_BROWSER_HIVEY_FLAG_ENTRIES_H_
+--- a/chrome/browser/performance_manager/BUILD.gn
++++ b/chrome/browser/performance_manager/BUILD.gn
+@@ -74,6 +74,7 @@
+       "execution_context_priority/side_panel_loading_voter.h",
+       "metrics/metrics_provider_desktop.h",
+       "policies/freezing_opt_out_checker.h",
++      "policies/hivey_memory_limit_policy.h",
+       "policies/memory_saver_mode_policy.h",
+       "policies/sustained_memory_pressure_evaluator.h",
+       "policies/urgent_page_discarding_policy.h",
+@@ -216,6 +217,7 @@
+       "execution_context_priority/side_panel_loading_voter.cc",
+       "metrics/metrics_provider_desktop.cc",
+       "policies/freezing_opt_out_checker.cc",
++      "policies/hivey_memory_limit_policy.cc",
+       "policies/memory_saver_mode_policy.cc",
+       "policies/sustained_memory_pressure_evaluator.cc",
+       "policies/urgent_page_discarding_policy.cc",
+--- a/chrome/browser/performance_manager/chrome_browser_main_extra_parts_performance_manager.cc
++++ b/chrome/browser/performance_manager/chrome_browser_main_extra_parts_performance_manager.cc
+@@ -29,6 +29,7 @@
+ #include "chrome/browser/performance_manager/policies/keep_alive_dse_policy.h"
+ #include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
+ #include "chrome/browser/performance_manager/policies/policy_features.h"
++#include "chrome/browser/performance_manager/policies/hivey_memory_limit_policy.h"
+ #include "chrome/browser/performance_manager/policies/termination_target_policy.h"
+ #include "chrome/browser/performance_manager/policies/transient_keep_alive_policy.h"
+ #include "chrome/browser/performance_manager/policies/working_set_trimmer_policy.h"
+@@ -235,6 +236,14 @@
+ 
+   graph->PassToGraph(
+       std::make_unique<performance_manager::policies::MemorySaverModePolicy>());
++
++  // Hivey: RAM limiter (chrome://flags/#hivey-memory-limit).
++  if (base::FeatureList::IsEnabled(
++          performance_manager::policies::kHiveyMemoryLimit)) {
++    graph->PassToGraph(
++        std::make_unique<
++            performance_manager::policies::HiveyMemoryLimitPolicy>());
++  }
+ #endif  // !BUILDFLAG(IS_ANDROID)
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+--- a/chrome/browser/performance_manager/policies/hivey_memory_limit_policy.cc
++++ b/chrome/browser/performance_manager/policies/hivey_memory_limit_policy.cc
+@@ -0,0 +1,89 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/performance_manager/policies/hivey_memory_limit_policy.h"
++
++#include <cstdint>
++
++#include "base/byte_size.h"
++#include "base/functional/bind.h"
++#include "base/logging.h"
++#include "chrome/browser/performance_manager/policies/discard_eligibility_policy.h"
++#include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
++#include "components/memory_pressure/reclaim_target.h"
++#include "components/performance_manager/public/graph/process_node.h"
++
++namespace performance_manager::policies {
++
++BASE_FEATURE(kHiveyMemoryLimit, base::FEATURE_DISABLED_BY_DEFAULT);
++BASE_FEATURE_PARAM(int,
++                   kHiveyMemoryLimitMb,
++                   &kHiveyMemoryLimit,
++                   "limit_mb",
++                   4096);
++
++namespace {
++
++constexpr base::TimeDelta kCheckInterval = base::Seconds(30);
++// Longer than ProcessMetricsDecorator's refresh interval (2 minutes).
++constexpr base::TimeDelta kCooldownAfterDiscard = base::Minutes(2) + base::Seconds(30);
++
++}  // namespace
++
++HiveyMemoryLimitPolicy::HiveyMemoryLimitPolicy() = default;
++HiveyMemoryLimitPolicy::~HiveyMemoryLimitPolicy() = default;
++
++void HiveyMemoryLimitPolicy::OnPassedToGraph(Graph* graph) {
++  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  DCHECK(PageDiscardingHelper::GetFromGraph(graph))
++      << "HiveyMemoryLimitPolicy needs a PageDiscardingHelper in the graph.";
++  metrics_interest_token_ =
++      ProcessMetricsDecorator::RegisterInterestForProcessMetrics(graph);
++  timer_.Start(FROM_HERE, kCheckInterval,
++               base::BindRepeating(&HiveyMemoryLimitPolicy::CheckMemoryUsage,
++                                   base::Unretained(this)));
++}
++
++void HiveyMemoryLimitPolicy::OnTakenFromGraph(Graph* graph) {
++  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  timer_.Stop();
++  metrics_interest_token_.reset();
++}
++
++void HiveyMemoryLimitPolicy::CheckMemoryUsage() {
++  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  if (!last_discard_.is_null() &&
++      base::TimeTicks::Now() - last_discard_ < kCooldownAfterDiscard) {
++    return;
++  }
++  const int limit_mb = kHiveyMemoryLimitMb.Get();
++  if (limit_mb <= 0) {
++    return;
++  }
++  const uint64_t limit_kb = static_cast<uint64_t>(limit_mb) * 1024;
++
++  uint64_t total_kb = 0;
++  for (const ProcessNode* process : GetOwningGraph()->GetAllProcessNodes()) {
++    total_kb += process->GetPrivateFootprint().InKiB();
++  }
++  if (total_kb <= limit_kb) {
++    return;
++  }
++
++  // Reclaim the excess plus 10% of the limit, so usage settles below it.
++  const uint64_t reclaim_kb = total_kb - limit_kb + limit_kb / 10;
++  VLOG(1) << "Hivey memory limit: " << total_kb / 1024 << " MiB used, limit "
++          << limit_mb << " MiB, reclaiming " << reclaim_kb / 1024 << " MiB";
++  const std::optional<base::TimeTicks> discarded =
++      PageDiscardingHelper::GetFromGraph(GetOwningGraph())
++          ->DiscardMultiplePages(
++              memory_pressure::ReclaimTarget(base::KiB(reclaim_kb)),
++              /*discard_protected_tabs=*/false,
++              DiscardEligibilityPolicy::DiscardReason::PROACTIVE);
++  if (discarded) {
++    last_discard_ = *discarded;
++  }
++}
++
++}  // namespace performance_manager::policies
+--- a/chrome/browser/performance_manager/policies/hivey_memory_limit_policy.h
++++ b/chrome/browser/performance_manager/policies/hivey_memory_limit_policy.h
+@@ -0,0 +1,55 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_PERFORMANCE_MANAGER_POLICIES_HIVEY_MEMORY_LIMIT_POLICY_H_
++#define CHROME_BROWSER_PERFORMANCE_MANAGER_POLICIES_HIVEY_MEMORY_LIMIT_POLICY_H_
++
++#include <memory>
++
++#include "base/feature_list.h"
++#include "base/metrics/field_trial_params.h"
++#include "base/sequence_checker.h"
++#include "base/time/time.h"
++#include "base/timer/timer.h"
++#include "components/performance_manager/public/decorators/process_metrics_decorator.h"
++#include "components/performance_manager/public/graph/graph.h"
++
++namespace performance_manager::policies {
++
++// RAM limiter, like Opera GX: when the private memory of all the browser's
++// processes goes over a limit the user picked, background tabs are discarded
++// (least recently used first, with the usual protections: audio, forms being
++// filled, pinned...) until memory is back under the limit.
++BASE_DECLARE_FEATURE(kHiveyMemoryLimit);
++// The limit, in MiB.
++BASE_DECLARE_FEATURE_PARAM(int, kHiveyMemoryLimitMb);
++
++class HiveyMemoryLimitPolicy : public GraphOwned {
++ public:
++  HiveyMemoryLimitPolicy();
++  ~HiveyMemoryLimitPolicy() override;
++  HiveyMemoryLimitPolicy(const HiveyMemoryLimitPolicy&) = delete;
++  HiveyMemoryLimitPolicy& operator=(const HiveyMemoryLimitPolicy&) = delete;
++
++  // GraphOwned:
++  void OnPassedToGraph(Graph* graph) override;
++  void OnTakenFromGraph(Graph* graph) override;
++
++ private:
++  void CheckMemoryUsage();
++
++  // Keeps process memory measurements flowing while the policy is alive.
++  std::unique_ptr<ProcessMetricsDecorator::ScopedMetricsInterestToken>
++      metrics_interest_token_;
++  base::RepeatingTimer timer_;
++  // Measurements refresh every few minutes: after discarding, wait for fresh
++  // numbers instead of discarding again on stale ones.
++  base::TimeTicks last_discard_;
++
++  SEQUENCE_CHECKER(sequence_checker_);
++};
++
++}  // namespace performance_manager::policies
++
++#endif  // CHROME_BROWSER_PERFORMANCE_MANAGER_POLICIES_HIVEY_MEMORY_LIMIT_POLICY_H_

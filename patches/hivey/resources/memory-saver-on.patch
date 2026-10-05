@@ -1,0 +1,19 @@
+# Memory Saver (inactive tabs are discarded to free memory) on by default, balanced aggressiveness.
+--- a/components/performance_manager/user_tuning/prefs.cc
++++ b/components/performance_manager/user_tuning/prefs.cc
+@@ -27,12 +27,13 @@
+ }
+ 
+ void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
+-  registry->RegisterBooleanPref(kMemorySaverModeEnabled, false);
++  // Hivey: Memory Saver on by default (Settings > Performance).
++  registry->RegisterBooleanPref(kMemorySaverModeEnabled, true);
+   registry->RegisterIntegerPref(
+       kMemorySaverModeTimeBeforeDiscardInMinutes,
+       kDefaultMemorySaverModeTimeBeforeDiscardInMinutes);
+   registry->RegisterIntegerPref(
+-      kMemorySaverModeState, static_cast<int>(MemorySaverModeState::kDisabled));
++      kMemorySaverModeState, static_cast<int>(MemorySaverModeState::kEnabled));
+   registry->RegisterIntegerPref(
+       kMemorySaverModeAggressiveness,
+       static_cast<int>(MemorySaverModeAggressiveness::kMedium));

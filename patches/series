@@ -5,3 +5,5 @@ hivey/privacy/hardened-defaults.patch
 hivey/customization/hivey-default-theme.patch
 hivey/privacy/secure-dns-quad9.patch
 hivey/privacy/webgl-gpu-info-hidden.patch
+hivey/resources/memory-saver-on.patch
+hivey/resources/ram-limiter.patch
