@@ -7,3 +7,4 @@ hivey/privacy/secure-dns-quad9.patch
 hivey/privacy/webgl-gpu-info-hidden.patch
 hivey/resources/memory-saver-on.patch
 hivey/resources/ram-limiter.patch
+hivey/customization/fluent-overlay-scrollbars.patch

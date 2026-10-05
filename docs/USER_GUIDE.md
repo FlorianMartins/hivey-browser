@@ -48,6 +48,11 @@ The browser uses Hivey amber by default. To change it, open a new tab,
 click **Customize** (bottom right), then **Appearance**: pick a color, a
 color style, light/dark/system mode, or go back to *Default*.
 
+Scrollbars are thin and fade out when you stop scrolling (Windows 11
+style). If you prefer them always visible, turn on *Windows Settings >
+Accessibility > Visual effects > Always show scrollbars*; the browser follows
+it.
+
 ## Advanced switches
 
 `chrome://flags` lists every Hivey Browser and ungoogled-chromium option

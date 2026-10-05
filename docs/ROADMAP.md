@@ -38,6 +38,7 @@ on a real Windows machine before moving on.
 ## Phase 3: Look and feel
 
 - [x] Hivey amber as the default browser color (native Material palette)
+- [x] Fluent overlay scrollbars on Windows
 - [ ] Theme engine: colors, accents, transparency, corner radius
 - [ ] Built-in animations (tabs, page transitions), with a reduced-motion mode
 - [ ] Customization page, theme import/export
