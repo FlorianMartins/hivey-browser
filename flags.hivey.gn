@@ -1,0 +1,21 @@
+# Hivey Browser GN args, applied after ungoogled-chromium/flags.gn and
+# ungoogled-chromium-windows/flags.windows.gn (later values win).
+
+# Cross-compile Windows x64 from a Linux host with Chromium's pinned clang/Rust.
+target_os="win"
+target_cpu="x64"
+
+# No Google services, no crash/usage reporting, no field trials.
+enable_reporting=false
+disable_fieldtrial_testing_config=true
+
+# Release build tuned for speed (PGO profile ships in the source tarball).
+is_official_build=true
+chrome_pgo_phase=2
+symbol_level=0
+blink_symbol_level=0
+v8_symbol_level=0
+
+# The build host also serves production: ThinLTO limited to 4 threads per
+# link (Chromium already runs a single link at a time on Windows targets).
+hivey_thin_lto_jobs="4"

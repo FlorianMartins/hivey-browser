@@ -1,0 +1,48 @@
+# Roadmap
+
+Windows x64 first, then Linux. Each phase ends with a build that is tested
+on a real Windows machine before moving on.
+
+## Phase 0: Foundations (in progress)
+
+- [x] Reproducible cross-build from Linux (no Windows machine needed)
+- [x] ungoogled-chromium base, pinned and verified
+- [x] Branding: name, install/user-data paths, ProgIDs, translated strings
+- [x] Build that cannot starve a shared host (priority, memory cap, LTO threads)
+- [ ] First `chrome.exe` + `mini_installer.exe` built and started on Windows
+- [ ] Logo and icons
+- [ ] Own COM CLSIDs/IIDs (elevation service, toast activator)
+- [ ] CI build
+
+## Phase 1: Privacy
+
+- [ ] Built-in content blocker (filter lists, no extension needed)
+- [ ] Fingerprinting protections
+- [ ] HTTPS-only mode and encrypted DNS on by default
+- [ ] Hardened defaults (third-party cookies, referrers, WebRTC IP handling)
+- [ ] Zero requests at startup, proven by a network capture in CI
+
+## Phase 2: Resource control
+
+- [ ] RAM and CPU limits for the browser, configurable
+- [ ] Tab sleeping with per-site exceptions
+- [ ] Memory saver
+- [ ] Live per-tab resource panel
+
+## Phase 3: Look and feel
+
+- [ ] Theme engine: colors, accents, transparency, corner radius
+- [ ] Built-in animations (tabs, page transitions), with a reduced-motion mode
+- [ ] Customization page, theme import/export
+
+## Phase 4: Hivey AI sidebar
+
+- [ ] Native side panel, like Leo in Brave
+- [ ] Bring your own key, or local models
+- [ ] Off by default; nothing sent until the user turns it on
+
+## Phase 5: Distribution
+
+- [ ] Signed installer and automatic updates
+- [ ] Download page
+- [ ] Linux build

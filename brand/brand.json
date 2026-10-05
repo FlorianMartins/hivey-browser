@@ -1,0 +1,16 @@
+{
+  "_comment": "Single source of truth for the product identity. Renaming the browser = editing this file and re-running `hb.py brand --force` on a fresh tree.",
+  "product_name": "Hivey Browser",
+  "short_name": "Hivey",
+  "company_name": "Hivey",
+  "copyright_holder": "The Hivey Browser contributors",
+  "install": {
+    "company_path": "Hivey",
+    "product_path": "Browser",
+    "base_app_id": "HiveyBrowser",
+    "prog_id_prefix": "HiveyHTM",
+    "pdf_prog_id_prefix": "HiveyPDF",
+    "url_scheme": "hivey-browser",
+    "active_setup_guid": "{0A3A905A-34E1-45D5-9D18-089A58AB2E4E}"
+  }
+}

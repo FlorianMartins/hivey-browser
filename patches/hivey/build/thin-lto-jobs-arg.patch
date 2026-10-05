@@ -1,0 +1,25 @@
+# Make the ThinLTO thread count of Windows links configurable (hivey_thin_lto_jobs).
+--- a/build/config/compiler/BUILD.gn
++++ b/build/config/compiler/BUILD.gn
+@@ -54,6 +54,12 @@
+ }
+ 
+ declare_args() {
++  # Hivey: number of ThinLTO backend threads per Windows link. Chromium uses
++  # every hardware thread; a shared build host wants fewer (less memory too).
++  hivey_thin_lto_jobs = "all"
++}
++
++declare_args() {
+   # Normally, Android builds are lightly optimized, even for debug builds, to
+   # keep binary size down. Setting this flag to true disables such optimization
+   android_full_debug = false
+@@ -820,7 +826,7 @@
+ 
+     if (is_win) {
+       ldflags += [
+-        "/opt:lldltojobs=all",
++        "/opt:lldltojobs=$hivey_thin_lto_jobs",
+         "-mllvm:-import-instr-limit=$import_instr_limit",
+         "-mllvm:-disable-auto-upgrade-debug-info",
+       ]
