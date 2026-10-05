@@ -36,7 +36,7 @@ progress. Any single step can be re-run with `hb.py <step> --force`.
 | --- | --- |
 | `fetch` | Downloads the Chromium "lite" source tarball pinned by ungoogled-chromium and checks its sha256. |
 | `unpack` | Extracts it into `$HB_BUILD_DIR/src`. |
-| `prune` | Deletes prebuilt binaries listed by ungoogled-chromium. |
+| `prune` | Deletes prebuilt binaries listed by ungoogled-chromium, except the precompiled MIDL/MC outputs in `win_build_output/` (type libraries and message tables generated from the tree's `.idl`/`.mc` files): Linux has no `midl.exe`/`mc.exe`, so a cross-build needs them. |
 | `toolchain` | Fetches **build-only** tools (never shipped): Chromium's pinned clang + Windows runtime, Rust, the Linux sysroot, `rc`, Node, ninja, gn (built from source), the Windows PGO profile, Windows-only sources missing from the lite tarball, and the MSVC CRT + Windows SDK. Must run before `domsub`. |
 | `patch` | Applies ungoogled-chromium's patches, the product patches of ungoogled-chromium-windows, then `patches/series`. |
 | `brand` | Applies `brand/brand.json` (see below). |

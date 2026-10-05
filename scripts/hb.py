@@ -161,8 +161,15 @@ def step_unpack(args):
     mark_done('unpack')
 
 
+# Pruned by ungoogled, needed by a cross-build: Linux has no midl.exe/mc.exe,
+# so Chromium copies their precompiled outputs (type libraries, message
+# tables: data generated from the .idl/.mc files in the tree, not code).
+PRUNE_KEEP = ('third_party/win_build_output/',
+              'third_party/dawn/third_party/directx-shader-compiler/win_build_output/')
+
+
 def step_prune(args):
-    pruning = (UG / 'pruning.list').read_text().splitlines()
+    pruning = [f for f in (UG / 'pruning.list').read_text().splitlines() if not f.startswith(PRUNE_KEEP)]
     leftover = prune_binaries.prune_files(SRC, pruning)
     if leftover:
         log(f'{len(leftover)} listed files were already absent (expected with the lite tarball)')
