@@ -41,12 +41,12 @@ These protections are on without any setup:
 - **Memory Saver** is on: tabs you have not used for a while are put to
   sleep and reload when you come back to them. *Settings > Performance*
   sets how aggressive it is, and which sites always stay awake.
-- **RAM limiter** (like Opera GX): open `chrome://flags/#hivey-memory-limit`,
-  pick a limit (2 to 12 GB) and restart. When the browser as a whole uses
-  more than that, the least recently used background tabs are put to sleep
-  until it is back under the limit. Tabs playing audio or with a form being
-  filled are never put to sleep this way. It checks every 30 seconds, and
-  memory figures refresh every 2 minutes, so it is a soft limit.
+- **RAM limiter** (like Opera GX): *Settings > Performance > Memory > RAM
+  limiter*, pick a limit (2 to 16 GB). When the browser as a whole uses more
+  than that, the least recently used background tabs are put to sleep until
+  it is back under the limit. Tabs playing audio or with a form being filled
+  are never put to sleep this way. It checks every 30 seconds and memory
+  figures refresh every 2 minutes, so it is a soft limit.
 
 ## Colors and look
 

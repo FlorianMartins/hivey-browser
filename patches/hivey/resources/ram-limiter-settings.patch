@@ -1,0 +1,183 @@
+# RAM limiter in Settings > Performance > Memory (pref hivey.memory_limit_mb), English and French strings.
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10760,4 +10760,7 @@
+ <translation id="998347228911661591">Synchronisez vos groupes d'onglets</translation>
+ <translation id="998747458861718449">I&amp;nspecter</translation>
+ <translation id="998852291477823323">L'action n'a pas été autorisée en raison des règles configurées.</translation>
++<translation id="1820038538331701043">Limiteur de RAM</translation>
++<translation id="621601378681755227">Quand le navigateur utilise plus de mémoire que cette limite, les onglets que vous n'utilisez plus depuis un moment deviennent inactifs</translation>
++<translation id="3413832581901426260">Aucune limite</translation>
+ </translationbundle>
+\ No newline at end of file
+--- a/chrome/app/settings_strings.grdp
++++ b/chrome/app/settings_strings.grdp
+@@ -1087,6 +1087,15 @@
+     <message name="IDS_SETTINGS_PERFORMANCE_MEMORY_SAVER_MODE_AGGRESSIVE_DESCRIPTION" desc="Description for the aggressive memory saver aggressiveness option">
+       Get maximum memory savings. Your tabs become inactive after a shorter period of time.
+     </message>
++    <message name="IDS_SETTINGS_HIVEY_MEMORY_LIMIT_LABEL" desc="Label of the Hivey Browser RAM limiter setting.">
++      RAM limiter
++    </message>
++    <message name="IDS_SETTINGS_HIVEY_MEMORY_LIMIT_DESCRIPTION" desc="Description of the Hivey Browser RAM limiter setting.">
++      When the browser uses more memory than this, tabs you have not used for a while are made inactive
++    </message>
++    <message name="IDS_SETTINGS_HIVEY_MEMORY_LIMIT_OFF" desc="RAM limiter option: no memory limit.">
++      No limit
++    </message>
+     <message name="IDS_SETTINGS_PERFORMANCE_TAB_DISCARDING_EXCEPTIONS_ADD_BUTTON_ARIA_LABEL" desc="Accessibility label which will be read by screen readers when focusing the tab discarding exceptions list add button. Sites added to the list will not be discarded by memory saver.">
+       Add to the "always keep these sites active" list
+     </message>
+--- a/chrome/browser/extensions/api/settings_private/prefs_util.cc
++++ b/chrome/browser/extensions/api/settings_private/prefs_util.cc
+@@ -1308,6 +1308,8 @@
+   (*s_allowlist)[performance_manager::user_tuning::prefs::
+                      kMemorySaverModeAggressiveness] =
+       settings_api::PrefType::kNumber;
++  (*s_allowlist)[performance_manager::user_tuning::prefs::kHiveyMemoryLimitMb] =
++      settings_api::PrefType::kNumber;
+   (*s_allowlist)[performance_manager::user_tuning::prefs::
+                      kMemorySaverModeTimeBeforeDiscardInMinutes] =
+       settings_api::PrefType::kNumber;
+--- a/chrome/browser/performance_manager/chrome_browser_main_extra_parts_performance_manager.cc
++++ b/chrome/browser/performance_manager/chrome_browser_main_extra_parts_performance_manager.cc
+@@ -237,13 +237,10 @@
+   graph->PassToGraph(
+       std::make_unique<performance_manager::policies::MemorySaverModePolicy>());
+ 
+-  // Hivey: RAM limiter (chrome://flags/#hivey-memory-limit).
+-  if (base::FeatureList::IsEnabled(
+-          performance_manager::policies::kHiveyMemoryLimit)) {
+-    graph->PassToGraph(
+-        std::make_unique<
+-            performance_manager::policies::HiveyMemoryLimitPolicy>());
+-  }
++  // Hivey: RAM limiter (Settings > Performance > Memory). Does nothing while
++  // no limit is set.
++  graph->PassToGraph(
++      std::make_unique<performance_manager::policies::HiveyMemoryLimitPolicy>());
+ #endif  // !BUILDFLAG(IS_ANDROID)
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+--- a/chrome/browser/performance_manager/policies/hivey_memory_limit_policy.cc
++++ b/chrome/browser/performance_manager/policies/hivey_memory_limit_policy.cc
+@@ -9,10 +9,13 @@
+ #include "base/byte_size.h"
+ #include "base/functional/bind.h"
+ #include "base/logging.h"
++#include "chrome/browser/browser_process.h"
+ #include "chrome/browser/performance_manager/policies/discard_eligibility_policy.h"
+ #include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
+ #include "components/memory_pressure/reclaim_target.h"
+ #include "components/performance_manager/public/graph/process_node.h"
++#include "components/performance_manager/public/user_tuning/prefs.h"
++#include "components/prefs/pref_service.h"
+ 
+ namespace performance_manager::policies {
+ 
+@@ -57,7 +60,15 @@
+       base::TimeTicks::Now() - last_discard_ < kCooldownAfterDiscard) {
+     return;
+   }
+-  const int limit_mb = kHiveyMemoryLimitMb.Get();
++  // Settings > Performance > Memory sets the limit; the chrome://flags entry
++  // is a fallback when the setting is off.
++  int limit_mb = 0;
++  if (PrefService* local_state = g_browser_process->local_state()) {
++    limit_mb = local_state->GetInteger(user_tuning::prefs::kHiveyMemoryLimitMb);
++  }
++  if (limit_mb <= 0 && base::FeatureList::IsEnabled(kHiveyMemoryLimit)) {
++    limit_mb = kHiveyMemoryLimitMb.Get();
++  }
+   if (limit_mb <= 0) {
+     return;
+   }
+--- a/chrome/browser/resources/settings/performance_page/memory_page.html.ts
++++ b/chrome/browser/resources/settings/performance_page/memory_page.html.ts
+@@ -54,5 +54,16 @@
+       </settings-radio-group>
+     </div>
+   </cr-collapse>
++  <div class="cr-row" id="hiveyMemoryLimitRow">
++    <div class="flex cr-padded-text" aria-hidden="true">
++      <div>$i18n{hiveyMemoryLimitLabel}</div>
++      <div class="cr-secondary-text">$i18n{hiveyMemoryLimitDescription}</div>
++    </div>
++    <settings-dropdown-menu id="hiveyMemoryLimit"
++        label="$i18n{hiveyMemoryLimitLabel}"
++        pref-key="hivey.memory_limit_mb"
++        .menuOptions="${this.hiveyMemoryLimitOptions_}">
++    </settings-dropdown-menu>
++  </div>
+ </settings-section><!--_html_template_end_-->`;
+ }
+--- a/chrome/browser/resources/settings/performance_page/memory_page.ts
++++ b/chrome/browser/resources/settings/performance_page/memory_page.ts
+@@ -4,6 +4,7 @@
+ 
+ import '../controls/controlled_radio_button.js';
+ import '../controls/settings_radio_group.js';
++import '../controls/settings_dropdown_menu.js';
+ import '../controls/settings_toggle_button.js';
+ import 'chrome://resources/cr_elements/cr_collapse/cr_collapse.js';
+ import '../settings_page/settings_section.js';
+@@ -13,6 +14,7 @@
+ import {OpenWindowProxyImpl} from 'chrome://resources/js/open_window_proxy.js';
+ import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
+ 
++import type {DropdownMenuOptionList} from '../controls/settings_dropdown_menu.js';
+ import type {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
+ import {loadTimeData} from '../i18n_setup.js';
+ 
+@@ -54,9 +56,16 @@
+       numericUncheckedValues_: {type: Array},
+       numericCheckedValue_: {type: Number},
+       memorySaverStatePref_: {type: Object},
++      hiveyMemoryLimitOptions_: {type: Array},
+     };
+   }
+ 
++  // Hivey: RAM limiter choices, in MiB (0 = no limit).
++  protected accessor hiveyMemoryLimitOptions_: DropdownMenuOptionList = [
++    {value: 0, name: loadTimeData.getString('hiveyMemoryLimitOff')},
++    ...[2, 4, 6, 8, 12, 16].map(gb => ({value: gb * 1024, name: `${gb} GB`})),
++  ];
++
+   protected accessor numericUncheckedValues_: MemorySaverModeState[] =
+       [MemorySaverModeState.DISABLED];
+   protected accessor numericCheckedValue_: MemorySaverModeState =
+--- a/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
++++ b/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
+@@ -1287,6 +1287,10 @@
+        IDS_SETTINGS_PERFORMANCE_MEMORY_SAVER_MODE_MEDIUM_DESCRIPTION},
+       {"memorySaverModeAggressiveDescription",
+        IDS_SETTINGS_PERFORMANCE_MEMORY_SAVER_MODE_AGGRESSIVE_DESCRIPTION},
++      {"hiveyMemoryLimitLabel", IDS_SETTINGS_HIVEY_MEMORY_LIMIT_LABEL},
++      {"hiveyMemoryLimitDescription",
++       IDS_SETTINGS_HIVEY_MEMORY_LIMIT_DESCRIPTION},
++      {"hiveyMemoryLimitOff", IDS_SETTINGS_HIVEY_MEMORY_LIMIT_OFF},
+       {"batteryPageTitle", IDS_SETTINGS_PERFORMANCE_BATTERY_PAGE_TITLE},
+       {"batterySaverModeLabel",
+        IDS_SETTINGS_PERFORMANCE_BATTERY_SAVER_MODE_SETTING},
+--- a/components/performance_manager/public/user_tuning/prefs.h
++++ b/components/performance_manager/public/user_tuning/prefs.h
+@@ -50,6 +50,9 @@
+ inline constexpr char kMemorySaverModeAggressiveness[] =
+     "performance_tuning.high_efficiency_mode.aggressiveness";
+ 
++// Hivey: RAM limiter. Memory limit for the whole browser, in MiB; 0 = off.
++inline constexpr char kHiveyMemoryLimitMb[] = "hivey.memory_limit_mb";
++
+ enum class BatterySaverModeState {
+   kDisabled = 0,
+   kEnabledBelowThreshold = 1,
+--- a/components/performance_manager/user_tuning/prefs.cc
++++ b/components/performance_manager/user_tuning/prefs.cc
+@@ -34,6 +34,7 @@
+       kDefaultMemorySaverModeTimeBeforeDiscardInMinutes);
+   registry->RegisterIntegerPref(
+       kMemorySaverModeState, static_cast<int>(MemorySaverModeState::kEnabled));
++  registry->RegisterIntegerPref(kHiveyMemoryLimitMb, 0);
+   registry->RegisterIntegerPref(
+       kMemorySaverModeAggressiveness,
+       static_cast<int>(MemorySaverModeAggressiveness::kMedium));
