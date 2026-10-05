@@ -31,8 +31,6 @@ The browser uses Hivey amber by default. To change it, open a new tab,
 click **Customize** (bottom right), then **Appearance**: pick a color, a
 color style, light/dark/system mode, or go back to *Default*.
 
-Vertical tabs: right-click the tab strip and choose *Show tabs on the side*.
-
 ## Advanced switches
 
 `chrome://flags` lists every Hivey Browser and ungoogled-chromium option
