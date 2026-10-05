@@ -33,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -441,6 +442,7 @@ def _toolchain_msvc():
         (vc_bin / 'cl.exe').touch()
     _toolchain_msvc_redist(root, msvc)
     _toolchain_msvc_atl(root, msvc)
+    _toolchain_dia_sdk(root)
     _toolchain_debuggers(kits)
     _toolchain_d3dcompiler(kits, sdk_version)
     (SRC / 'build/win_toolchain.json').write_text(json.dumps({
@@ -450,11 +452,35 @@ def _toolchain_msvc():
 
 
 def _vs_payload(pkg_id):
+    """Payload of a VS manifest package (newest version if several manifests
+    list it)."""
+    found = []
     for vsman in (BUILD / 'xwin-cache' / 'dl').glob('*.vsman'):
         for pkg in json.loads(vsman.read_text()).get('packages', []):
             if pkg['id'] == pkg_id:
-                return pkg['payloads'][0]
-    raise SystemExit(f'{pkg_id} not found in the VS manifest')
+                found.append((tuple(int(x) for x in pkg['version'].split('.')), pkg['payloads'][0]))
+    if not found:
+        raise SystemExit(f'{pkg_id} not found in the VS manifest')
+    return max(found, key=lambda f: f[0])[1]
+
+
+def _toolchain_dia_sdk(root):
+    """DIA SDK (dia2.h, diaguids.lib, msdia140.dll), used by Dawn's DirectX
+    shader compiler and copied next to the binaries by vs_toolchain.py."""
+    dia = root / 'DIA SDK'
+    if (dia / 'include' / 'dia2.h').exists():
+        return
+    payload = _vs_payload('Microsoft.VisualCpp.DIA.SDK')
+    vsix = download(payload['url'].replace(' ', '%20'), BUILD / 'download_cache' / payload['fileName'],
+                    payload['sha256'].lower())
+    with zipfile.ZipFile(vsix) as zf:
+        for info in zf.infolist():
+            name = urllib.parse.unquote(info.filename)  # VSIX paths are URL-encoded ("DIA%20SDK")
+            marker = 'DIA SDK/'
+            if marker in name and not info.is_dir():
+                dest = dia / name.split(marker, 1)[1]
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(zf.read(info))
 
 
 def _toolchain_msvc_atl(root, msvc):
