@@ -405,8 +405,11 @@ def _toolchain_msvc():
             if '/w kits2/' in text:
                 vsman.write_text(text.replace('/w kits2/', '/w%20kits2/'))
         # No casing symlinks: the case-insensitive mount makes them useless
-        # (and a symlink to its own lower-case name would loop).
+        # (and a symlink to its own lower-case name would loop). CRT PDBs are
+        # needed: libcmt.lib objects reference them and lld-link errors out
+        # (LNK4099) when they are missing.
         run(cmd + ['splat', '--use-winsysroot-style', '--preserve-ms-arch-notation', '--disable-symlinks',
+                   '--include-debug-symbols',
                    '--output', root])
         for sub in ('Include', 'Lib'):
             src_dir = kits / sub / short_sdk
