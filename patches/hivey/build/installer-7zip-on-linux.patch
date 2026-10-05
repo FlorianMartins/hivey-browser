@@ -1,0 +1,18 @@
+# Cross-build: find 7-Zip on PATH instead of the Windows registry when creating the installer archive.
+--- a/chrome/tools/build/win/create_installer_archive.py
++++ b/chrome/tools/build/win/create_installer_archive.py
+@@ -259,6 +259,14 @@
+ 
+ 
+ def GetLZMAExec(build_dir):
++    # Hivey: cross-building from Linux, use 7-Zip from PATH (7zz from the
++    # "7zip" package, or p7zip's 7z).
++    if sys.platform != 'win32':
++        import shutil
++        for name in ('7zz', '7z'):
++            if shutil.which(name):
++                return shutil.which(name)
++        raise RuntimeError('7-Zip not found: install the "7zip" package')
+     # Taken from ungoogled-chromium's _extraction.py file, modified for Python 2
+     import winreg
+     sub_key_7zfm = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\7zFM.exe'

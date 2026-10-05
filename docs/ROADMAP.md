@@ -9,7 +9,8 @@ on a real Windows machine before moving on.
 - [x] ungoogled-chromium base, pinned and verified
 - [x] Branding: name, install/user-data paths, ProgIDs, translated strings
 - [x] Build that cannot starve a shared host (priority, memory cap, LTO threads)
-- [ ] First `chrome.exe` + `mini_installer.exe` built and started on Windows
+- [x] First `chrome.exe` + `mini_installer.exe` built (2026-10-05)
+- [ ] Started and tested on a real Windows machine
 - [x] Logo and icons (`brand/logo.svg`, rendered at build time)
 - [x] Own COM CLSIDs (elevation service, toast activator, tracing service)
 - [ ] CI build

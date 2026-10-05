@@ -12,6 +12,7 @@ Visual Studio installation is needed.
 | ~120 GB free disk, 32 GB RAM | source (11 GB) + build output |
 | `python3` ≥ 3.12, `git`, `curl`, `xz` | scripts and downloads |
 | `msitools` (`msiextract`, `msiinfo`) | unpack two Windows SDK MSIs |
+| `7zip` (or `p7zip-full`) | pack the installer archive |
 | `pkg-config` | configure the Linux host tools (blocker ruleset converter) |
 | Python `cairosvg`, `Pillow` | render the icons |
 | [`xwin`](https://github.com/Jake-Shadle/xwin) (`cargo install --locked xwin`) | MSVC CRT + Windows SDK |
