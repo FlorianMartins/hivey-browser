@@ -1,3 +1,5 @@
+<p align="center"><img src="brand/logo.svg" width="128" alt="Hivey Browser logo"></p>
+
 # Hivey Browser
 
 A modern, deeply customizable, **privacy-first** web browser built on

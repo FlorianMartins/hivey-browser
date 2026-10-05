@@ -7,7 +7,8 @@ What it changes:
   * chrome/app/theme/chromium/BRANDING  (product/company names, copyright)
   * chrome/install_static/chromium_install_modes.h  (install + user data
     paths, ProgIDs, URL scheme, Active Setup GUID)
-  * user-visible "Chromium" strings, *with* their translations.
+  * user-visible "Chromium" strings, *with* their translations;
+  * product icons, rendered from brand/logo.svg.
 
 Why the strings need care: every translation in a .xtb file is keyed by a
 fingerprint of the English source text. Replacing "Chromium" in the .grd
@@ -145,10 +146,67 @@ def rebrand_install_modes(src):
     write(p, text)
 
 
+def _png(svg, size, out):
+    import cairosvg
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(out.name + '.hb-tmp')
+    cairosvg.svg2png(url=str(svg), write_to=str(tmp), output_width=size, output_height=size)
+    tmp.replace(out)
+
+
+def _wordmark(svg, height, color, out):
+    """Logo + "Hivey" in Space Grotesk Bold, at the size Chromium expects."""
+    import io
+    import cairosvg
+    from PIL import Image, ImageDraw, ImageFont
+    scale = height // 22
+    width = 97 * scale
+    canvas = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    icon = Image.open(io.BytesIO(cairosvg.svg2png(url=str(svg), output_width=height, output_height=height)))
+    canvas.paste(icon, (0, 0), icon)
+    font = ImageFont.truetype(str(ROOT / 'brand' / 'fonts' / 'SpaceGrotesk.ttf'), int(15 * scale))
+    font.set_variation_by_name('Bold')
+    draw = ImageDraw.Draw(canvas)
+    box = draw.textbbox((0, 0), BRAND['short_name'], font=font)
+    draw.text((height + 4 * scale, (height - (box[3] - box[1])) // 2 - box[1]), BRAND['short_name'],
+              font=font, fill=color)
+    canvas.save(out.with_name(out.name + '.hb-tmp'), format='PNG')
+    out.with_name(out.name + '.hb-tmp').replace(out)
+
+
+def rebrand_icons(src):
+    """Every Chromium product logo replaced by brand/logo.svg renders."""
+    from PIL import Image
+    svg = ROOT / 'brand' / 'logo.svg'
+    theme = src / 'chrome/app/theme'
+    for size in (16, 24, 32, 48, 64, 128, 256):
+        if (theme / f'chromium/product_logo_{size}.png').exists():
+            _png(svg, size, theme / f'chromium/product_logo_{size}.png')
+    for scale, folder in ((1, 'default_100_percent'), (2, 'default_200_percent')):
+        for size in (16, 32):
+            _png(svg, size * scale, theme / folder / 'chromium' / f'product_logo_{size}.png')
+        _wordmark(svg, 22 * scale, (32, 24, 12, 255), theme / folder / 'chromium' / 'product_logo_name_22.png')
+        _wordmark(svg, 22 * scale, (255, 255, 255, 255),
+                  theme / folder / 'chromium' / 'product_logo_name_22_white.png')
+    _png(svg, 600, theme / 'chromium/win/tiles/Logo.png')
+    _png(svg, 176, theme / 'chromium/win/tiles/SmallLogo.png')
+    # Multi-size .ico for the executable, the app list and the installer.
+    big = theme / 'chromium/win/hivey-256.png.hb-tmp'
+    _png(svg, 256, big)
+    ico_sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+    for name in ('chromium.ico', 'app_list.ico'):
+        out = theme / 'chromium/win' / name
+        Image.open(big).save(out.with_name(name + '.hb-tmp'), format='ICO', sizes=ico_sizes)
+        out.with_name(name + '.hb-tmp').replace(out)
+    big.unlink()
+    print('[brand] icons rendered from brand/logo.svg')
+
+
 def main():
     src = Path(sys.argv[1]).resolve()
     rebrand_branding_file(src)
     rebrand_install_modes(src)
+    rebrand_icons(src)
     rebrand_strings(src, BRAND['product_name'])
     print(f"[brand] applied: {BRAND['product_name']}")
 

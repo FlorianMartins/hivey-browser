@@ -10,7 +10,7 @@ on a real Windows machine before moving on.
 - [x] Branding: name, install/user-data paths, ProgIDs, translated strings
 - [x] Build that cannot starve a shared host (priority, memory cap, LTO threads)
 - [ ] First `chrome.exe` + `mini_installer.exe` built and started on Windows
-- [ ] Logo and icons
+- [x] Logo and icons (`brand/logo.svg`, rendered at build time)
 - [ ] Own COM CLSIDs/IIDs (elevation service, toast activator)
 - [ ] CI build
 

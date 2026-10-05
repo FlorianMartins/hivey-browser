@@ -359,9 +359,9 @@ def _toolchain_msvc():
         env = {
             'VSINSTALLDIR': [['.\\']],
             'VCINSTALLDIR': [['VC\\']],
-            'INCLUDE': [['VC', 'Tools', 'MSVC', msvc, 'include']] + [sdk_inc + [d] for d in
+            'INCLUDE': [['VC', 'Tools', 'MSVC', msvc, 'include'], ['VC', 'Tools', 'MSVC', msvc, 'atlmfc', 'include']] + [sdk_inc + [d] for d in
                                                                        ('um', 'shared', 'winrt', 'ucrt', 'cppwinrt')],
-            'LIB': [['VC', 'Tools', 'MSVC', msvc, 'lib', cpu], sdk_lib + ['um', cpu], sdk_lib + ['ucrt', cpu]],
+            'LIB': [['VC', 'Tools', 'MSVC', msvc, 'lib', cpu], ['VC', 'Tools', 'MSVC', msvc, 'atlmfc', 'lib', cpu], sdk_lib + ['um', cpu], sdk_lib + ['ucrt', cpu]],
             'LIBPATH': [['VC', 'Tools', 'MSVC', msvc, 'lib', cpu]],
             'PATH': [['VC', 'Tools', 'MSVC', msvc, 'bin', 'HostX64', cpu]],
         }
@@ -373,12 +373,41 @@ def _toolchain_msvc():
         vc_bin.mkdir(parents=True, exist_ok=True)
         (vc_bin / 'cl.exe').touch()
     _toolchain_msvc_redist(root, msvc)
+    _toolchain_msvc_atl(root, msvc)
     _toolchain_debuggers(kits)
     _toolchain_d3dcompiler(kits, sdk_version)
     (SRC / 'build/win_toolchain.json').write_text(json.dumps({
         'path': str(root), 'version': '2026', 'win_sdk': str(kits), 'wdk': '',
         'runtime_dirs': [str(root / 'sys64'), str(root / 'sys32'), 'Arm64Unused'],
     }, indent=2))
+
+
+def _vs_payload(pkg_id):
+    for vsman in (BUILD / 'xwin-cache' / 'dl').glob('*.vsman'):
+        for pkg in json.loads(vsman.read_text()).get('packages', []):
+            if pkg['id'] == pkg_id:
+                return pkg['payloads'][0]
+    raise SystemExit(f'{pkg_id} not found in the VS manifest')
+
+
+def _toolchain_msvc_atl(root, msvc):
+    """ATL headers and libraries (Chromium's Windows code uses ATL), which
+    xwin does not fetch. Unpacked to VC/Tools/MSVC/<ver>/atlmfc, where
+    clang-cl and lld-link look on their own with /winsysroot."""
+    atl = root / 'VC/Tools/MSVC' / msvc / 'atlmfc'
+    if (atl / 'include' / 'atldef.h').exists():
+        return
+    for part in ('Headers', 'X64', 'X86', 'ARM64'):
+        payload = _vs_payload(f'Microsoft.VC.{msvc}.ATL.{part}.base')
+        vsix = download(payload['url'].replace(' ', '%20'), BUILD / 'download_cache' / payload['fileName'],
+                        payload['sha256'].lower())
+        with zipfile.ZipFile(vsix) as zf:
+            for info in zf.infolist():
+                marker = '/atlmfc/'
+                if marker in info.filename and not info.is_dir():
+                    dest = atl / info.filename.split(marker, 1)[1]
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(zf.read(info))
 
 
 def _toolchain_msvc_redist(root, msvc):
@@ -555,6 +584,8 @@ def step_build(args):
     env = {**os.environ, 'DEPOT_TOOLS_WIN_TOOLCHAIN': '1'}
     targets = args.targets or ['chrome', 'mini_installer']
     cmd = [TOOLS / 'ninja', '-C', OUT, '-j', str(args_jobs())] + targets
+    if os.environ.get('HB_KEEP_GOING'):  # e.g. 0 = keep going past every failure
+        cmd[1:1] = ['-k', os.environ['HB_KEEP_GOING']]
     # Run inside a transient systemd scope with a memory cap: if a ThinLTO link
     # outgrows it, the kernel kills the build, never a production service.
     mem_max = os.environ.get('HB_MEM_MAX', '26G')

@@ -12,6 +12,7 @@ Visual Studio installation is needed.
 | ~120 GB free disk, 32 GB RAM | source (11 GB) + build output |
 | `python3` ≥ 3.12, `git`, `curl`, `xz` | scripts and downloads |
 | `msitools` (`msiextract`, `msiinfo`) | unpack two Windows SDK MSIs |
+| Python `cairosvg`, `Pillow` | render the icons |
 | [`xwin`](https://github.com/Jake-Shadle/xwin) (`cargo install --locked xwin`) | MSVC CRT + Windows SDK |
 | `systemd-run` (optional) | memory-capped build |
 
@@ -78,7 +79,7 @@ The build host may also run production services. By default:
 
 - every step runs at the lowest CPU priority (`nice 19`) and idle I/O
   priority (`ionice -c3`);
-- ninja runs with `-j 8` (`HB_JOBS` to change);
+- ninja runs with `-j 8` (`HB_JOBS` to change; `HB_KEEP_GOING=0` keeps going past failures to collect them all);
 - the build runs inside a transient systemd scope with
   `MemoryMax=26G`, `CPUWeight=10`, `IOWeight=10` (`HB_MEM_MAX` to change,
   `none` to disable). If a link outgrows the cap, the kernel kills the build,
@@ -94,7 +95,9 @@ The build host may also run production services. By default:
 `brand/brand.json` is the single source of truth for the product identity:
 product and company names, install and user-data paths
 (`%LOCALAPPDATA%\Hivey\Browser\User Data`), ProgIDs, URL scheme, Active
-Setup GUID.
+Setup GUID. Icons (executable `.ico`, tiles, product logos, wordmark in
+Space Grotesk, OFL-licensed in `brand/fonts/`) are rendered from
+`brand/logo.svg`; this needs the Python packages `cairosvg` and `Pillow`.
 
 User-visible strings are renamed **together with their translations**:
 every `.xtb` translation is keyed by a fingerprint of the English text, so a
