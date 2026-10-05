@@ -622,16 +622,45 @@ def _series(patch_dir, skip=frozenset()):
             yield patch_dir / line
 
 
+def _apply_hivey_patches(state_patches):
+    """Apply the Hivey patches of patches/series not applied yet, in order.
+
+    The tree remembers each applied patch with its sha256, so new patches can
+    be added to an existing tree. A patch edited after being applied cannot be
+    re-applied on top of itself: that needs a fresh tree (see BUILDING.md).
+    """
+    applied = dict(state_patches)
+    todo = []
+    for path in _series(ROOT / 'patches'):
+        rel = path.relative_to(ROOT / 'patches').as_posix()
+        digest = sha256_file(path)
+        if rel in applied:
+            if applied[rel] != digest:
+                raise SystemExit(f'{rel} changed since it was applied: start from a fresh tree')
+            continue
+        todo.append((rel, path, digest))
+    for rel, path, digest in todo:
+        log(f'patch: {rel}')
+        patches.apply_patches([path], SRC, patch_bin_path=Path(shutil.which('patch')))
+        applied[rel] = digest
+        state = load_state()
+        state.setdefault('patch', {})['hivey'] = applied
+        STATE.write_text(json.dumps(state, indent=2))
+    return applied
+
+
 def step_patch(args):
-    groups = [
-        ('ungoogled-chromium', list(_series(UG / 'patches'))),
-        ('ungoogled-chromium-windows', list(_series(UGW / 'patches', WINDOWS_HOST_ONLY_PATCHES))),
-        ('hivey', list(_series(ROOT / 'patches'))),
-    ]
-    for name, plist in groups:
-        log(f'patches: {name} ({len(plist)})')
-        patches.apply_patches(plist, SRC, patch_bin_path=Path(shutil.which('patch')))
-    mark_done('patch')
+    state = load_state().get('patch', {})
+    if not state.get('done'):
+        groups = [
+            ('ungoogled-chromium', list(_series(UG / 'patches'))),
+            ('ungoogled-chromium-windows', list(_series(UGW / 'patches', WINDOWS_HOST_ONLY_PATCHES))),
+        ]
+        for name, plist in groups:
+            log(f'patches: {name} ({len(plist)})')
+            patches.apply_patches(plist, SRC, patch_bin_path=Path(shutil.which('patch')))
+    applied = _apply_hivey_patches(state.get('hivey', {}))
+    mark_done('patch', hivey=applied)
 
 
 def step_brand(args):
@@ -715,11 +744,11 @@ def main():
     fns = {s: globals()[f'step_{s}'] for s in STEPS + ['status']}
     if args.step == 'all':
         for s in STEPS:
-            if is_done(s) and s != 'build':
+            if is_done(s) and s not in ('build', 'patch'):
                 continue
             fns[s](args)
     else:
-        if args.step in STEPS and is_done(args.step) and not args.force and args.step != 'build':
+        if args.step in STEPS and is_done(args.step) and not args.force and args.step not in ('build', 'patch'):
             log(f'{args.step}: already done (use --force to re-run)')
             return
         fns[args.step](args)
