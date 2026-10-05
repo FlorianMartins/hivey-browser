@@ -17,8 +17,11 @@ on a real Windows machine before moving on.
 ## Phase 1: Privacy
 
 - [ ] Built-in content blocker (filter lists, no extension needed)
-- [ ] Fingerprinting protections
-- [ ] HTTPS-only mode and encrypted DNS on by default
+- [x] Fingerprinting deception on by default (Canvas, measureText, ClientRects)
+- [x] Global Privacy Control on by default
+- [ ] More fingerprinting protections (fonts, WebGL, audio)
+- [x] HTTPS-only (strict) mode on by default
+- [ ] Encrypted DNS with a privacy-respecting resolver by default
 - [ ] Hardened defaults (third-party cookies, referrers, WebRTC IP handling)
 - [ ] Zero requests at startup, proven by a network capture in CI
 
@@ -31,6 +34,7 @@ on a real Windows machine before moving on.
 
 ## Phase 3: Look and feel
 
+- [x] Hivey amber as the default browser color (native Material palette)
 - [ ] Theme engine: colors, accents, transparency, corner radius
 - [ ] Built-in animations (tabs, page transitions), with a reduced-motion mode
 - [ ] Customization page, theme import/export

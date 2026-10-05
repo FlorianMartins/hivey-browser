@@ -26,6 +26,17 @@ Windows event log, no private state tokens.
 Hivey Browser build flags additionally keep crash/usage reporting
 (`enable_reporting=false`) and field-trial configs off.
 
+## What Hivey Browser adds
+
+| Protection | Default | How to change it | Patch |
+| --- | --- | --- | --- |
+| Fingerprinting deception: tiny noise in Canvas image data, `measureText()` and `get*ClientRects()`, recomputed on every page load | **On** | `chrome://flags/#disable-fingerprinting-noise` | `privacy/fingerprinting-noise-on-by-default` |
+| Global Privacy Control: `Sec-GPC: 1` header and `navigator.globalPrivacyControl` tell sites not to sell or share your data | **On** | `chrome://flags/#enable-global-privacy-control` | `privacy/hardened-defaults` |
+| Always use secure connections (strict): warns before loading any page over plain HTTP | **On** | Settings > Privacy and security > Security | `privacy/hardened-defaults` |
+
+The noise is small enough to be invisible on screen but changes the
+fingerprint a tracker computes on every page load.
+
 ## Build-time downloads are not runtime requests
 
 Building fetches compilers and Microsoft SDK files (see

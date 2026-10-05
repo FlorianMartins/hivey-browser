@@ -1,0 +1,25 @@
+# Hardened defaults: Global Privacy Control on, HTTPS-Only (strict) mode on.
+--- a/chrome/browser/ui/browser_ui_prefs.cc
++++ b/chrome/browser/ui/browser_ui_prefs.cc
+@@ -221,7 +221,8 @@
+ #endif
+ 
+   registry->RegisterBooleanPref(
+-      prefs::kHttpsOnlyModeEnabled, false,
++      // Hivey: "Always use secure connections" (strict) on by default.
++      prefs::kHttpsOnlyModeEnabled, true,
+       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+   registry->RegisterBooleanPref(
+       prefs::kHttpsFirstBalancedMode, false,
+--- a/third_party/blink/renderer/platform/runtime_enabled_features.json5
++++ b/third_party/blink/renderer/platform/runtime_enabled_features.json5
+@@ -3397,6 +3397,9 @@
+     },
+     {
+       name: "GlobalPrivacyControlForce",
++      // Hivey: send Sec-GPC and expose navigator.globalPrivacyControl by
++      // default (chrome://flags/#enable-global-privacy-control to turn it off).
++      status: "stable",
+     },
+     {
+       name: "GlobalPrivacyControlTest",

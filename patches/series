@@ -1,2 +1,5 @@
 # Hivey Browser patches, applied after ungoogled-chromium and ungoogled-chromium-windows.
 hivey/build/thin-lto-jobs-arg.patch
+hivey/privacy/fingerprinting-noise-on-by-default.patch
+hivey/privacy/hardened-defaults.patch
+hivey/customization/hivey-default-theme.patch

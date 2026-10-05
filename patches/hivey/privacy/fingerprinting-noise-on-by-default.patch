@@ -1,0 +1,79 @@
+# Turn Canvas/measureText/ClientRects fingerprint deception on by default, with --disable-fingerprinting-noise (chrome://flags) to turn it off.
+--- a/chrome/browser/bromite_flag_entries.h
++++ b/chrome/browser/bromite_flag_entries.h
+@@ -20,4 +20,8 @@
+      "Enable Canvas image data fingerprint deception",
+      "Slightly modifies at most 10 pixels in Canvas image data extracted via JS APIs. ungoogled-chromium flag, Bromite feature.",
+      kOsAll, SINGLE_VALUE_TYPE(switches::kFingerprintingCanvasImageDataNoise)},
++    {"disable-fingerprinting-noise",
++     "Disable fingerprinting deception",
++     "Hivey Browser adds noise to Canvas image data, measureText() and get*ClientRects() by default, so sites cannot use them to fingerprint you. Turn this on only if a site breaks. Hivey Browser flag.",
++     kOsAll, SINGLE_VALUE_TYPE(switches::kDisableFingerprintingNoise)},
+ #endif  // CHROME_BROWSER_BROMITE_FLAG_ENTRIES_H_
+--- a/components/ungoogled/ungoogled_switches.cc
++++ b/components/ungoogled/ungoogled_switches.cc
+@@ -15,4 +15,8 @@
+ // Enable fingerprinting deception for Canvas image data
+ const char kFingerprintingCanvasImageDataNoise[] = "fingerprinting-canvas-image-data-noise";
+ 
++// Hivey Browser: the three deceptions above are on by default; this turns
++// them all off (for a site that breaks).
++const char kDisableFingerprintingNoise[] = "disable-fingerprinting-noise";
++
+ }  // namespace switches
+--- a/components/ungoogled/ungoogled_switches.h
++++ b/components/ungoogled/ungoogled_switches.h
+@@ -14,6 +14,7 @@
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintingClientRectsNoise[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintingCanvasMeasureTextNoise[];
+ COMPONENT_EXPORT(UNGOOGLED) extern const char kFingerprintingCanvasImageDataNoise[];
++COMPONENT_EXPORT(UNGOOGLED) extern const char kDisableFingerprintingNoise[];
+ 
+ }
+ 
+--- a/content/browser/renderer_host/render_process_host_impl.cc
++++ b/content/browser/renderer_host/render_process_host_impl.cc
+@@ -3926,6 +3926,7 @@
+       switches::kFingerprintingClientRectsNoise,
+       switches::kFingerprintingCanvasMeasureTextNoise,
+       switches::kFingerprintingCanvasImageDataNoise,
++      switches::kDisableFingerprintingNoise,
+       switches::kForceDeviceScaleFactor,
+       switches::kForceDisplayColorProfile,
+       switches::kForceHighContrast,
+--- a/content/child/runtime_features.cc
++++ b/content/child/runtime_features.cc
+@@ -416,6 +416,12 @@
+        switches::kFingerprintingCanvasMeasureTextNoise, true},
+       {wrf::EnableFingerprintingCanvasImageDataNoise,
+        switches::kFingerprintingCanvasImageDataNoise, true},
++      {wrf::EnableFingerprintingClientRectsNoise,
++       switches::kDisableFingerprintingNoise, false},
++      {wrf::EnableFingerprintingCanvasMeasureTextNoise,
++       switches::kDisableFingerprintingNoise, false},
++      {wrf::EnableFingerprintingCanvasImageDataNoise,
++       switches::kDisableFingerprintingNoise, false},
+   };
+ 
+   for (const auto& mapping : switchToFeatureMapping) {
+--- a/third_party/blink/renderer/platform/runtime_enabled_features.json5
++++ b/third_party/blink/renderer/platform/runtime_enabled_features.json5
+@@ -3061,12 +3061,18 @@
+     },
+     {
+       name: "FingerprintingClientRectsNoise",
++      // Hivey: on by default; --disable-fingerprinting-noise turns it off.
++      status: "stable",
+     },
+     {
+       name: "FingerprintingCanvasMeasureTextNoise",
++      // Hivey: on by default; --disable-fingerprinting-noise turns it off.
++      status: "stable",
+     },
+     {
+       name: "FingerprintingCanvasImageDataNoise",
++      // Hivey: on by default; --disable-fingerprinting-noise turns it off.
++      status: "stable",
+     },
+     {
+       name: "Fledge",
