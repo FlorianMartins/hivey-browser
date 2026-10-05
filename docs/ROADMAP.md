@@ -26,6 +26,7 @@ on a real Windows machine before moving on.
 - [x] HTTPS-only (strict) mode on by default
 - [x] Encrypted DNS (secure mode, Quad9) by default
 - [ ] Hardened defaults (third-party cookies, referrers, WebRTC IP handling)
+- [x] DuckDuckGo as default search engine (local new tab page)
 - [ ] Zero requests at startup, proven by a network capture in CI
 
 ## Phase 2: Resource control

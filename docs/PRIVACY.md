@@ -31,6 +31,7 @@ Hivey Browser build flags additionally keep crash/usage reporting
 | Protection | Default | How to change it | Patch |
 | --- | --- | --- | --- |
 | Built-in ad and tracker blocker: EasyList + EasyPrivacy, applied to every site by Chromium's own subresource filter; nothing is downloaded at runtime and no per-site record is kept | **On** | Address bar icon > *Always allow on this site*, or Settings > Site settings > Ads | `privacy/builtin-adblock` |
+| DuckDuckGo as default search engine, in every country; its remote new tab page and logo are removed so new tabs stay local | **On** | Settings > Search engine | `privacy/duckduckgo-default-search` |
 | Fingerprinting deception: tiny noise in Canvas image data, `measureText()` and `get*ClientRects()`, recomputed on every page load | **On** | `chrome://flags/#disable-fingerprinting-noise` | `privacy/fingerprinting-noise-on-by-default` |
 | Global Privacy Control: `Sec-GPC: 1` header and `navigator.globalPrivacyControl` tell sites not to sell or share your data | **On** | `chrome://flags/#enable-global-privacy-control` | `privacy/hardened-defaults` |
 | Always use secure connections (strict): warns before loading any page over plain HTTP | **On** | Settings > Privacy and security > Security | `privacy/hardened-defaults` |

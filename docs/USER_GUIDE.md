@@ -32,6 +32,8 @@ These protections are on without any setup:
   draws in a canvas (a game, an image editor) misbehaves, turn on
   `chrome://flags/#disable-fingerprinting-noise` and restart.
 - **GPU hidden.** Sites using WebGL cannot read your graphics card model.
+- **Private search.** Searches typed in the address bar go to DuckDuckGo.
+  Pick another engine in *Settings > Search engine*.
 - **No Google services, no telemetry, no crash reports.**
 
 ## Memory and performance

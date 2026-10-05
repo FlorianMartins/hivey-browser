@@ -9,3 +9,4 @@ hivey/resources/memory-saver-on.patch
 hivey/resources/ram-limiter.patch
 hivey/customization/fluent-overlay-scrollbars.patch
 hivey/privacy/builtin-adblock.patch
+hivey/privacy/duckduckgo-default-search.patch

@@ -1,0 +1,34 @@
+# DuckDuckGo as default search engine everywhere, without its remote new tab page and logo.
+--- a/components/search_engines/template_url_prepopulate_data.cc
++++ b/components/search_engines/template_url_prepopulate_data.cc
+@@ -317,9 +317,14 @@
+     PrefService& prefs,
+     const std::vector<raw_ptr<const PrepopulatedEngine>>&
+         regional_prepopulated_engines) {
+-  return FindPrepopulatedEngineInternal(prefs, regional_prepopulated_engines,
+-                                        google.id,
+-                                        /*use_first_as_fallback=*/true);
++  // Hivey: DuckDuckGo is the default search engine in every country (other
++  // engines stay one click away in Settings > Search engine).
++  if (std::unique_ptr<TemplateURLData> engine = FindPrepopulatedEngineInternal(
++          prefs, regional_prepopulated_engines, duckduckgo.id,
++          /*use_first_as_fallback=*/false)) {
++    return engine;
++  }
++  return PrepopulatedEngineToTemplateURLData(&duckduckgo);
+ }
+ 
+ }  // namespace TemplateURLPrepopulateData
+--- a/third_party/search_engines_data/resources/definitions/prepopulated_engines.json
++++ b/third_party/search_engines_data/resources/definitions/prepopulated_engines.json
+@@ -123,10 +123,8 @@
+       "keyword": "duckduckgo.com",
+       "favicon_url": "https://duckduckgo.com/favicon.ico",
+       "base_builtin_resource_id": "SEARCH_ENGINE_DUCKDUCKGO",
+-      "logo_url": "https://staticcdn.duckduckgo.com/android/DuckDuckGoLogo.png",
+       "search_url": "https://duckduckgo.com/?q={searchTerms}",
+       "suggest_url": "https://duckduckgo.com/ac/?q={searchTerms}&type=list",
+-      "new_tab_url": "https://duckduckgo.com/chrome_newtab",
+       "type": "SEARCH_ENGINE_DUCKDUCKGO",
+       "id": 92,
+       "regulatory_extensions": [
