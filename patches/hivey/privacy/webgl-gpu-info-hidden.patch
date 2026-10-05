@@ -1,0 +1,14 @@
+# Hide the GPU vendor and model from WebGL (WEBGL_debug_renderer_info) by default.
+--- a/third_party/blink/common/features.cc
++++ b/third_party/blink/common/features.cc
+@@ -22,7 +22,9 @@
+ BASE_FEATURE(kDisableLinkDrag, "DisableLinkDrag", base::FEATURE_DISABLED_BY_DEFAULT);
+ BASE_FEATURE(kReducedSystemInfo, "ReducedSystemInfo", base::FEATURE_DISABLED_BY_DEFAULT);
+ BASE_FEATURE(kRemoveClientHints, "RemoveClientHints", base::FEATURE_DISABLED_BY_DEFAULT);
+-BASE_FEATURE(kSpoofWebGLInfo, "SpoofWebGLInfo", base::FEATURE_DISABLED_BY_DEFAULT);
++// Hivey: hide the GPU vendor/model (WEBGL_debug_renderer_info) by default;
++// chrome://flags/#spoof-webgl-info turns it off or picks another profile.
++BASE_FEATURE(kSpoofWebGLInfo, "SpoofWebGLInfo", base::FEATURE_ENABLED_BY_DEFAULT);
+ const char kSpoofWebGLRenderer[] = "renderer";
+ const char kSpoofWebGLVendor[] = "vendor";
+ const base::FeatureParam<std::string> kSpoofWebGLRendererParam{&kSpoofWebGLInfo, kSpoofWebGLRenderer, " "};

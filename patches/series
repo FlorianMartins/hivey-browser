@@ -3,3 +3,5 @@ hivey/build/thin-lto-jobs-arg.patch
 hivey/privacy/fingerprinting-noise-on-by-default.patch
 hivey/privacy/hardened-defaults.patch
 hivey/customization/hivey-default-theme.patch
+hivey/privacy/secure-dns-quad9.patch
+hivey/privacy/webgl-gpu-info-hidden.patch

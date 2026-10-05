@@ -19,9 +19,10 @@ on a real Windows machine before moving on.
 - [ ] Built-in content blocker (filter lists, no extension needed)
 - [x] Fingerprinting deception on by default (Canvas, measureText, ClientRects)
 - [x] Global Privacy Control on by default
-- [ ] More fingerprinting protections (fonts, WebGL, audio)
+- [x] GPU vendor/model hidden from WebGL
+- [ ] More fingerprinting protections (fonts, audio)
 - [x] HTTPS-only (strict) mode on by default
-- [ ] Encrypted DNS with a privacy-respecting resolver by default
+- [x] Encrypted DNS (secure mode, Quad9) by default
 - [ ] Hardened defaults (third-party cookies, referrers, WebRTC IP handling)
 - [ ] Zero requests at startup, proven by a network capture in CI
 

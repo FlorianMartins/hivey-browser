@@ -33,6 +33,12 @@ Hivey Browser build flags additionally keep crash/usage reporting
 | Fingerprinting deception: tiny noise in Canvas image data, `measureText()` and `get*ClientRects()`, recomputed on every page load | **On** | `chrome://flags/#disable-fingerprinting-noise` | `privacy/fingerprinting-noise-on-by-default` |
 | Global Privacy Control: `Sec-GPC: 1` header and `navigator.globalPrivacyControl` tell sites not to sell or share your data | **On** | `chrome://flags/#enable-global-privacy-control` | `privacy/hardened-defaults` |
 | Always use secure connections (strict): warns before loading any page over plain HTTP | **On** | Settings > Privacy and security > Security | `privacy/hardened-defaults` |
+| Encrypted DNS (DNS-over-HTTPS, secure mode) through Quad9: your network provider no longer sees the sites you visit | **On** | Settings > Privacy and security > Security > Use secure DNS | `privacy/secure-dns-quad9` |
+| GPU vendor and model hidden from WebGL (`WEBGL_debug_renderer_info` returns a blank value, the same for every Hivey user) | **On** | `chrome://flags/#spoof-webgl-info` | `privacy/webgl-gpu-info-hidden` |
+
+Why Quad9: a Swiss non-profit, no IP address logging, and it refuses to
+resolve known malicious domains. Captive portals (hotel or airport Wi-Fi)
+still work: Chromium opens their login page without secure DNS.
 
 The noise is small enough to be invisible on screen but changes the
 fingerprint a tracker computes on every page load.

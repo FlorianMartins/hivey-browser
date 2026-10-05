@@ -1,0 +1,28 @@
+# Encrypted DNS (DoH, secure mode) with Quad9 by default.
+--- a/chrome/browser/net/default_dns_over_https_config_source.cc
++++ b/chrome/browser/net/default_dns_over_https_config_source.cc
+@@ -27,9 +27,11 @@
+   // result in reentrancy and mess up registration between this code and
+   // NetworkService creation.
+   if (set_up_pref_defaults) {
++    // Hivey: every DNS query is encrypted by default (Quad9, see
++    // RegisterPrefs); Settings > Security > "Use secure DNS" changes it.
+     local_state->SetDefaultPrefValue(prefs::kDnsOverHttpsMode,
+                                      base::Value(SecureDnsConfig::ModeToString(
+-                                         net::SecureDnsMode::kOff)));
++                                         net::SecureDnsMode::kSecure)));
+   }
+ }
+ 
+@@ -39,7 +41,10 @@
+ void DefaultDnsOverHttpsConfigSource::RegisterPrefs(
+     PrefRegistrySimple* registry) {
+   registry->RegisterStringPref(prefs::kDnsOverHttpsMode, std::string());
+-  registry->RegisterStringPref(prefs::kDnsOverHttpsTemplates, std::string());
++  // Hivey: Quad9 (non-profit, Swiss, no IP logging, blocks known malicious
++  // domains) as the default secure DNS provider.
++  registry->RegisterStringPref(prefs::kDnsOverHttpsTemplates,
++                               "https://dns.quad9.net/dns-query");
+   registry->RegisterBooleanPref(prefs::kDnsOverHttpsAutomaticModeFallbackToDoh,
+                                 false);
+ #if BUILDFLAG(IS_CHROMEOS)
