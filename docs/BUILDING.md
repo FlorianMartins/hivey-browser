@@ -60,7 +60,8 @@ Microsoft's public sources instead, verifying every file:
 | `d3dcompiler_47.dll`, DXC DLLs | same manifest, SDK MSI "Windows Store Apps Tools" | sha256 in the manifest |
 | `dbghelp.dll`, `dbgcore.dll` | NuGet `Microsoft.Debugging.Platform.DbgEng` | sha256 pinned in `hb.py` (checked against the NuGet catalog's SHA512) |
 | DirectX-Headers, webauthn headers, `windows.0.52.0.lib` | GitHub (Microsoft), versions from ungoogled-chromium-windows | pinned commit / sha512 |
-| clang, Rust, `rc`, sysroot, Node, PGO profile | Chromium's own storage buckets | sha1/sha256/md5 pinned by Chromium |
+| clang, Rust, `rc`, sysroot, Node, PGO profile, ciopfs | Chromium's own storage buckets | sha1/sha256/md5 pinned by Chromium |
+| Go (Dawn's source generators) | go.dev, version from Dawn's `go.mod` | sha256 from go.dev's index; the build runs with `GOTOOLCHAIN=local GOPROXY=off`, so Go never downloads anything itself |
 
 Known quirks the script handles:
 

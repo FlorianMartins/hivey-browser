@@ -25,6 +25,7 @@ import argparse
 import base64
 import configparser
 import gzip
+import re
 import hashlib
 import json
 import os
@@ -258,6 +259,35 @@ def _toolchain_windows_sources():
         if not lib.exists():
             lib.parent.mkdir(parents=True, exist_ok=True)
             lib.write_bytes(zf.read(f'windows-rs-0.52.0/crates/targets/{arch}_msvc/lib/windows.0.52.0.lib'))
+
+
+def _toolchain_go():
+    """Go for the Linux host: Dawn generates WebGPU sources with `go run`.
+
+    The version follows the `go` directive of Dawn's go.mod (newest stable
+    patch release, sha256 from go.dev's index). The build runs with
+    GOTOOLCHAIN=local and GOPROXY=off, so Go never downloads anything itself.
+    """
+    gomod = (SRC / 'third_party/dawn/go.mod').read_text()
+    minor = re.search(r'^go (\d+\.\d+)', gomod, re.M).group(1)
+    target = SRC / 'third_party/dawn/tools/golang/linux-amd64'
+    gobin = target / 'bin' / 'go'
+    if gobin.exists() and f'go{minor}' in subprocess.run([gobin, 'version'], capture_output=True,
+                                                        text=True).stdout:
+        return
+    shutil.rmtree(target, ignore_errors=True)
+    with urllib.request.urlopen('https://go.dev/dl/?mode=json&include=all') as r:
+        releases = json.load(r)
+    rel = next(r for r in releases if r['stable'] and re.fullmatch(rf'go{re.escape(minor)}(\.\d+)?', r['version']))
+    name = f"{rel['version']}.linux-amd64.tar.gz"
+    sha = next(f['sha256'] for f in rel['files'] if f['filename'] == name)
+    archive = download(f'https://go.dev/dl/{name}', BUILD / 'download_cache' / name, sha)
+    target.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive) as t:
+        for m in t.getmembers():
+            if m.name.startswith('go/'):
+                m.name = m.name[3:]
+                t.extract(m, target, filter='data')
 
 
 def _toolchain_node():
@@ -549,7 +579,7 @@ def step_toolchain(args):
     if is_done('domsub'):
         raise SystemExit('domain substitution already applied: toolchain scripts no longer point at real hosts')
     for name, fn in [('clang', _toolchain_clang), ('rust', _toolchain_rust), ('sysroot', _toolchain_sysroot), ('rc', _toolchain_rc), ('pgo', _toolchain_pgo), ('windows-sources', _toolchain_windows_sources),
-                     ('node', _toolchain_node), ('ninja', _toolchain_ninja), ('gn', _toolchain_gn),
+                     ('node', _toolchain_node), ('go', _toolchain_go), ('ninja', _toolchain_ninja), ('gn', _toolchain_gn),
                      ('msvc', _toolchain_msvc)]:
         log(f'toolchain: {name}')
         fn()
@@ -617,7 +647,10 @@ def args_jobs():
 
 def step_build(args):
     ensure_winsysroot()
-    env = {**os.environ, 'DEPOT_TOOLS_WIN_TOOLCHAIN': '1'}
+    env = {**os.environ, 'DEPOT_TOOLS_WIN_TOOLCHAIN': '1',
+           # Go (Dawn's generators) must never fetch toolchains or modules.
+           'GOTOOLCHAIN': 'local', 'GOPROXY': 'off', 'GOFLAGS': '-mod=mod',
+           'GOPATH': str(BUILD / 'gopath'), 'GOCACHE': str(BUILD / 'gopath' / 'cache')}
     targets = args.targets or ['chrome', 'mini_installer']
     cmd = [TOOLS / 'ninja', '-C', OUT, '-j', str(args_jobs())] + targets
     if os.environ.get('HB_KEEP_GOING'):  # e.g. 0 = keep going past every failure
