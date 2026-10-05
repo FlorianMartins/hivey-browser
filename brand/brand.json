@@ -11,6 +11,12 @@
     "prog_id_prefix": "HiveyHTM",
     "pdf_prog_id_prefix": "HiveyPDF",
     "url_scheme": "hivey-browser",
-    "active_setup_guid": "{0A3A905A-34E1-45D5-9D18-089A58AB2E4E}"
+    "active_setup_guid": "{0A3A905A-34E1-45D5-9D18-089A58AB2E4E}",
+    "clsids": {
+      "_comment": "COM classes registered by the installer; must differ from Chrome/Chromium so they can be installed side by side.",
+      "toast_activator_clsid": "{569BC02A-7CD6-4BD8-ABC5-6B9919383605}",
+      "elevator_clsid": "{B6C83E77-EE55-4488-9E88-222EE39099CE}",
+      "tracing_service_clsid": "{5308E3D9-0418-4D3E-A400-E2DED759E34B}"
+    }
   }
 }

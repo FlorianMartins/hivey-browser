@@ -11,7 +11,7 @@ on a real Windows machine before moving on.
 - [x] Build that cannot starve a shared host (priority, memory cap, LTO threads)
 - [ ] First `chrome.exe` + `mini_installer.exe` built and started on Windows
 - [x] Logo and icons (`brand/logo.svg`, rendered at build time)
-- [ ] Own COM CLSIDs/IIDs (elevation service, toast activator)
+- [x] Own COM CLSIDs (elevation service, toast activator, tracing service)
 - [ ] CI build
 
 ## Phase 1: Privacy

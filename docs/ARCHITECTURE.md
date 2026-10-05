@@ -53,12 +53,11 @@ The build tree lives outside the repository (`$HB_BUILD_DIR`, by default
 to Chrome or Chromium without clashing: its own user-data directory, ProgIDs,
 URL scheme and Active Setup GUID.
 
-Known debt: the COM CLSIDs/IIDs of the elevation service and the toast
-activator are still Chromium's. They are baked into MIDL outputs that
-Chromium ships precompiled (`third_party/win_build_output`), so changing
-them needs regenerated MIDL output. This matters only when Chromium is
-installed system-wide on the same machine, and will be fixed before the
-first public release.
+The COM classes the installer registers (elevation service, notification
+toast activator, tracing service) also get their own CLSIDs from
+`brand.json`. The COM *interface* IDs (IIDs) stay Chromium's: they are
+shared by every Chromium-based browser in the IDL and precompiled MIDL
+output, and do not identify the product.
 
 ## Feature work ahead
 

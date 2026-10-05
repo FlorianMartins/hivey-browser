@@ -120,6 +120,13 @@ def rebrand_branding_file(src):
     write(p, '\n'.join(lines) + '\n')
 
 
+def _guid_initializer(guid):
+    """{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX} -> C++ GUID initializer."""
+    h = guid.strip('{}').replace('-', '')
+    tail = ', '.join(f'0x{h[i:i + 2]}' for i in range(16, 32, 2))
+    return f'{{0x{h[0:8]}, 0x{h[8:12]}, 0x{h[12:16]}, {{{tail}}}}}'
+
+
 def rebrand_install_modes(src):
     p = src / 'chrome/install_static/chromium_install_modes.h'
     i = BRAND['install']
@@ -137,6 +144,13 @@ def rebrand_install_modes(src):
         ('L"Chromium PDF Document",', f'L"{name} PDF Document",'),
         ('L"{7D2B3E1D-D096-4594-9D8F-A6667F12E0AC}",', f'L"{i["active_setup_guid"]}",'),
     ]
+    for field, guid in i['clsids'].items():
+        if field.startswith('_'):
+            continue
+        text = re.sub(rf'\.{field} = \{{0x[0-9A-Fa-f]+,\s*0x[0-9A-Fa-f]+,\s*0x[0-9A-Fa-f]+,\s*\{{[^}}]*\}}\}}',
+                      f'.{field} = {_guid_initializer(guid)}', text)
+        if _guid_initializer(guid) not in text:
+            raise SystemExit(f'install modes: could not set {field}')
     for old, new in replacements:
         if new in text:  # already applied
             continue
