@@ -10,14 +10,14 @@ on a real Windows machine before moving on.
 - [x] Branding: name, install/user-data paths, ProgIDs, translated strings
 - [x] Build that cannot starve a shared host (priority, memory cap, LTO threads)
 - [x] First `chrome.exe` + `mini_installer.exe` built (2026-10-05)
-- [ ] Started and tested on a real Windows machine
+- [x] Installed and started on Windows 11 (VM); privacy checks pass (`tests/vm/cdp_checks.py`)
 - [x] Logo and icons (`brand/logo.svg`, rendered at build time)
 - [x] Own COM CLSIDs (elevation service, toast activator, tracing service)
 - [ ] CI build
 
 ## Phase 1: Privacy
 
-- [x] Built-in ad/tracker blocker (EasyList + EasyPrivacy, request blocking): ruleset generated (4.1 MB), browser side compiled; Windows test pending
+- [x] Built-in ad/tracker blocker (EasyList + EasyPrivacy, request blocking): verified on Windows: ad/tracker scripts blocked, and loaded again when the filter is disabled (A/B)
 - [ ] Cosmetic filtering (hide empty ad boxes)
 - [ ] Blocked-requests counter in the toolbar
 - [x] Fingerprinting deception on by default (Canvas, measureText, ClientRects)

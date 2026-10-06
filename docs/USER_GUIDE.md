@@ -36,6 +36,8 @@ These protections are on without any setup:
   Pick another engine in *Settings > Search engine*.
 - **No Google services, no telemetry, no crash reports.**
 
+![Security settings: secure connections and Quad9 DNS](images/settings-security.png)
+
 ## Memory and performance
 
 - **Memory Saver** is on: tabs you have not used for a while are put to
@@ -47,6 +49,8 @@ These protections are on without any setup:
   it is back under the limit. Tabs playing audio or with a form being filled
   are never put to sleep this way. It checks every 30 seconds and memory
   figures refresh every 2 minutes, so it is a soft limit.
+
+![Performance settings: Memory Saver and RAM limiter](images/settings-performance.png)
 
 ## Colors and look
 

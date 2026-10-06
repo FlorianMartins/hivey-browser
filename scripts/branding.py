@@ -36,6 +36,11 @@ STRING_FILES = [
 ]
 
 KEEP = 'The Chromium Authors'
+FIXED_TRANSLATIONS = {
+    'IDS_ABOUT_VERSION_COMPANY_NAME': BRAND['company_name'],
+    'IDS_ABOUT_VERSION_COPYRIGHT': f'Copyright <ph name="YEAR" /> {BRAND["copyright_holder"]} '
+                                   'and The Chromium Authors. All rights reserved.',
+}
 SENTINEL = '\x00KEEP\x00'
 
 
@@ -47,7 +52,24 @@ def write(path, text):
     tmp.replace(path)
 
 
+def credit_and_company(text):
+    """The about pages and the installer's "Publisher" use the company name
+    and copyright messages: the company becomes ours, the copyright credits
+    both (BSD attribution of The Chromium Authors stays)."""
+    company = BRAND['company_name']
+    holder = BRAND['copyright_holder']
+    # Company name message, in the .grd (multi-line) and in the .xtb files.
+    text = re.sub(r'(name="IDS_ABOUT_VERSION_COMPANY_NAME"[^>]*>\s*)The Chromium Authors(\s*</message>)',
+                  rf'\g<1>{company}\g<2>', text)
+    text = text.replace('>The Chromium Authors</translation>', f'>{company}</translation>')
+    # Copyright messages: "<year placeholder> The Chromium Authors".
+    text = re.sub(rf'((?:</ph>|<ph name="YEAR"\s*/>)\s*)(?!{re.escape(holder)})The Chromium Authors',
+                  rf'\g<1>{holder} and The Chromium Authors', text)
+    return text
+
+
 def rename(text, name):
+    text = credit_and_company(text)
     text = text.replace(KEEP, SENTINEL)
     text = re.sub(r'\bChromium\b', name, text)
     return text.replace(SENTINEL, KEEP)
@@ -85,6 +107,10 @@ def rebrand_strings(src, name):
         if [n for n, _ in before] != [n for n, _ in after]:
             raise SystemExit(f'{grd}: message list changed while renaming')
         remap = {old: new for (_, old), (_, new) in zip(before, after) if old != new}
+        # Translators localized "The Chromium Authors" ("Auteurs de Chromium"...),
+        # so a rename would drop the credit in other languages: these messages
+        # get the same fixed text in every language.
+        fixed = {mid: FIXED_TRANSLATIONS[n] for n, mid in after if n in FIXED_TRANSLATIONS}
 
         grd_text = (src / grd).read_text(encoding='utf-8')
         xtbs = re.findall(r'<file path="([^"]+\.xtb)"', grd_text)
@@ -95,7 +121,11 @@ def rebrand_strings(src, name):
             def rekey(m):
                 return f'<translation id="{remap.get(m.group(1), m.group(1))}"'
             text = re.sub(r'<translation id="(\d+)"', rekey, text)
-            write(p, rename(text, name))
+            text = rename(text, name)
+            for mid, content in fixed.items():
+                text = re.sub(rf'(<translation id="{mid}">).*?(</translation>)',
+                              lambda m: m.group(1) + content + m.group(2), text)
+            write(p, text)
         total_rekeyed += len(remap)
         print(f'[brand] {grd}: {len(remap)} messages re-keyed across {len(xtbs)} translations')
     return total_rekeyed
