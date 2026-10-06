@@ -33,7 +33,7 @@ on a real Windows machine before moving on.
 ## Phase 2: Resource control
 
 - [x] Memory Saver on by default
-- [x] RAM limiter (`chrome://flags/#hivey-memory-limit`, 2 to 12 GB), compiled; to be tested on Windows
+- [x] RAM limiter, verified on Windows (1.23 GB -> 1.01 GB under a 1 GB limit)
 - [x] RAM limiter in Settings > Performance > Memory (English + French)
 - [ ] CPU limit
 - [ ] Tab sleeping with per-site exceptions
