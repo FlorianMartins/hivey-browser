@@ -1,0 +1,74 @@
+# Bundled extensions: the loader and the toolbar pinning read the generated list (uBlock Origin Lite, Hivey AI sidebar, Hivey Cyber).
+--- a/chrome/browser/extensions/hivey_bundled_extension_loader.cc
++++ b/chrome/browser/extensions/hivey_bundled_extension_loader.cc
+@@ -17,22 +17,25 @@
+ 
+ namespace {
+ 
+-// Runs on a blocking thread: looks for the bundled .crx next to the browser.
++// Runs on a blocking thread: looks for the bundled .crx files next to the
++// browser.
+ base::DictValue BuildBundledExtensionPrefs() {
+   base::DictValue prefs;
+   base::FilePath dir;
+   if (!base::PathService::Get(chrome::DIR_EXTERNAL_EXTENSIONS, &dir)) {
+     return prefs;
+   }
+-  const base::FilePath crx = dir.Append(HIVEY_BUNDLED_SHIELD_CRX);
+-  if (!base::PathExists(crx)) {
+-    return prefs;
++  for (const HiveyBundledExtension& extension : kHiveyBundledExtensions) {
++    const base::FilePath crx = dir.AppendASCII(extension.crx);
++    if (!base::PathExists(crx)) {
++      continue;
++    }
++    prefs.Set(extension.id,
++              base::DictValue()
++                  .Set(ExternalProviderImpl::kExternalCrx, crx.AsUTF8Unsafe())
++                  .Set(ExternalProviderImpl::kExternalVersion,
++                       extension.version));
+   }
+-  prefs.Set(HIVEY_BUNDLED_SHIELD_ID,
+-            base::DictValue()
+-                .Set(ExternalProviderImpl::kExternalCrx, crx.AsUTF8Unsafe())
+-                .Set(ExternalProviderImpl::kExternalVersion,
+-                     HIVEY_BUNDLED_SHIELD_VERSION));
+   return prefs;
+ }
+ 
+--- a/chrome/browser/extensions/hivey_bundled_extension_loader.h
++++ b/chrome/browser/extensions/hivey_bundled_extension_loader.h
+@@ -11,10 +11,11 @@
+ namespace extensions {
+ 
+ // Hivey: installs the extensions that ship with the browser (uBlock Origin
+-// Lite, as <module dir>/extensions/hivey-shield.crx). Only the extension ID
+-// compiled into the browser is offered, and Chromium checks the .crx
+-// signature against that ID, so files dropped into that folder cannot
+-// install anything else. A user who removes the extension keeps it removed.
++// Lite, the Hivey AI sidebar, Hivey Cyber), as <module dir>/extensions/*.crx.
++// Only the extension IDs compiled into the browser (bundled_extensions.h) are
++// offered, and Chromium checks each .crx signature against its ID, so files
++// dropped into that folder cannot install anything else. A user who removes
++// an extension keeps it removed.
+ class HiveyBundledExtensionLoader : public ExternalLoader {
+  public:
+   HiveyBundledExtensionLoader();
+--- a/chrome/browser/ui/toolbar/toolbar_actions_model.cc
++++ b/chrome/browser/ui/toolbar/toolbar_actions_model.cc
+@@ -157,9 +157,12 @@
+       !is_enterprise_extension && !is_installed_from_sync &&
+       is_feature_enabled && is_toggle_on;
+ 
+-  // Hivey: the bundled content blocker shows its blocked-requests counter
+-  // in the toolbar from the start.
+-  const bool is_hivey_bundled = extension->id() == HIVEY_BUNDLED_SHIELD_ID;
++  // Hivey: bundled extensions marked "pinned" (the content blocker and its
++  // counter, the AI sidebar, the security tools) start in the toolbar.
++  const bool is_hivey_bundled = std::ranges::any_of(
++      kHiveyBundledExtensions, [&](const HiveyBundledExtension& bundled) {
++        return bundled.pinned && extension->id() == bundled.id;
++      });
+ 
+   // We can only pin extensions that have a toolbar action.
+   if (should_add_extension) {

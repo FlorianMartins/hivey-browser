@@ -24,3 +24,4 @@ hivey/privacy/font-fingerprinting.patch
 hivey/customization/hivey-studio-more.patch
 hivey/privacy/font-fingerprinting-fallback.patch
 hivey/build/installer-snapshot-blob-dep.patch
+hivey/privacy/bundled-extensions-list.patch

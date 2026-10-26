@@ -4,3 +4,6 @@
 [submodule "third_party/ungoogled-chromium-windows"]
 	path = third_party/ungoogled-chromium-windows
 	url = https://github.com/ungoogled-software/ungoogled-chromium-windows
+[submodule "third_party/hivey-ai-sidebar"]
+	path = third_party/hivey-ai-sidebar
+	url = https://github.com/FlorianMartins/HiveyAI-Sidebar
