@@ -1,0 +1,48 @@
+# Side panel header: no extension icon for Hivey Tools (the Hivey AI sidebar shows its logo itself).
+--- a/chrome/browser/ui/views/side_panel/side_panel_header_controller.cc
++++ b/chrome/browser/ui/views/side_panel/side_panel_header_controller.cc
+@@ -8,6 +8,7 @@
+ #include <string_view>
+ 
+ #include "base/check.h"
++#include "chrome/browser/hivey/bundled_extensions.h"
+ #include "base/check_deref.h"
+ #include "base/functional/bind.h"
+ #include "base/functional/callback_helpers.h"
+@@ -97,14 +98,24 @@
+ 
+ SidePanelHeaderController::~SidePanelHeaderController() = default;
+ 
++namespace {
++
++// Extension panels show the extension's icon in the header, except Hivey
++// Tools (the Hivey AI sidebar), which shows its logo itself just below.
++bool ShowsPanelIcon(const SidePanelEntryKey& key) {
++  return key.id() == SidePanelEntryId::kExtension &&
++         key.extension_id() != HIVEY_BUNDLED_AI_ID;
++}
++
++}  // namespace
++
+ std::unique_ptr<views::ImageView> SidePanelHeaderController::CreatePanelIcon() {
+   CHECK(!panel_icon_);
+   CHECK(side_panel_entry_);
+ 
+   std::unique_ptr<views::ImageView> icon_image_view =
+       std::make_unique<views::ImageView>();
+-  const bool is_visible =
+-      side_panel_entry_->key().id() == SidePanelEntryId::kExtension;
++  const bool is_visible = ShowsPanelIcon(side_panel_entry_->key());
+   icon_image_view->SetVisible(is_visible);
+   if (is_visible) {
+     icon_image_view->SetImage(GetIconImage());
+@@ -265,8 +276,7 @@
+   CHECK(side_panel_entry_);
+   CHECK(action_item_);
+   panel_title_->SetText(GetTitleText());
+-  const bool show_icon =
+-      side_panel_entry_->key().id() == SidePanelEntryId::kExtension;
++  const bool show_icon = ShowsPanelIcon(side_panel_entry_->key());
+   panel_icon_->SetVisible(show_icon);
+   if (show_icon) {
+     panel_icon_->SetImage(GetIconImage());
