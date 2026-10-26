@@ -1,0 +1,48 @@
+# Applies the whole patch stack (ungoogled-chromium, ungoogled-chromium-windows,
+# Hivey) to the pinned Chromium source tarball, without building: catches a
+# patch that no longer applies, or applies with fuzz, on every change.
+name: Patch stack
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "patches/**"
+      - "third_party/**"
+      - "scripts/hb.py"
+      - "scripts/patchcheck.py"
+      - ".github/workflows/patch-stack.yml"
+  push:
+    branches: [main]
+    paths:
+      - "patches/**"
+      - "third_party/**"
+      - "scripts/hb.py"
+      - "scripts/patchcheck.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  patchcheck:
+    name: patch stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Source tarball (sha256 checked)
+        env:
+          HB_BUILD_DIR: ${{ runner.temp }}/build
+        run: python3 scripts/hb.py fetch --full-priority
+      - name: Apply every patch, no fuzz for Hivey patches
+        env:
+          HB_BUILD_DIR: ${{ runner.temp }}/build
+        run: python3 scripts/patchcheck.py "$HB_BUILD_DIR"/download_cache/chromium-*-lite.tar.xz "$RUNNER_TEMP/tree"
