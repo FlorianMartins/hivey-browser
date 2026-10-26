@@ -1,0 +1,218 @@
+# Audio fingerprinting deception (AudioBuffer, AnalyserNode) and navigator.hardwareConcurrency capped at 8, on by default, off with --disable-fingerprinting-noise.
+--- a/chrome/browser/bromite_flag_entries.h
++++ b/chrome/browser/bromite_flag_entries.h
+@@ -22,6 +22,6 @@
+      kOsAll, SINGLE_VALUE_TYPE(switches::kFingerprintingCanvasImageDataNoise)},
+     {"disable-fingerprinting-noise",
+      "Disable fingerprinting deception",
+-     "Hivey Browser adds noise to Canvas image data, measureText() and get*ClientRects() by default, so sites cannot use them to fingerprint you. Turn this on only if a site breaks. Hivey Browser flag.",
++     "Hivey Browser adds noise to Canvas image data, measureText(), get*ClientRects() and Web Audio data, and reports at most 8 processors, by default, so sites cannot use them to fingerprint you. Turn this on only if a site breaks. Hivey Browser flag.",
+      kOsAll, SINGLE_VALUE_TYPE(switches::kDisableFingerprintingNoise)},
+ #endif  // CHROME_BROWSER_BROMITE_FLAG_ENTRIES_H_
+--- a/content/child/runtime_features.cc
++++ b/content/child/runtime_features.cc
+@@ -394,6 +394,15 @@
+     }
+   }
+ 
++  // Hivey: --disable-fingerprinting-noise also turns off the audio noise and
++  // the hardwareConcurrency cap.
++  if (command_line.HasSwitch(switches::kDisableFingerprintingNoise)) {
++    WebRuntimeFeatures::EnableFeatureFromString("FingerprintingAudioNoise",
++                                                false);
++    WebRuntimeFeatures::EnableFeatureFromString(
++        "FingerprintingHardwareConcurrencyCap", false);
++  }
++
+   // Set EnableAutomationControlled if the caller passes
+   // --remote-debugging-port=0 on the command line. This means
+   // the caller has requested an ephemeral port which is how ChromeDriver
+--- a/third_party/blink/renderer/core/frame/navigator_concurrent_hardware.cc
++++ b/third_party/blink/renderer/core/frame/navigator_concurrent_hardware.cc
+@@ -4,12 +4,22 @@
+ 
+ #include "third_party/blink/renderer/core/frame/navigator_concurrent_hardware.h"
+ 
++#include <algorithm>
++
+ #include "base/system/sys_info.h"
++#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+ 
+ namespace blink {
+ 
+ unsigned NavigatorConcurrentHardware::hardwareConcurrency() const {
+-  return static_cast<unsigned>(base::SysInfo::NumberOfProcessors());
++  unsigned processors =
++      static_cast<unsigned>(base::SysInfo::NumberOfProcessors());
++  // Hivey: report at most 8 logical processors, so that most machines give
++  // the same value. Workers can still use every core.
++  if (RuntimeEnabledFeatures::FingerprintingHardwareConcurrencyCapEnabled()) {
++    processors = std::min(processors, 8u);
++  }
++  return processors;
+ }
+ 
+ }  // namespace blink
+--- a/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
++++ b/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
+@@ -39,6 +39,7 @@
+ #include "third_party/blink/renderer/platform/audio/audio_utilities.h"
+ #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
+ #include "third_party/blink/renderer/platform/bindings/exception_state.h"
++#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+ #include "third_party/blink/renderer/platform/wtf/text/strcat.h"
+ 
+ namespace blink {
+@@ -222,6 +223,7 @@
+     return NotShared<DOMFloat32Array>(nullptr);
+   }
+ 
++  MaybeApplyFingerprintingNoise();
+   return NotShared<DOMFloat32Array>(channels_[channel_index].Get());
+ }
+ 
+@@ -252,6 +254,7 @@
+     return;
+   }
+ 
++  MaybeApplyFingerprintingNoise();
+   base::span<const float> src = channels_[channel_number].Get()->AsSpan();
+   base::span<float> dst = destination->AsSpan();
+ 
+@@ -314,6 +317,17 @@
+   dst.subspan(buffer_offset, count).copy_from(src.first(count));
+ }
+ 
++void AudioBuffer::MaybeApplyFingerprintingNoise() {
++  if (fingerprinting_noise_applied_ ||
++      !RuntimeEnabledFeatures::FingerprintingAudioNoiseEnabled()) {
++    return;
++  }
++  fingerprinting_noise_applied_ = true;
++  for (auto& channel : channels_) {
++    audio_utilities::ApplyFingerprintingNoise(channel->AsSpan());
++  }
++}
++
+ void AudioBuffer::Zero() {
+   for (unsigned i = 0; i < channels_.size(); ++i) {
+     if (NotShared<DOMFloat32Array> array = getChannelData(i)) {
+--- a/third_party/blink/renderer/modules/webaudio/audio_buffer.h
++++ b/third_party/blink/renderer/modules/webaudio/audio_buffer.h
+@@ -119,6 +119,11 @@
+  private:
+   bool CreatedSuccessfully(unsigned desired_number_of_channels) const;
+ 
++  // Hivey: adds the audio fingerprinting noise once, the first time script
++  // reads the samples.
++  void MaybeApplyFingerprintingNoise();
++  bool fingerprinting_noise_applied_ = false;
++
+   float sample_rate_;
+   uint32_t length_;
+ 
+--- a/third_party/blink/renderer/modules/webaudio/realtime_analyser.cc
++++ b/third_party/blink/renderer/modules/webaudio/realtime_analyser.cc
+@@ -36,6 +36,7 @@
+ #include "third_party/blink/renderer/platform/audio/audio_bus.h"
+ #include "third_party/blink/renderer/platform/audio/audio_utilities.h"
+ #include "third_party/blink/renderer/platform/audio/vector_math.h"
++#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+ #include "third_party/blink/renderer/platform/wtf/math_extras.h"
+ 
+ namespace blink {
+@@ -130,6 +131,10 @@
+       const double db_mag = audio_utilities::LinearToDecibels(linear_value);
+       destination[i] = static_cast<float>(db_mag);
+     }
++    // Hivey: audio fingerprinting deception.
++    if (RuntimeEnabledFeatures::FingerprintingAudioNoiseEnabled()) {
++      audio_utilities::ApplyFingerprintingNoise(destination.first(len));
++    }
+   }
+ }
+ 
+@@ -197,6 +202,10 @@
+ 
+       destination[i] = value;
+     }
++    // Hivey: audio fingerprinting deception.
++    if (RuntimeEnabledFeatures::FingerprintingAudioNoiseEnabled()) {
++      audio_utilities::ApplyFingerprintingNoise(destination.first(len));
++    }
+   }
+ }
+ 
+--- a/third_party/blink/renderer/platform/audio/audio_utilities.cc
++++ b/third_party/blink/renderer/platform/audio/audio_utilities.cc
+@@ -28,6 +28,7 @@
+ #include <sstream>
+ 
+ #include "base/notreached.h"
++#include "base/rand_util.h"
+ #include "third_party/blink/renderer/platform/wtf/math_extras.h"
+ #include "third_party/blink/renderer/platform/wtf/vector.h"
+ #include "third_party/fdlibm/ieee754.h"
+@@ -214,4 +215,17 @@
+   return ((value + modulus - 1) / modulus) * modulus;
+ }
+ 
++void ApplyFingerprintingNoise(base::span<float> samples) {
++  static const uint64_t seed = base::RandUint64();
++  for (size_t i = 0; i < samples.size(); ++i) {
++    // splitmix64 of (seed, i): uniform, cheap, deterministic per position.
++    uint64_t x = seed + (i + 1) * 0x9E3779B97F4A7C15ull;
++    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
++    x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
++    x ^= x >> 31;
++    const double unit = static_cast<double>(x >> 11) / 9007199254740992.0;
++    samples[i] = static_cast<float>(samples[i] * (1.0 + (unit - 0.5) * 2e-6));
++  }
++}
++
+ }  // namespace blink::audio_utilities
+--- a/third_party/blink/renderer/platform/audio/audio_utilities.h
++++ b/third_party/blink/renderer/platform/audio/audio_utilities.h
+@@ -28,6 +28,7 @@
+ 
+ #include <cstddef>
+ 
++#include "base/containers/span.h"
+ #include "base/time/time.h"
+ #include "third_party/blink/public/common/mediastream/media_devices.h"
+ #include "third_party/blink/public/platform/web_audio_latency_hint.h"
+@@ -92,6 +93,13 @@
+ PLATFORM_EXPORT const std::string GetDeviceEnumerationForTracing(
+     const Vector<WebMediaDeviceInfo>& device_infos);
+ 
++// Hivey: audio fingerprinting deception. Multiplies each sample by 1 + e,
++// |e| <= 1e-6 (about -120 dB, inaudible), e drawn from a per-process seed and
++// the sample position: fingerprints differ between sessions and sites, the
++// noise cannot be removed by normalizing, and reading the same data twice
++// gives the same values.
++PLATFORM_EXPORT void ApplyFingerprintingNoise(base::span<float> samples);
++
+ }  // namespace blink::audio_utilities
+ 
+ #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_AUDIO_AUDIO_UTILITIES_H_
+--- a/third_party/blink/renderer/platform/runtime_enabled_features.json5
++++ b/third_party/blink/renderer/platform/runtime_enabled_features.json5
+@@ -3158,6 +3158,18 @@
+       status: "stable",
+     },
+     {
++      // Hivey: audio fingerprinting deception (AudioBuffer, AnalyserNode);
++      // --disable-fingerprinting-noise turns it off.
++      name: "FingerprintingAudioNoise",
++      status: "stable",
++    },
++    {
++      // Hivey: navigator.hardwareConcurrency reports at most 8;
++      // --disable-fingerprinting-noise turns it off.
++      name: "FingerprintingHardwareConcurrencyCap",
++      status: "stable",
++    },
++    {
+       name: "Fledge",
+       status: "stable",
+       public: true,

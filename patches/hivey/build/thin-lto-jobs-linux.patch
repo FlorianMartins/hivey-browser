@@ -1,0 +1,22 @@
+# ThinLTO thread cap (hivey_thin_lto_jobs) for Linux links too.
+--- a/build/config/compiler/BUILD.gn
++++ b/build/config/compiler/BUILD.gn
+@@ -54,7 +54,7 @@
+ }
+ 
+ declare_args() {
+-  # Hivey: number of ThinLTO backend threads per Windows link. Chromium uses
++  # Hivey: number of ThinLTO backend threads per link. Chromium uses
+   # every hardware thread; a shared build host wants fewer (less memory too).
+   hivey_thin_lto_jobs = "all"
+ }
+@@ -841,7 +841,8 @@
+       # and let it use all cores.
+       # TODO(thakis): Check if '=0' (that is, number of cores, instead
+       # of "all" which means number of hardware threads) is faster.
+-      ldflags += [ "-Wl,--thinlto-jobs=all" ]
++      # Hivey: same thread cap as Windows links (hivey_thin_lto_jobs).
++      ldflags += [ "-Wl,--thinlto-jobs=$hivey_thin_lto_jobs" ]
+ 
+       if (is_chromeos) {
+         # ARM was originally set lower than x86 to keep the size

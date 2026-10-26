@@ -1,0 +1,4 @@
+# Windows x64, cross-compiled from a Linux host with Chromium's pinned
+# clang/Rust (HB_TARGET=win, out/Default).
+target_os="win"
+target_cpu="x64"
