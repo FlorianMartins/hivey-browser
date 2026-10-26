@@ -49,7 +49,7 @@
          <include name="IDR_INTRO_SOUND_ALL_SET_FLAC" file="resources\intro\sounds\all_set.flac" type="BINDATA" />
 --- a/chrome/browser/chrome_browser_main.cc
 +++ b/chrome/browser/chrome_browser_main.cc
-@@ -1331,7 +1331,8 @@
+@@ -1338,7 +1338,8 @@
    if (first_run::IsChromeFirstRun()) {
      if (!base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kApp) &&
          !base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kAppId)) {
