@@ -1,0 +1,1305 @@
+# Location bar: the Hivey logo, centered, on internal pages; a server chip (flag, country, IP, connection) from an IP-to-country database shipped with the browser (DB-IP Lite, CC BY 4.0): no lookup ever leaves the machine.
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -20583,6 +20583,54 @@
+     <message name="IDS_OSCRYPTASYNC_AVAILABILITY_INFOBAR_BUTTON" desc="The text of the button to proceed with relaunching the entire browser to resolve keychain permission issues.">
+       Relaunch
+     </message>
++    <!-- Hivey: server info in the location bar (country of the server, offline lookup) -->
++    <if expr="not is_android">
++      <message name="IDS_HIVEY_SERVER_INFO_TITLE" desc="Title of the bubble that tells where the server of the current page is (its IP address, country and connection).">
++        Server
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_ADDRESS" desc="Label of the IP address of the server of the current page, in the server info bubble.">
++        IP address
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_COUNTRY" desc="Label of the country of the server of the current page, in the server info bubble.">
++        Country
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_CONNECTION" desc="Label of the kind of connection to the server (HTTPS or HTTP, protocol and TLS version), in the server info bubble.">
++        Connection
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_SECURE" desc="The connection to the server of the current page is encrypted (HTTPS), in the server info bubble.">
++        Secure (HTTPS)
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_NOT_SECURE" desc="The connection to the server of the current page is not encrypted (HTTP), in the server info bubble.">
++        Not secure (HTTP)
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_VIA_PROXY" desc="Shown instead of the country of the server when the page was loaded through a proxy, in the location bar and the server info bubble.">
++        Via proxy
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_PROXY_NOTE" desc="Explanation in the server info bubble when the page was loaded through a proxy.">
++        This page was loaded through a proxy: the address is the proxy's, not the server's.
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_LOCAL" desc="Shown instead of a country when the server of the current page is on the local network (private IP address).">
++        Local network
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_UNKNOWN" desc="Shown when the country of the server of the current page is not known.">
++        Unknown
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_TOOLTIP" desc="Tooltip and accessible name of the location bar chip that shows the country of the server of the current page.">
++        Server: <ph name="COUNTRY">$1<ex>United States</ex></ph> (<ph name="IP_ADDRESS">$2<ex>192.0.2.1</ex></ph>)
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_WHOIS" desc="Link in the server info bubble that opens a WHOIS lookup of the domain of the current page on whois.com (technical term)." translateable="false">
++        WHOIS
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_IP_DETAILS" desc="Link in the server info bubble that opens details about the IP address of the server on ipinfo.io.">
++        IP details
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_LINKS_NOTE" desc="Privacy note under the links of the server info bubble: the lookups are done by websites.">
++        These links open a website in a new tab, which then learns the domain or the address.
++      </message>
++      <message name="IDS_HIVEY_SERVER_INFO_ATTRIBUTION" desc="Attribution of the IP-to-country database shipped with the browser (required by its license); a link to db-ip.com. DB-IP is a company name.">
++        IP geolocation by DB-IP
++      </message>
++    </if>
+   </messages>
+ </release>
+ </grit>
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10859,4 +10859,17 @@
+ <translation id="8776060692590616279">Afficher la barre Hivey</translation>
+ <translation id="6713024601744425595">Onglets à gauche</translation>
+ <translation id="8964168382003186981">Onglets à droite</translation>
++<translation id="1919008675977575793">Serveur</translation>
++<translation id="8483248364096924578">Adresse IP</translation>
++<translation id="6445051938772793705">Pays</translation>
++<translation id="4813345808229079766">Connexion</translation>
++<translation id="3350707768161789653">Sécurisée (HTTPS)</translation>
++<translation id="8417718423055476371">Non sécurisée (HTTP)</translation>
++<translation id="2369111204869947198">Via un proxy</translation>
++<translation id="5107008383144279356">Cette page a été chargée via un proxy : l'adresse est celle du proxy, pas celle du serveur.</translation>
++<translation id="3134859781443140237">Réseau local</translation>
++<translation id="1926502253204872447">Serveur : <ph name="COUNTRY"/> (<ph name="IP_ADDRESS"/>)</translation>
++<translation id="6771994669958079942">Détails de l'adresse IP</translation>
++<translation id="963583333837971347">Ces liens ouvrent un site web dans un nouvel onglet, qui apprend alors le domaine ou l'adresse.</translation>
++<translation id="1198436571127508047">Géolocalisation IP par DB-IP</translation>
+ </translationbundle>
+\ No newline at end of file
+--- a/chrome/app/vector_icons/BUILD.gn
++++ b/chrome/app/vector_icons/BUILD.gn
+@@ -164,6 +164,7 @@
+     "help_menu_old.icon",
+     "history.icon",
+     "history_old.icon",
++    "hivey_logo.icon",  # Hivey: location bar chip of internal pages.
+     "home.icon",
+     "home_repair_service.icon",
+     "hotel_class.icon",
+--- a/chrome/app/vector_icons/hivey_logo.icon
++++ b/chrome/app/vector_icons/hivey_logo.icon
+@@ -0,0 +1,68 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++// The Hivey Browser logo (brand/logo.svg), monochrome: a honeycomb cell
++// (pointy-top hexagon outline, even-odd) holding a globe crossed by its orbit
++// (tilted -28 degrees like the logo's, with a cleared gap where its front half
++// passes over the globe). Centered on each canvas. The 16 dip version is the
++// one the location bar uses by default (kLocationBarIconSize), so it is not
++// scaled; the 20 dip one is for touch UI.
++
++CANVAS_DIMENSIONS, 20,
++MOVE_TO, 10, 1,
++LINE_TO, 17.79f, 5.5f,
++LINE_TO, 17.79f, 14.5f,
++LINE_TO, 10, 19,
++LINE_TO, 2.21f, 14.5f,
++LINE_TO, 2.21f, 5.5f,
++CLOSE,
++MOVE_TO, 10, 2.7f,
++LINE_TO, 3.68f, 6.35f,
++LINE_TO, 3.68f, 13.65f,
++LINE_TO, 10, 17.3f,
++LINE_TO, 16.32f, 13.65f,
++LINE_TO, 16.32f, 6.35f,
++CLOSE,
++NEW_PATH,
++CIRCLE, 10, 10, 3.7f,
++NEW_PATH,
++PATH_MODE_CLEAR,
++STROKE, 2.2f,
++MOVE_TO, 5.14f, 12.58f,
++ARC_TO, 5.5f, 1.9f, -28, 0, 0, 14.86f, 7.42f,
++NEW_PATH,
++STROKE, 1,
++MOVE_TO, 5.14f, 12.58f,
++ARC_TO, 5.5f, 1.9f, -28, 0, 0, 14.86f, 7.42f,
++ARC_TO, 5.5f, 1.9f, -28, 0, 0, 5.14f, 12.58f,
++CLOSE
++
++CANVAS_DIMENSIONS, 16,
++MOVE_TO, 8, 0.5f,
++LINE_TO, 14.5f, 4.25f,
++LINE_TO, 14.5f, 11.75f,
++LINE_TO, 8, 15.5f,
++LINE_TO, 1.5f, 11.75f,
++LINE_TO, 1.5f, 4.25f,
++CLOSE,
++MOVE_TO, 8, 2.1f,
++LINE_TO, 2.89f, 5.05f,
++LINE_TO, 2.89f, 10.95f,
++LINE_TO, 8, 13.9f,
++LINE_TO, 13.11f, 10.95f,
++LINE_TO, 13.11f, 5.05f,
++CLOSE,
++NEW_PATH,
++CIRCLE, 8, 8, 2.9f,
++NEW_PATH,
++PATH_MODE_CLEAR,
++STROKE, 1.9f,
++MOVE_TO, 4.12f, 10.07f,
++ARC_TO, 4.4f, 1.5f, -28, 0, 0, 11.88f, 5.93f,
++NEW_PATH,
++STROKE, 0.9f,
++MOVE_TO, 4.12f, 10.07f,
++ARC_TO, 4.4f, 1.5f, -28, 0, 0, 11.88f, 5.93f,
++ARC_TO, 4.4f, 1.5f, -28, 0, 0, 4.12f, 10.07f,
++CLOSE
+--- a/chrome/browser/hivey/BUILD.gn
++++ b/chrome/browser/hivey/BUILD.gn
+@@ -0,0 +1,26 @@
++# Copyright 2026 The Hivey Browser contributors
++# Use of this source code is governed by the MIT license that can be found in
++# the LICENSE file of the Hivey Browser repository.
++
++# The server of the page shown in a tab, and the offline IP-to-country
++# database (hivey_geoip.bin, shipped next to the browser) it is looked up in.
++source_set("server_info") {
++  sources = [
++    "hivey_geoip.cc",
++    "hivey_geoip.h",
++    "hivey_server_info.cc",
++    "hivey_server_info.h",
++  ]
++  public_deps = [
++    "//base",
++    "//content/public/browser",
++    "//net",
++    "//url",
++  ]
++  deps = [
++    "//chrome/common:constants",
++    "//services/network/public/mojom",
++    "//third_party/blink/public/common",
++    "//third_party/blink/public/mojom:mojom_platform",
++  ]
++}
+--- a/chrome/browser/hivey/hivey_geoip.cc
++++ b/chrome/browser/hivey/hivey_geoip.cc
+@@ -0,0 +1,146 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/hivey/hivey_geoip.h"
++
++#include <algorithm>
++#include <utility>
++
++#include "base/containers/span.h"
++#include "base/files/memory_mapped_file.h"
++#include "base/logging.h"
++#include "base/no_destructor.h"
++#include "base/numerics/byte_conversions.h"
++#include "base/numerics/checked_math.h"
++#include "base/path_service.h"
++#include "base/strings/string_util.h"
++#include "base/task/thread_pool.h"
++#include "chrome/common/chrome_paths.h"
++#include "net/base/ip_address.h"
++
++namespace hivey {
++
++namespace {
++
++// See scripts/geoip.py for the file format.
++constexpr char kMagic[] = "HIVEYGEO";
++constexpr size_t kMagicSize = 8;
++constexpr uint16_t kVersion = 1;
++constexpr size_t kHeaderSize = 24;
++constexpr size_t kV4EntrySize = 4 + 2;
++constexpr size_t kV6EntrySize = 16 + 2;
++
++// Index of the last entry whose start is <= `address`, in a table of
++// `count` entries of `entry_size` bytes starting with a big-endian address of
++// `address.size()` bytes. The first entry starts at 0, so there is always one.
++size_t FindEntry(base::span<const uint8_t> table,
++                 size_t count,
++                 size_t entry_size,
++                 base::span<const uint8_t> address) {
++  size_t lo = 0;
++  size_t hi = count;
++  while (hi - lo > 1) {
++    const size_t mid = lo + (hi - lo) / 2;
++    base::span<const uint8_t> start =
++        table.subspan(mid * entry_size, address.size());
++    if (std::ranges::lexicographical_compare(address, start)) {
++      hi = mid;  // address < start
++    } else {
++      lo = mid;
++    }
++  }
++  return lo;
++}
++
++}  // namespace
++
++HiveyGeoIp::Database::Database(base::FilePath path) : path_(std::move(path)) {}
++
++HiveyGeoIp::Database::~Database() = default;
++
++bool HiveyGeoIp::Database::EnsureLoaded() {
++  if (load_attempted_) {
++    return !!file_;
++  }
++  load_attempted_ = true;
++  if (path_.empty()) {
++    base::FilePath dir;
++    if (!base::PathService::Get(chrome::DIR_EXTERNAL_EXTENSIONS, &dir)) {
++      return false;
++    }
++    path_ = dir.AppendASCII(kFileName);
++  }
++  auto file = std::make_unique<base::MemoryMappedFile>();
++  if (!file->Initialize(path_)) {
++    VLOG(1) << "Hivey: no IP-to-country database at " << path_;
++    return false;
++  }
++  base::span<const uint8_t> bytes = file->bytes();
++  if (bytes.size() < kHeaderSize ||
++      bytes.first<kMagicSize>() != base::byte_span_from_cstring(kMagic) ||
++      base::U16FromBigEndian(bytes.subspan<8, 2>()) != kVersion) {
++    LOG(WARNING) << "Hivey: invalid IP-to-country database " << path_;
++    return false;
++  }
++  const size_t v4_count = base::U32FromBigEndian(bytes.subspan<12, 4>());
++  const size_t v6_count = base::U32FromBigEndian(bytes.subspan<16, 4>());
++  base::CheckedNumeric<size_t> expected_size = kHeaderSize;
++  expected_size += base::CheckMul(v4_count, kV4EntrySize);
++  expected_size += base::CheckMul(v6_count, kV6EntrySize);
++  if (!expected_size.IsValid() || expected_size.ValueOrDie() != bytes.size() ||
++      !v4_count || !v6_count) {
++    LOG(WARNING) << "Hivey: truncated IP-to-country database " << path_;
++    return false;
++  }
++  v4_count_ = v4_count;
++  v6_count_ = v6_count;
++  file_ = std::move(file);
++  return true;
++}
++
++std::string HiveyGeoIp::Database::Lookup(const net::IPAddress& address) {
++  const net::IPAddress ip = address.IsIPv4MappedIPv6()
++                                ? net::ConvertIPv4MappedIPv6ToIPv4(address)
++                                : address;
++  if (!ip.IsValid() || !EnsureLoaded()) {
++    return std::string();
++  }
++  base::span<const uint8_t> tables = file_->bytes().subspan(kHeaderSize);
++  const bool is_v4 = ip.IsIPv4();
++  const size_t entry_size = is_v4 ? kV4EntrySize : kV6EntrySize;
++  const size_t count = is_v4 ? v4_count_ : v6_count_;
++  base::span<const uint8_t> table =
++      is_v4 ? tables.first(v4_count_ * kV4EntrySize)
++            : tables.subspan(v4_count_ * kV4EntrySize);
++  const size_t index = FindEntry(table, count, entry_size, ip.bytes().span());
++  base::span<const uint8_t> code =
++      table.subspan(index * entry_size + ip.size(), 2u);
++  if (!base::IsAsciiAlpha(code[0]) || !base::IsAsciiAlpha(code[1])) {
++    return std::string();  // "--": unassigned or reserved.
++  }
++  return base::ToUpperASCII(std::string(code.begin(), code.end()));
++}
++
++// static
++HiveyGeoIp* HiveyGeoIp::GetInstance() {
++  static base::NoDestructor<HiveyGeoIp> instance;
++  return instance.get();
++}
++
++HiveyGeoIp::HiveyGeoIp()
++    : database_(base::ThreadPool::CreateSequencedTaskRunner(
++                    {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
++                     base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN}),
++                base::FilePath()) {}
++
++HiveyGeoIp::~HiveyGeoIp() = default;
++
++void HiveyGeoIp::Lookup(const net::IPAddress& address,
++                        LookupCallback callback) {
++  database_.AsyncCall(&Database::Lookup)
++      .WithArgs(address)
++      .Then(std::move(callback));
++}
++
++}  // namespace hivey
+--- a/chrome/browser/hivey/hivey_geoip.h
++++ b/chrome/browser/hivey/hivey_geoip.h
+@@ -0,0 +1,83 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_HIVEY_GEOIP_H_
++#define CHROME_BROWSER_HIVEY_HIVEY_GEOIP_H_
++
++#include <memory>
++#include <string>
++
++#include "base/files/file_path.h"
++#include "base/functional/callback.h"
++#include "base/no_destructor.h"
++#include "base/threading/sequence_bound.h"
++
++namespace base {
++class MemoryMappedFile;
++}
++
++namespace net {
++class IPAddress;
++}
++
++namespace hivey {
++
++// Offline IP-to-country lookup, from the database that ships next to the
++// browser (<module dir>/extensions/hivey_geoip.bin, written by
++// scripts/geoip.py from db-ip.com's "IP to Country Lite", CC BY 4.0). Nothing
++// is ever sent over the network: the file is memory-mapped once, on a
++// background sequence, and searched there.
++class HiveyGeoIp {
++ public:
++  // The 2-letter ISO 3166 code of the country, in upper case, or an empty
++  // string when the address is not in the database (unassigned or reserved
++  // range, or the database is missing or invalid).
++  using LookupCallback = base::OnceCallback<void(std::string country_code)>;
++
++  // The file name, in chrome::DIR_EXTERNAL_EXTENSIONS.
++  static constexpr char kFileName[] = "hivey_geoip.bin";
++
++  static HiveyGeoIp* GetInstance();
++
++  HiveyGeoIp(const HiveyGeoIp&) = delete;
++  HiveyGeoIp& operator=(const HiveyGeoIp&) = delete;
++
++  // Looks `address` up; replies on the calling sequence. IPv4-mapped IPv6
++  // addresses are looked up as IPv4.
++  void Lookup(const net::IPAddress& address, LookupCallback callback);
++
++  // The database, on its own sequence. Public for tests.
++  class Database {
++   public:
++    // Maps `path` lazily, on the first lookup. An empty path means the default
++    // location.
++    explicit Database(base::FilePath path);
++    Database(const Database&) = delete;
++    Database& operator=(const Database&) = delete;
++    ~Database();
++
++    std::string Lookup(const net::IPAddress& address);
++
++   private:
++    bool EnsureLoaded();
++
++    base::FilePath path_;
++    bool load_attempted_ = false;
++    std::unique_ptr<base::MemoryMappedFile> file_;
++    size_t v4_count_ = 0;
++    size_t v6_count_ = 0;
++  };
++
++ private:
++  friend class base::NoDestructor<HiveyGeoIp>;
++
++  HiveyGeoIp();
++  ~HiveyGeoIp();
++
++  base::SequenceBound<Database> database_;
++};
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_HIVEY_HIVEY_GEOIP_H_
+--- a/chrome/browser/hivey/hivey_server_info.cc
++++ b/chrome/browser/hivey/hivey_server_info.cc
+@@ -0,0 +1,202 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/hivey/hivey_server_info.h"
++
++#include <utility>
++
++#include "base/functional/bind.h"
++#include "chrome/browser/hivey/hivey_geoip.h"
++#include "content/public/browser/document_user_data.h"
++#include "content/public/browser/navigation_handle.h"
++#include "content/public/browser/page.h"
++#include "content/public/browser/render_frame_host.h"
++#include "content/public/browser/weak_document_ptr.h"
++#include "content/public/browser/web_contents.h"
++#include "net/base/ip_endpoint.h"
++#include "net/base/proxy_chain.h"
++#include "net/http/http_connection_info.h"
++#include "net/ssl/ssl_cipher_suite_names.h"
++#include "net/ssl/ssl_connection_status_flags.h"
++#include "net/ssl/ssl_info.h"
++#include "services/network/public/mojom/fetch_api.mojom-shared.h"
++#include "third_party/blink/public/mojom/loader/resource_load_info.mojom.h"
++
++namespace hivey {
++
++namespace {
++
++// The server info of one document (the main frame of a page), so it follows
++// the page into and out of the back/forward cache and through prerendering.
++class DocumentServerInfo
++    : public content::DocumentUserData<DocumentServerInfo> {
++ public:
++  ~DocumentServerInfo() override = default;
++
++  ServerInfo& info() { return info_; }
++
++ private:
++  friend class content::DocumentUserData<DocumentServerInfo>;
++
++  DocumentServerInfo(content::RenderFrameHost* render_frame_host,
++                     ServerInfo info)
++      : DocumentUserData(render_frame_host), info_(std::move(info)) {}
++
++  ServerInfo info_;
++
++  DOCUMENT_USER_DATA_KEY_DECL();
++};
++
++DOCUMENT_USER_DATA_KEY_IMPL(DocumentServerInfo);
++
++std::string TlsVersion(const net::SSLInfo& ssl_info) {
++  const int version =
++      net::SSLConnectionStatusToVersion(ssl_info.connection_status);
++  if (version == net::SSL_CONNECTION_VERSION_UNKNOWN) {
++    return std::string();
++  }
++  const char* name = nullptr;
++  net::SSLVersionToString(&name, version);
++  return name ? name : std::string();
++}
++
++}  // namespace
++
++ServerInfo::ServerInfo() = default;
++ServerInfo::ServerInfo(const ServerInfo&) = default;
++ServerInfo& ServerInfo::operator=(const ServerInfo&) = default;
++ServerInfo::~ServerInfo() = default;
++
++HiveyServerInfo::HiveyServerInfo(content::WebContents* web_contents)
++    : content::WebContentsObserver(web_contents),
++      content::WebContentsUserData<HiveyServerInfo>(*web_contents) {}
++
++HiveyServerInfo::~HiveyServerInfo() = default;
++
++const ServerInfo* HiveyServerInfo::GetInfo() const {
++  auto* document = DocumentServerInfo::GetForCurrentDocument(
++      web_contents()->GetPrimaryMainFrame());
++  return document ? &document->info() : nullptr;
++}
++
++base::CallbackListSubscription HiveyServerInfo::RegisterInfoChangedCallback(
++    base::RepeatingClosure callback) {
++  return callbacks_.Add(std::move(callback));
++}
++
++void HiveyServerInfo::DidFinishNavigation(
++    content::NavigationHandle* navigation_handle) {
++  // The outermost main frame: the primary page, or a page being prerendered
++  // (whose info is then ready when it is activated). Back/forward cache
++  // restores and prerender activations keep the info of their document.
++  if (!navigation_handle->IsInOutermostMainFrame() ||
++      !navigation_handle->HasCommitted() ||
++      navigation_handle->IsSameDocument() ||
++      navigation_handle->IsServedFromBackForwardCache() ||
++      navigation_handle->IsPrerenderedPageActivation()) {
++    return;
++  }
++  content::RenderFrameHost* render_frame_host =
++      navigation_handle->GetRenderFrameHost();
++  const GURL& url = navigation_handle->GetURL();
++  const net::IPAddress address =
++      navigation_handle->GetSocketAddress().address();
++  if (!render_frame_host || navigation_handle->IsErrorPage() ||
++      !url.SchemeIsHTTPOrHTTPS() || !address.IsValid()) {
++    NotifyIfPrimary(render_frame_host);
++    return;
++  }
++
++  ServerInfo info;
++  info.url = url;
++  info.address = address;
++  info.is_secure = url.SchemeIsCryptographic();
++  if (navigation_handle->GetConnectionInfo() !=
++      net::HttpConnectionInfo::kUNKNOWN) {
++    info.protocol = std::string(
++        net::HttpConnectionInfoToString(navigation_handle->GetConnectionInfo()));
++  }
++  if (const std::optional<net::SSLInfo>& ssl_info =
++          navigation_handle->GetSSLInfo();
++      ssl_info && ssl_info->is_valid()) {
++    info.tls_version = TlsVersion(*ssl_info);
++  }
++  const net::IPAddress public_address =
++      address.IsIPv4MappedIPv6() ? net::ConvertIPv4MappedIPv6ToIPv4(address)
++                                 : address;
++  const bool is_local = !public_address.IsPubliclyRoutable();
++  info.is_local = is_local;
++  info.lookup_pending = !is_local;
++  DocumentServerInfo::CreateForCurrentDocument(render_frame_host,
++                                               std::move(info));
++  if (!is_local) {
++    HiveyGeoIp::GetInstance()->Lookup(
++        public_address,
++        base::BindOnce(&HiveyServerInfo::OnCountryLookedUp,
++                       weak_factory_.GetWeakPtr(),
++                       render_frame_host->GetWeakDocumentPtr()));
++  }
++  NotifyIfPrimary(render_frame_host);
++}
++
++void HiveyServerInfo::ResourceLoadComplete(
++    content::RenderFrameHost* render_frame_host,
++    const content::GlobalRequestID& request_id,
++    const GURL& original_url,
++    const blink::mojom::ResourceLoadInfo& resource_load_info) {
++  // The navigation does not expose its proxy chain; the load info of the main
++  // resource of the document does, once its body has loaded.
++  if (!render_frame_host || render_frame_host->GetParentOrOuterDocument() ||
++      resource_load_info.request_destination !=
++          network::mojom::RequestDestination::kDocument ||
++      !resource_load_info.proxy_chain.IsValid() ||
++      resource_load_info.proxy_chain.is_direct()) {
++    return;
++  }
++  auto* document =
++      DocumentServerInfo::GetForCurrentDocument(render_frame_host);
++  if (!document || document->info().via_proxy ||
++      document->info().url != resource_load_info.final_url) {
++    return;
++  }
++  document->info().via_proxy = true;
++  document->info().country_code.clear();
++  NotifyIfPrimary(render_frame_host);
++}
++
++void HiveyServerInfo::PrimaryPageChanged(content::Page& page) {
++  callbacks_.Notify();
++}
++
++void HiveyServerInfo::OnCountryLookedUp(
++    const content::WeakDocumentPtr& document_ptr,
++    std::string country_code) {
++  content::RenderFrameHost* render_frame_host =
++      document_ptr.AsRenderFrameHostIfValid();
++  if (!render_frame_host) {
++    return;
++  }
++  auto* document =
++      DocumentServerInfo::GetForCurrentDocument(render_frame_host);
++  if (!document) {
++    return;
++  }
++  document->info().lookup_pending = false;
++  if (!document->info().via_proxy) {
++    document->info().country_code = std::move(country_code);
++  }
++  NotifyIfPrimary(render_frame_host);
++}
++
++void HiveyServerInfo::NotifyIfPrimary(
++    content::RenderFrameHost* render_frame_host) {
++  if (!render_frame_host ||
++      render_frame_host == web_contents()->GetPrimaryMainFrame()) {
++    callbacks_.Notify();
++  }
++}
++
++WEB_CONTENTS_USER_DATA_KEY_IMPL(HiveyServerInfo);
++
++}  // namespace hivey
+--- a/chrome/browser/hivey/hivey_server_info.h
++++ b/chrome/browser/hivey/hivey_server_info.h
+@@ -0,0 +1,102 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_HIVEY_SERVER_INFO_H_
++#define CHROME_BROWSER_HIVEY_HIVEY_SERVER_INFO_H_
++
++#include <string>
++
++#include "base/callback_list.h"
++#include "base/functional/callback_forward.h"
++#include "base/memory/weak_ptr.h"
++#include "content/public/browser/web_contents_observer.h"
++#include "content/public/browser/web_contents_user_data.h"
++#include "net/base/ip_address.h"
++#include "url/gurl.h"
++
++namespace content {
++class WeakDocumentPtr;
++}
++
++namespace hivey {
++
++// What the location bar tells about the server a page was loaded from.
++struct ServerInfo {
++  ServerInfo();
++  ServerInfo(const ServerInfo&);
++  ServerInfo& operator=(const ServerInfo&);
++  ~ServerInfo();
++
++  // The committed URL of the page.
++  GURL url;
++  // The remote address of the socket that fetched the page. Through a proxy,
++  // that is the proxy's address.
++  net::IPAddress address;
++  // True until the country lookup has replied.
++  bool lookup_pending = false;
++  // ISO 3166 code of the country of `address` ("US"), or empty: unknown, not
++  // publicly routable, or `via_proxy`.
++  std::string country_code;
++  // The address is not publicly routable (LAN, loopback...).
++  bool is_local = false;
++  // The page was fetched through a proxy: `address` and the country are the
++  // proxy's, not the server's.
++  bool via_proxy = false;
++  // HTTPS (or another cryptographic scheme).
++  bool is_secure = false;
++  // ALPN protocol ("h2", "http/1.1", "h3"...), or empty.
++  std::string protocol;
++  // "TLS 1.3"..., or empty.
++  std::string tls_version;
++};
++
++// Per tab: the server of the page shown, for the location bar's server chip
++// (Flagfox-like). Only uses what the navigation already knows (the socket's
++// remote address, the connection, the proxy chain) and the database shipped
++// with the browser (HiveyGeoIp): it never sends anything, never stores
++// anything. The info is kept per document, so going back to a page restored
++// from the back/forward cache shows its server again.
++class HiveyServerInfo : public content::WebContentsObserver,
++                        public content::WebContentsUserData<HiveyServerInfo> {
++ public:
++  HiveyServerInfo(const HiveyServerInfo&) = delete;
++  HiveyServerInfo& operator=(const HiveyServerInfo&) = delete;
++  ~HiveyServerInfo() override;
++
++  // The server of the page in the primary main frame, or nullptr when there
++  // is nothing to show (internal page, file, error page, unknown address).
++  const ServerInfo* GetInfo() const;
++
++  // `callback` runs whenever GetInfo() may have changed.
++  base::CallbackListSubscription RegisterInfoChangedCallback(
++      base::RepeatingClosure callback);
++
++ private:
++  friend class content::WebContentsUserData<HiveyServerInfo>;
++
++  explicit HiveyServerInfo(content::WebContents* web_contents);
++
++  // content::WebContentsObserver:
++  void DidFinishNavigation(
++      content::NavigationHandle* navigation_handle) override;
++  void ResourceLoadComplete(
++      content::RenderFrameHost* render_frame_host,
++      const content::GlobalRequestID& request_id,
++      const GURL& original_url,
++      const blink::mojom::ResourceLoadInfo& resource_load_info) override;
++  void PrimaryPageChanged(content::Page& page) override;
++
++  void OnCountryLookedUp(const content::WeakDocumentPtr& document,
++                         std::string country_code);
++  void NotifyIfPrimary(content::RenderFrameHost* render_frame_host);
++
++  base::RepeatingClosureList callbacks_;
++  base::WeakPtrFactory<HiveyServerInfo> weak_factory_{this};
++
++  WEB_CONTENTS_USER_DATA_KEY_DECL();
++};
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_HIVEY_HIVEY_SERVER_INFO_H_
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -1309,6 +1309,7 @@
+   public_deps = [ ":tab_helpers" ]
+ 
+   deps = [
++    "//chrome/browser/hivey:server_info",
+     ":recently_audible_helper",
+     ":tab_dialogs",
+     ":ui_features",
+--- a/chrome/browser/ui/tab_helpers.cc
++++ b/chrome/browser/ui/tab_helpers.cc
+@@ -156,6 +156,7 @@
+ #include "components/webapps/browser/android/app_banner_manager_android.h"
+ #include "content/public/common/content_features.h"
+ #else
++#include "chrome/browser/hivey/hivey_server_info.h"
+ #include "chrome/browser/ui/bookmarks/bookmark_tab_helper.h"
+ #include "chrome/browser/ui/javascript_dialogs/javascript_tab_modal_dialog_manager_delegate_desktop.h"
+ #include "chrome/browser/ui/read_anything/read_anything_side_panel_controller.h"
+@@ -601,6 +602,8 @@
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+   webapps::PreRedirectionURLObserver::CreateForWebContents(web_contents);
++  // Hivey: the server of the page, for the location bar's server chip.
++  hivey::HiveyServerInfo::CreateForWebContents(web_contents);
+ #endif
+ 
+   // --- Section 3: Feature tab helpers behind BUILDFLAGs ---
+--- a/chrome/browser/ui/toolbar/BUILD.gn
++++ b/chrome/browser/ui/toolbar/BUILD.gn
+@@ -74,6 +74,7 @@
+       "//ui/menus",
+     ]
+     deps += [
++      "//chrome/app/vector_icons",  # Hivey: kHiveyLogoIcon.
+       "//chrome/browser/ttc/core:features",
+       "//chrome/browser/ui:ui_features",
+       "//chrome/browser/ui/actions:actions_headers",
+--- a/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
++++ b/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
+@@ -41,6 +41,7 @@
+ #include "url/gurl.h"
+ 
+ #if !BUILDFLAG(IS_ANDROID)
++#include "chrome/app/vector_icons/vector_icons.h"
+ #include "chrome/browser/extensions/extension_ui_util.h"
+ #include "components/omnibox/browser/vector_icons.h"  // nogncheck
+ #include "components/vector_icons/vector_icons.h"     // nogncheck
+@@ -195,9 +196,9 @@
+   }
+ 
+   if (url.SchemeIs(content::kChromeUIScheme)) {
+-    return &(features::IsRoundedIconsEnabled()
+-                 ? omnibox::kChromeProductIcon
+-                 : omnibox::kProductChromeRefreshOldIcon);
++    // Hivey: the "Hivey Browser" chip of internal pages shows the Hivey logo,
++    // not Chromium's.
++    return &kHiveyLogoIcon;
+   }
+ 
+   // If there is no active WebContents (which can happen during toolbar
+--- a/chrome/browser/ui/views/location_bar/BUILD.gn
++++ b/chrome/browser/ui/views/location_bar/BUILD.gn
+@@ -15,6 +15,7 @@
+     public += [
+       "content_setting_image_view.h",
+       "custom_tab_bar_view.h",
++      "hivey_server_info_view.h",  # Hivey
+       "lens_overlay_homework_page_action_controller.h",
+       "location_bar_bubble_delegate_view.h",
+       "location_bar_layout.h",
+@@ -90,6 +91,7 @@
+     sources += [
+       "content_setting_image_view.cc",
+       "custom_tab_bar_view.cc",
++      "hivey_server_info_view.cc",  # Hivey
+       "lens_overlay_homework_page_action_controller.cc",
+       "location_bar_actions.cc",
+       "location_bar_bubble_delegate_view.cc",
+@@ -113,6 +115,7 @@
+     deps += [
+       "//chrome/app:generated_resources",
+       "//chrome/app/vector_icons",
++      "//chrome/browser:browser_process",  # Hivey: g_browser_process
+       "//chrome/browser:primitives",
+       "//chrome/browser/actor/ui",
+       "//chrome/browser/autocomplete",
+@@ -122,6 +125,7 @@
+       "//chrome/browser/extensions/api/omnibox",
+       "//chrome/browser/glic",
+       "//chrome/browser/history_embeddings",
++      "//chrome/browser/hivey:server_info",  # Hivey
+       "//chrome/browser/page_info",
+       "//chrome/browser/resources/omnibox_popup:resources_grit",
+       "//chrome/browser/search_engines",
+@@ -196,6 +200,7 @@
+       "//extensions/browser",
+       "//extensions/common",
+       "//extensions/common:extension_features",
++      "//net",  # Hivey: registry_controlled_domains
+       "//third_party/blink/public/common",
+       "//ui/accessibility",
+       "//ui/actions",
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
+@@ -0,0 +1,332 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/ui/views/location_bar/hivey_server_info_view.h"
++
++#include <memory>
++#include <utility>
++#include <vector>
++
++#include "base/functional/bind.h"
++#include "base/strings/string_util.h"
++#include "base/strings/utf_string_conversion_utils.h"
++#include "base/strings/utf_string_conversions.h"
++#include "build/build_config.h"
++#include "chrome/app/vector_icons/vector_icons.h"
++#include "chrome/browser/browser_process.h"
++#include "chrome/browser/hivey/hivey_server_info.h"
++#include "chrome/browser/ui/color/chrome_color_id.h"
++#include "chrome/browser/ui/layout_constants.h"
++#include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
++#include "chrome/grit/generated_resources.h"
++#include "content/public/browser/page_navigator.h"
++#include "content/public/browser/web_contents.h"
++#include "content/public/common/referrer.h"
++#include "net/base/registry_controlled_domains/registry_controlled_domain.h"
++#include "ui/base/l10n/l10n_util.h"
++#include "ui/base/metadata/metadata_impl_macros.h"
++#include "ui/base/models/image_model.h"
++#include "ui/base/mojom/dialog_button.mojom.h"
++#include "ui/base/page_transition_types.h"
++#include "ui/base/ui_base_features.h"
++#include "ui/base/window_open_disposition.h"
++#include "ui/gfx/text_constants.h"
++#include "ui/views/bubble/bubble_border.h"
++#include "ui/views/controls/label.h"
++#include "ui/views/controls/link.h"
++#include "ui/views/layout/box_layout.h"
++#include "ui/views/layout/layout_provider.h"
++#include "ui/views/layout/layout_types.h"
++#include "ui/views/layout/table_layout.h"
++#include "ui/views/style/typography.h"
++#include "ui/views/widget/widget.h"
++#include "url/gurl.h"
++
++namespace {
++
++// Lookups on these sites only happen when the user clicks their link.
++constexpr char kWhoisUrl[] = "https://www.whois.com/whois/";
++constexpr char kIpDetailsUrl[] = "https://ipinfo.io/";
++// Attribution required by the license (CC BY 4.0) of the database.
++constexpr char kDbIpUrl[] = "https://db-ip.com/";
++
++std::u16string CountryName(const hivey::ServerInfo& info) {
++  if (info.via_proxy) {
++    return l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_VIA_PROXY);
++  }
++  if (info.is_local) {
++    return l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_LOCAL);
++  }
++  if (info.country_code.empty()) {
++    return l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_UNKNOWN);
++  }
++  std::u16string name = l10n_util::GetDisplayNameForCountry(
++      info.country_code, g_browser_process->GetApplicationLocale());
++  return name.empty() ? base::ASCIIToUTF16(info.country_code) : name;
++}
++
++std::u16string ConnectionText(const hivey::ServerInfo& info) {
++  std::vector<std::u16string> parts = {l10n_util::GetStringUTF16(
++      info.is_secure ? IDS_HIVEY_SERVER_INFO_SECURE
++                     : IDS_HIVEY_SERVER_INFO_NOT_SECURE)};
++  if (!info.protocol.empty()) {
++    parts.push_back(base::ASCIIToUTF16(info.protocol));
++  }
++  if (!info.tls_version.empty()) {
++    parts.push_back(base::ASCIIToUTF16(info.tls_version));
++  }
++  return base::JoinString(parts, u" · ");
++}
++
++std::u16string Tooltip(const hivey::ServerInfo& info) {
++  return l10n_util::GetStringFUTF16(IDS_HIVEY_SERVER_INFO_TOOLTIP,
++                                    CountryName(info),
++                                    base::ASCIIToUTF16(info.address.ToString()));
++}
++
++// The bubble shown when the chip is clicked.
++class HiveyServerInfoBubbleView : public LocationBarBubbleDelegateView {
++  METADATA_HEADER(HiveyServerInfoBubbleView, LocationBarBubbleDelegateView)
++
++ public:
++  HiveyServerInfoBubbleView(views::View* anchor,
++                            content::WebContents* web_contents,
++                            const hivey::ServerInfo& info)
++      : LocationBarBubbleDelegateView(anchor, web_contents) {
++    SetArrow(views::BubbleBorder::TOP_RIGHT);
++    SetButtons(static_cast<int>(ui::mojom::DialogButton::kNone));
++    SetTitle(IDS_HIVEY_SERVER_INFO_TITLE);
++    SetShowCloseButton(true);
++    SetCloseOnMainFrameOriginNavigation(true);
++
++    const views::LayoutProvider* provider = views::LayoutProvider::Get();
++    set_fixed_width(
++        provider->GetDistanceMetric(views::DISTANCE_BUBBLE_PREFERRED_WIDTH));
++    const int vertical_spacing = provider->GetDistanceMetric(
++        views::DISTANCE_UNRELATED_CONTROL_VERTICAL);
++    SetLayoutManager(std::make_unique<views::BoxLayout>(
++        views::BoxLayout::Orientation::kVertical, gfx::Insets(),
++        vertical_spacing));
++
++    // IP address, country, connection.
++    auto* table = AddChildView(std::make_unique<views::View>());
++    auto& layout = table->SetLayoutManager(std::make_unique<views::TableLayout>())
++                       ->AddColumn(views::LayoutAlignment::kStart,
++                                   views::LayoutAlignment::kStart,
++                                   views::TableLayout::kFixedSize,
++                                   views::TableLayout::ColumnSize::kUsePreferred,
++                                   0, 0)
++                       .AddPaddingColumn(
++                           views::TableLayout::kFixedSize,
++                           provider->GetDistanceMetric(
++                               views::DISTANCE_RELATED_CONTROL_HORIZONTAL))
++                       .AddColumn(views::LayoutAlignment::kStretch,
++                                  views::LayoutAlignment::kStart, 1.0f,
++                                  views::TableLayout::ColumnSize::kUsePreferred,
++                                  0, 0);
++    const int row_spacing =
++        provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL);
++    auto add_row = [&](int name_id, const std::u16string& value,
++                       bool selectable) {
++      if (table->children().size()) {
++        layout.AddPaddingRow(views::TableLayout::kFixedSize, row_spacing);
++      }
++      layout.AddRows(1, views::TableLayout::kFixedSize);
++      table->AddChildView(std::make_unique<views::Label>(
++          l10n_util::GetStringUTF16(name_id),
++          views::style::CONTEXT_DIALOG_BODY_TEXT,
++          views::style::STYLE_SECONDARY));
++      auto* label = table->AddChildView(std::make_unique<views::Label>(
++          value, views::style::CONTEXT_DIALOG_BODY_TEXT));
++      label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
++      label->SetSelectable(selectable);
++    };
++    add_row(IDS_HIVEY_SERVER_INFO_ADDRESS,
++            base::ASCIIToUTF16(info.address.ToString()), /*selectable=*/true);
++    std::u16string country = CountryName(info);
++    if (!info.via_proxy && !info.country_code.empty()) {
++      country = HiveyServerInfoView::FlagEmoji(info.country_code) + u" " +
++                country + u" (" + base::ASCIIToUTF16(info.country_code) + u")";
++    }
++    add_row(IDS_HIVEY_SERVER_INFO_COUNTRY, country, /*selectable=*/false);
++    add_row(IDS_HIVEY_SERVER_INFO_CONNECTION, ConnectionText(info),
++            /*selectable=*/false);
++
++    if (info.via_proxy) {
++      AddNote(IDS_HIVEY_SERVER_INFO_PROXY_NOTE);
++    }
++
++    // Links to lookup sites: nothing is sent unless the user clicks one.
++    auto* links = AddChildView(std::make_unique<views::View>());
++    links->SetLayoutManager(std::make_unique<views::BoxLayout>(
++        views::BoxLayout::Orientation::kHorizontal, gfx::Insets(),
++        provider->GetDistanceMetric(
++            views::DISTANCE_RELATED_CONTROL_HORIZONTAL)));
++    std::string domain = net::registry_controlled_domains::GetDomainAndRegistry(
++        info.url,
++        net::registry_controlled_domains::EXCLUDE_PRIVATE_REGISTRIES);
++    if (domain.empty()) {
++      domain = info.url.HostNoBrackets();  // IP address or single-label host.
++    }
++    AddLink(links, l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_WHOIS),
++            GURL(kWhoisUrl + domain));
++    AddLink(links, l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_IP_DETAILS),
++            GURL(kIpDetailsUrl + info.address.ToString()));
++    AddNote(IDS_HIVEY_SERVER_INFO_LINKS_NOTE);
++    AddLink(this, l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_ATTRIBUTION),
++            GURL(kDbIpUrl))
++        ->SetHorizontalAlignment(gfx::ALIGN_LEFT);
++  }
++  HiveyServerInfoBubbleView(const HiveyServerInfoBubbleView&) = delete;
++  HiveyServerInfoBubbleView& operator=(const HiveyServerInfoBubbleView&) =
++      delete;
++  ~HiveyServerInfoBubbleView() override = default;
++
++ private:
++  void AddNote(int message_id) {
++    auto* note = AddChildView(std::make_unique<views::Label>(
++        l10n_util::GetStringUTF16(message_id),
++        views::style::CONTEXT_DIALOG_BODY_TEXT, views::style::STYLE_HINT));
++    note->SetMultiLine(true);
++    note->SetHorizontalAlignment(gfx::ALIGN_LEFT);
++  }
++
++  views::Link* AddLink(views::View* parent,
++                       const std::u16string& text,
++                       const GURL& url) {
++    auto* link = parent->AddChildView(std::make_unique<views::Link>(
++        text, views::style::CONTEXT_DIALOG_BODY_TEXT));
++    link->SetCallback(base::BindRepeating(
++        &HiveyServerInfoBubbleView::OpenInNewTab, base::Unretained(this), url));
++    return link;
++  }
++
++  void OpenInNewTab(const GURL& url) {
++    if (!url.is_valid() || !web_contents()) {
++      return;
++    }
++    // No referrer: the site only gets what is in its URL.
++    web_contents()->OpenURL(
++        content::OpenURLParams(url, content::Referrer(),
++                               WindowOpenDisposition::NEW_FOREGROUND_TAB,
++                               ui::PAGE_TRANSITION_LINK,
++                               /*is_renderer_initiated=*/false),
++        /*navigation_handle_callback=*/{});
++    GetWidget()->Close();
++  }
++};
++
++BEGIN_METADATA(HiveyServerInfoBubbleView)
++END_METADATA
++
++}  // namespace
++
++HiveyServerInfoView::HiveyServerInfoView(
++    IconLabelBubbleView::Delegate* parent_delegate,
++    const gfx::FontList& font_list)
++    : IconLabelBubbleView(font_list, parent_delegate) {
++  SetVisible(false);
++  SetImageModel(ui::ImageModel::FromVectorIcon(
++      features::IsRoundedIconsEnabled() ? kGlobeIcon : kGlobeOldIcon,
++      kColorOmniboxResultsIcon,
++      GetLayoutConstant(LayoutConstant::kLocationBarTrailingIconSize)));
++  label()->SetElideBehavior(gfx::NO_ELIDE);
++}
++
++HiveyServerInfoView::~HiveyServerInfoView() = default;
++
++// static
++std::u16string HiveyServerInfoView::FlagEmoji(const std::string& country_code) {
++  std::u16string flag;
++  if (country_code.size() != 2 || !base::IsAsciiAlpha(country_code[0]) ||
++      !base::IsAsciiAlpha(country_code[1])) {
++    return flag;
++  }
++  for (char c : country_code) {
++    // U+1F1E6 REGIONAL INDICATOR SYMBOL LETTER A, then B...
++    base::WriteUnicodeCharacter(0x1F1E6 + (base::ToUpperASCII(c) - 'A'),
++                                &flag);
++  }
++  return flag;
++}
++
++void HiveyServerInfoView::Update(content::WebContents* web_contents,
++                                 bool force_hidden) {
++  force_hidden_ = force_hidden;
++  if (web_contents != web_contents_.get()) {
++    web_contents_ = web_contents ? web_contents->GetWeakPtr() : nullptr;
++    info_subscription_ = {};
++    if (web_contents) {
++      // Created by TabHelpers for every tab; GetOrCreate covers the others.
++      info_subscription_ =
++          hivey::HiveyServerInfo::GetOrCreateForWebContents(web_contents)
++              ->RegisterInfoChangedCallback(base::BindRepeating(
++                  &HiveyServerInfoView::Refresh, base::Unretained(this)));
++    }
++  }
++  Refresh();
++}
++
++bool HiveyServerInfoView::ShowBubble(const ui::Event& event) {
++  if (IsBubbleShowing() || !web_contents_) {
++    return false;
++  }
++  const hivey::HiveyServerInfo* server_info =
++      hivey::HiveyServerInfo::FromWebContents(web_contents_.get());
++  const hivey::ServerInfo* info =
++      server_info ? server_info->GetInfo() : nullptr;
++  if (!info) {
++    return false;
++  }
++  auto bubble = std::make_unique<HiveyServerInfoBubbleView>(
++      this, web_contents_.get(), *info);
++  bubble_tracker_.SetView(bubble.get());
++  views::Widget* widget =
++      views::BubbleDialogDelegateView::CreateBubble(std::move(bubble));
++  widget->Show();
++  return true;
++}
++
++bool HiveyServerInfoView::IsBubbleShowing() const {
++  return bubble_tracker_.view() != nullptr;
++}
++
++void HiveyServerInfoView::Refresh() {
++  const hivey::HiveyServerInfo* server_info =
++      web_contents_ ? hivey::HiveyServerInfo::FromWebContents(
++                          web_contents_.get())
++                    : nullptr;
++  const hivey::ServerInfo* info =
++      server_info ? server_info->GetInfo() : nullptr;
++  // Wait for the lookup (a few milliseconds) rather than flash a globe.
++  const bool visible = !force_hidden_ && info && !info->lookup_pending;
++  if (visible) {
++    std::u16string text;
++    if (info->via_proxy) {
++      text = l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_VIA_PROXY);
++    } else if (!info->country_code.empty()) {
++#if BUILDFLAG(IS_WIN)
++      // Windows' emoji font has no flags: the letters would show in boxes.
++      text = base::ASCIIToUTF16(info->country_code);
++#else
++      text = FlagEmoji(info->country_code) + u" " +
++             base::ASCIIToUTF16(info->country_code);
++#endif
++    }
++    const std::u16string tooltip = Tooltip(*info);
++    if (text != label()->GetText() || tooltip != tooltip_) {
++      tooltip_ = tooltip;
++      SetLabel(text, tooltip);
++      SetTooltipText(tooltip);
++      PreferredSizeChanged();
++    }
++  }
++  if (visible != GetVisible()) {
++    SetVisible(visible);
++    PreferredSizeChanged();
++  }
++}
++
++BEGIN_METADATA(HiveyServerInfoView)
++END_METADATA
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
+@@ -0,0 +1,63 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_HIVEY_SERVER_INFO_VIEW_H_
++#define CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_HIVEY_SERVER_INFO_VIEW_H_
++
++#include <string>
++
++#include "base/callback_list.h"
++#include "base/memory/weak_ptr.h"
++#include "chrome/browser/ui/views/location_bar/icon_label_bubble_view.h"
++#include "ui/base/metadata/metadata_header_macros.h"
++#include "ui/views/view_tracker.h"
++
++namespace content {
++class WebContents;
++}
++
++namespace gfx {
++class FontList;
++}
++
++// Location bar chip with the country of the server the page was loaded from
++// (flag and country code, like Firefox's Flagfox), from the offline database
++// shipped with Hivey Browser (hivey::HiveyServerInfo). Clicking it shows the
++// server's IP address, country and connection, with links to WHOIS and IP
++// details sites that only open on click. Hidden on internal pages, files,
++// error pages and when the address is unknown.
++class HiveyServerInfoView : public IconLabelBubbleView {
++  METADATA_HEADER(HiveyServerInfoView, IconLabelBubbleView)
++
++ public:
++  HiveyServerInfoView(IconLabelBubbleView::Delegate* parent_delegate,
++                      const gfx::FontList& font_list);
++  HiveyServerInfoView(const HiveyServerInfoView&) = delete;
++  HiveyServerInfoView& operator=(const HiveyServerInfoView&) = delete;
++  ~HiveyServerInfoView() override;
++
++  // Shows the server of `web_contents`, the active tab (may be null), unless
++  // `force_hidden` (e.g. while the user edits the location bar).
++  void Update(content::WebContents* web_contents, bool force_hidden);
++
++  // The regional-indicator flag emoji of a 2-letter country code ("US").
++  static std::u16string FlagEmoji(const std::string& country_code);
++
++ protected:
++  // IconLabelBubbleView:
++  bool ShowBubble(const ui::Event& event) override;
++  bool IsBubbleShowing() const override;
++
++ private:
++  // Updates the chip from the info of `web_contents_`.
++  void Refresh();
++
++  base::WeakPtr<content::WebContents> web_contents_;
++  bool force_hidden_ = false;
++  std::u16string tooltip_;
++  base::CallbackListSubscription info_subscription_;
++  views::ViewTracker bubble_tracker_;
++};
++
++#endif  // CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_HIVEY_SERVER_INFO_VIEW_H_
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -61,6 +61,7 @@
+ #include "chrome/browser/ui/views/chrome_typography.h"
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/location_bar/content_setting_image_view.h"
++#include "chrome/browser/ui/views/location_bar/hivey_server_info_view.h"
+ #include "chrome/browser/ui/views/location_bar/location_bar_actions.h"
+ #include "chrome/browser/ui/views/location_bar/location_bar_layout.h"
+ #include "chrome/browser/ui/views/location_bar/location_bar_util.h"
+@@ -474,6 +475,10 @@
+     content_setting_views_.push_back(AddChildView(std::move(image_view)));
+   }
+ 
++  // Hivey: country of the server of the page, from the bundled database.
++  hivey_server_info_view_ = AddChildView(
++      std::make_unique<HiveyServerInfoView>(this, page_action_font_list));
++
+   std::vector<actions::ActionItem*> page_action_items = {};
+   if (browser_) {
+     page_action_items = page_actions::GetActivePageActionItems(*browser_);
+@@ -925,6 +930,10 @@
+   }
+   add_trailing_decoration(ai_mode_hint_label_, /*intra_item_padding=*/0,
+                           /*edge_padding=*/trailing_decorations_edge_padding);
++  // Hivey: the server chip, between the page actions and the content settings.
++  add_trailing_decoration(hivey_server_info_view_,
++                          kContentSettingIntraItemPadding,
++                          /*edge_padding=*/trailing_decorations_edge_padding);
+   for (ContentSettingImageView* view :
+        std::views::reverse(content_setting_views_)) {
+     int intra_item_padding = kContentSettingIntraItemPadding;
+@@ -2040,6 +2049,13 @@
+       !omnibox_view_->GetText().empty() &&
+       IsVirtualKeyboardVisible(GetWidget()));
+ 
++  // Hivey: follow the active tab; hide the server chip while typing, like the
++  // page actions.
++  if (hivey_server_info_view_) {
++    hivey_server_info_view_->Update(GetWebContents(),
++                                    ShouldHidePageActionIcons());
++  }
++
+   InvalidateLayout();
+   SchedulePaint();
+   UpdateChipVisibility();
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.h
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.h
+@@ -55,6 +55,7 @@
+ class BrowserWindowInterface;
+ class CommandUpdater;
+ class ContentSettingBubbleModelDelegate;
++class HiveyServerInfoView;
+ class OmniboxController;
+ class OmniboxContextMenu;
+ enum class OmniboxPart;
+@@ -588,6 +589,9 @@
+   // The content setting views.
+   ContentSettingViews content_setting_views_;
+ 
++  // Hivey: the country of the server of the page (offline lookup).
++  raw_ptr<HiveyServerInfoView> hivey_server_info_view_ = nullptr;
++
+   // The container for page action icons.
+   raw_ptr<page_actions::PageActionContainerView> page_action_container_ =
+       nullptr;

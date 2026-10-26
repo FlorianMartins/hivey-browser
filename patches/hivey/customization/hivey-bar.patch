@@ -1476,7 +1476,7 @@
 +#include "components/prefs/pref_change_registrar.h"
 +#include "extensions/browser/extension_registry.h"
 +#include "extensions/browser/extension_registry_observer.h"
-+#include "ui/base/models/simple_menu_model.h"
++#include "ui/menus/simple_menu_model.h"
 +#include "ui/base/metadata/metadata_header_macros.h"
 +#include "ui/views/bubble/bubble_border.h"
 +#include "ui/views/context_menu_controller.h"

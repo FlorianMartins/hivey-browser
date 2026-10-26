@@ -217,7 +217,7 @@
      set({ui::kColorSysPrimary, ui::kColorAccent, ui::kColorFocusableBorderFocused,
 -         ui::kColorSysStateFocusRing},
 +         ui::kColorSysStateFocusRing, ui::kColorButtonBackgroundProminent,
-+         ui::kColorToggleButtonTrackOn, ui::kColorLink, ui::kColorHelpIconActive},
++         ui::kColorToggleButtonTrackOn, ui::kColorLinkForeground, ui::kColorHelpIconActive},
          *accent);
 +    set({ui::kColorSysOnPrimary, ui::kColorButtonForegroundProminent},
 +        on_accent);

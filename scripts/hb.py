@@ -64,6 +64,7 @@ import prune_binaries  # noqa: E402
 sys.path.pop(0)
 sys.path.insert(0, str(ROOT / 'scripts'))
 import crx3  # noqa: E402
+import geoip  # noqa: E402
 sys.path.pop(0)
 
 STEPS = ['fetch', 'unpack', 'prune', 'toolchain', 'patch', 'brand', 'bundle', 'domsub', 'configure', 'build',
@@ -924,16 +925,23 @@ def step_bundle(args):
         + '\n'.join(entries) + '\n};\n\n'
         '#endif  // CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n')
     log(f'update public key {update_key}')
-    mark_done('bundle', extensions=info, update_key=update_key)
+    # The offline IP-to-country database of the location bar's server chip
+    # (scripts/geoip.py); the download cache lives outside BUNDLED, which this
+    # step wipes.
+    geoip_bin, geoip_month = geoip.build(BUNDLED, BUILD / 'downloads' / 'geoip')
+    mark_done('bundle', extensions=info, update_key=update_key,
+              geoip={'month': geoip_month, 'sha256': sha256_file(geoip_bin)})
 
 
 def _stage_bundled_extensions():
-    """Put the .crx files where the browser looks for them: <module dir>/
-    extensions (the Windows installer packs out/Default/Extensions)."""
+    """Put the .crx files and the GeoIP database where the browser looks for
+    them: <module dir>/extensions (the Windows installer packs
+    out/Default/Extensions)."""
     dest = OUT / ('Extensions' if TARGET == 'win' else 'extensions')
     dest.mkdir(parents=True, exist_ok=True)
-    for crx in BUNDLED.glob('*.crx'):
-        shutil.copy2(crx, dest / crx.name)
+    for f in [*BUNDLED.glob('*.crx'), BUNDLED / geoip.FILE_NAME]:
+        if f.exists():
+            shutil.copy2(f, dest / f.name)
 
 
 def step_domsub(args):
