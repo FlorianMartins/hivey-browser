@@ -27,6 +27,10 @@ BASE = next((a for a in sys.argv[1:] if a.startswith('http')), 'http://127.0.0.1
 SHOTS = Path(sys.argv[sys.argv.index('--shots') + 1]) if '--shots' in sys.argv else None
 OFFLINE = '--offline' in sys.argv
 SHIELD_ID = 'dijgmkdjplmconokheconjjfkplefhbe'  # bundled uBlock Origin Lite
+AI_ID = 'lkcmbmbhbkaihiiioilbfoamihehnhce'  # bundled Hivey AI sidebar
+CYBER_ID = 'kcbcbfchhinjlnahaoehhnogalnjlefg'  # bundled Hivey Cyber
+# Hivey Studio's state, as the page gets it from its handler.
+STUDIO_STATE = "import('chrome://resources/js/cr.js').then(cr => cr.sendWithPromise('getState'))"
 
 
 class LocalSite(http.server.BaseHTTPRequestHandler):
@@ -220,6 +224,25 @@ try:
     shield = [t for t in targets if SHIELD_ID in t.get('url', '')]
     check('Hivey Shield (uBlock Origin Lite) running', bool(shield),
           shield[0]['url'] if shield else 'no target from the bundled extension')
+    for name, ext_id in (('Hivey AI sidebar', AI_ID), ('Hivey Cyber', CYBER_ID)):
+        running = [t for t in targets if ext_id in t.get('url', '')]
+        check(f'{name} running', bool(running), running[0]['url'] if running else 'no target from the bundled extension')
+
+    # The AI sidebar reads a page only when invoked on it: its site access is
+    # "on click", the AI providers' API hosts stay granted.
+    p.goto('chrome://extensions/', settle=2)
+    access = p.eval(f"""chrome.developerPrivate.getExtensionInfo('{AI_ID}').then(i => {{
+      const h = i.permissions.runtimeHostPermissions;
+      return h ? {{access: h.hostAccess, granted: h.hosts.filter(x => x.granted).map(x => x.host)}} : null; }})""")
+    check('Hivey AI site access on click', isinstance(access, dict) and access['access'] != 'ON_ALL_SITES' and
+          any('api.anthropic.com' in host for host in access['granted']), f'runtime host permissions: {access}')
+    # The security tools (opened in a tab, the popup has no site to check:
+    # ask its module for a site instead).
+    p.goto(f'chrome-extension://{CYBER_ID}/popup.html', settle=1.5)
+    tools = p.eval("""import('./tools.js').then(async m => ({count: m.TOOLS.length,
+      whois: await m.toolUrl(m.TOOLS.find(x => x.id === 'whois'), m.target('https://example.com/path'))}))""")
+    check('Hivey Cyber tools', isinstance(tools, dict) and tools['count'] >= 10 and
+          'example.com' in str(tools['whois']), f'{tools}')
     p.goto('chrome://hivey/', settle=3)
     nav = p.eval("document.querySelectorAll('.nav-item').length")
     check('Hivey Studio loads', nav == 6, f'{nav} sections in the navigation')
@@ -229,6 +252,57 @@ try:
     gauge = p.eval("document.querySelector('#gauge-ram .gauge-value')?.textContent")
     check('Hivey Studio live usage', bool(gauge) and gauge != '–', f'memory gauge shows {gauge!r}')
     p.shot('hivey-studio-resources')
+
+    # The toolbar button's bubble page: the Resources section alone.
+    p.goto('chrome://hivey-resources.top-chrome/', settle=4)
+    bubble = p.eval("({bubble: document.body.classList.contains('in-bubble'),"
+                    " nav: document.querySelectorAll('.nav-item').length,"
+                    " gauge: document.querySelector('#gauge-ram .gauge-value')?.textContent})")
+    check('Resources bubble page', isinstance(bubble, dict) and bubble['bubble'] and
+          bubble['gauge'] not in (None, '–'), f'{bubble}')
+    p.shot('hivey-resources-bubble')
+
+    # Security defaults, from the content settings Hivey Studio reads.
+    p.goto('chrome://hivey/#privacy', settle=2)
+    st = p.eval(STUDIO_STATE)
+    security = st.get('security') if isinstance(st, dict) else st
+    check('Device APIs blocked (USB, serial, HID, Bluetooth)',
+          isinstance(security, dict) and security.get('devicesBlocked') is True, f'security state: {security}')
+    check('Vertical tabs do not expand on hover by default',
+          isinstance(st, dict) and st['prefs'].get('vertical_tabs.expand_on_hover') is False,
+          f"vertical_tabs.expand_on_hover = {isinstance(st, dict) and st['prefs'].get('vertical_tabs.expand_on_hover')}")
+
+    # Color engine: a custom toolbar color reaches the browser's color
+    # provider (Hivey Studio reads its palette from there).
+    p.eval("chrome.send('setColor', ['toolbar', '#123456'])")
+    time.sleep(1.5)
+    toolbar = p.eval(STUDIO_STATE + ".then(s => s.colors.palette.toolbar)")
+    p.eval("chrome.send('setColor', ['toolbar', ''])")
+    time.sleep(1)
+    restored = p.eval(STUDIO_STATE + ".then(s => s.colors.palette.toolbar)")
+    check('Custom toolbar color', str(toolbar).lower() == '#123456' and str(restored).lower() != '#123456',
+          f'toolbar color {toolbar} set, {restored} after reset')
+
+    # Live refresh: a setting changed elsewhere (here, from another tab)
+    # shows up at once in an open Hivey Studio.
+    p.goto('about:blank', settle=0.5)
+    p.goto('chrome://hivey/#layout', settle=2)
+    switches = "document.querySelectorAll('.switch-input').length"
+    before = p.eval(switches)
+    other = Page()
+    other.goto('chrome://hivey/', settle=2)
+    other.eval("chrome.send('setPref', ['vertical_tabs.enabled', true])")
+    time.sleep(2)
+    after = p.eval(switches)
+    vertical = p.eval(STUDIO_STATE + ".then(s => s.prefs['vertical_tabs.enabled'])")
+    other.close()
+    urllib.request.urlopen(f'{BASE}/json/activate/{p.id}')  # a background tab draws no frames
+    time.sleep(1)
+    p.shot('hivey-studio-vertical-tabs')
+    p.eval("chrome.send('setPref', ['vertical_tabs.enabled', false])")
+    time.sleep(1)
+    check('Hivey Studio refreshes live', vertical is True and isinstance(before, int) and after == before + 1,
+          f'vertical tabs {vertical} from another tab: {before} -> {after} switches (hover option shown)')
 
     # Hivey Studio, end to end: a preset changes the browser color (handler
     # and ThemeService), and the network limiter slows a download down.
@@ -241,9 +315,9 @@ try:
     p.goto('chrome://hivey/#appearance', settle=3)
     after = p.eval("getComputedStyle(document.documentElement).getPropertyValue('--user').trim()")
     check('Hivey Studio color preset', after.lower() == '#6366f1' and before != after,
-          f'browser color {before} -> {after} (Aura preset)')
+          f'browser color {before} -> {after} (Aura accent)')
     p.shot('hivey-studio-aura')
-    p.eval("document.querySelectorAll('.swatch')[0].click()")  # back to Hivey amber
+    p.eval("chrome.send('applyPreset', ['aura'])")  # back to the default theme
     time.sleep(1)
 
     def timed_download():

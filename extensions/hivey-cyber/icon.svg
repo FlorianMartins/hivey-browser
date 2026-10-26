@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Hivey Cyber: the Hivey honeycomb cell holding a shield and a magnifier. -->
+  <defs>
+    <linearGradient id="aura" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#818CF8"/>
+      <stop offset="0.5" stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#aura)" d="M116 14.9 Q128 8 140 14.9 L218.9 60.5 Q230.9 67.4 230.9 81.3 L230.9 174.7 Q230.9 188.6 218.9 195.5 L140 241.1 Q128 248 116 241.1 L37.1 195.5 Q25.1 188.6 25.1 174.7 L25.1 81.3 Q25.1 67.4 37.1 60.5 Z"/>
+  <path fill="#0B0C14" opacity="0.9" d="M128 58 L180 78 L180 124 C180 158 157 184 128 196 C99 184 76 158 76 124 L76 78 Z"/>
+  <circle cx="122" cy="120" r="24" fill="none" stroke="#F4F2FC" stroke-width="12"/>
+  <path d="M139 137 L160 158" stroke="#F4F2FC" stroke-width="14" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,1131 @@
+# Hivey Studio: whole-browser themes, accent, every part's color with a screen-wide eyedropper, an exact preview (the colors the browser draws with), Studio in the theme's colors with the Hivey logo, live refresh on changes made elsewhere, armored mode and device API switches, the Hivey AI card.
+--- a/chrome/browser/browser_resources.grd
++++ b/chrome/browser/browser_resources.grd
+@@ -98,6 +98,7 @@
+         <include name="IDR_HIVEY_STUDIO_CSS" file="resources\hivey_studio\studio.css" type="BINDATA" />
+         <include name="IDR_HIVEY_STUDIO_JS" file="resources\hivey_studio\studio.js" type="BINDATA" />
+         <include name="IDR_HIVEY_STUDIO_I18N_JS" file="resources\hivey_studio\i18n.js" type="BINDATA" />
++        <include name="IDR_HIVEY_STUDIO_LOGO_JS" file="resources\hivey_studio\logo.js" type="BINDATA" />
+       </if>
+       <if expr="is_win or is_macosx or is_linux">
+         <!-- First Run audio resources -->
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -7,6 +7,44 @@
+ 
+ const STRINGS = {
+   en: {
++    themes: "Themes",
++    theme_aura: "Aura",
++    theme_aura_hint: "Deep ink and indigo, like the Hivey AI sidebar",
++    theme_amber_night: "Amber night",
++    theme_amber_night_hint: "Dark, with Hivey amber",
++    theme_daylight: "Daylight",
++    theme_daylight_hint: "Light and soft",
++    theme_material: "Material",
++    theme_material_hint: "Colors generated from the accent only",
++    accentTitle: 'Accent',
++    elementsTitle: "Each part of the browser",
++    elementsHint: "Pick any color, or take it from anywhere on the screen with the eyedropper. The undo button gives the part back to the palette.",
++    eyedropper: "Pick a color from the screen",
++    resetColor: "Back to the palette color",
++    el_frame: "Window frame and tab strip",
++    el_toolbar: "Toolbar and active tab",
++    el_tab_inactive: "Other tabs",
++    el_tab_text: "Tab text",
++    el_omnibox: "Address bar",
++    el_omnibox_text: "Address bar text",
++    el_icons: "Toolbar icons",
++    el_accent: "Accent (buttons, focus, links)",
++    el_menu: "Menus (right click…)",
++    el_menu_text: "Menu text",
++    el_panel: "Bubbles, dialogs, side panel",
++    el_panel_text: "Bubble and dialog text",
++    el_page: "Browser pages (Settings, Studio…)",
++    el_page_text: "Browser page text",
++    previewMenu1: "Open link in new tab",
++    previewMenu2: "Inspect with Hivey Cyber",
++    aiTitle: "Hivey AI",
++    aiHint: "The AI sidebar runs in its own sandbox, without browser privileges. It reads a page only when you call it on that tab or allow the site, so a malicious page cannot talk to it; nothing is sent until you choose a provider (local models supported).",
++    siteAccess: "Site access",
++    hardening: "Hardening",
++    hardened: "Armored mode (no JavaScript JIT)",
++    hardenedHint: "Turns off V8's optimizing compilers, where most browser exploits strike. Heavy web apps get slower.",
++    devices: "Block access to USB, HID, serial and Bluetooth devices",
++    devicesHint: "A large attack surface few sites need. A site can still be allowed in its settings.",
+     title: 'Hivey Studio',
+     subtitle: 'Make the browser yours: colors, layout, behaviour and resources.',
+     navAppearance: 'Colors',
+@@ -20,7 +58,7 @@
+     appearanceHint: 'The whole browser is colored from the color you pick: tabs, toolbar, menus and dialogs.',
+     presets: 'Presets',
+     customColor: 'Custom color',
+-    customColorHint: 'Any color: the browser derives a full palette from it.',
++    customColorHint: 'Any color, or one taken from the screen.',
+     variant: 'Palette style',
+     variantTonal: 'Tonal',
+     variantNeutral: 'Neutral',
+@@ -170,6 +208,44 @@
+     off: 'Off',
+   },
+   fr: {
++    themes: "Thèmes",
++    theme_aura: "Aura",
++    theme_aura_hint: "Encre profonde et indigo, comme la sidebar Hivey AI",
++    theme_amber_night: "Nuit ambrée",
++    theme_amber_night_hint: "Sombre, avec l’ambre Hivey",
++    theme_daylight: "Jour",
++    theme_daylight_hint: "Clair et doux",
++    theme_material: "Material",
++    theme_material_hint: "Couleurs générées à partir de l’accent seul",
++    accentTitle: 'Accent',
++    elementsTitle: "Chaque partie du navigateur",
++    elementsHint: "Choisissez n’importe quelle couleur, ou prenez-la n’importe où sur l’écran avec la pipette. Le bouton Annuler rend la partie à la palette.",
++    eyedropper: "Prendre une couleur sur l’écran",
++    resetColor: "Revenir à la couleur de la palette",
++    el_frame: "Cadre de la fenêtre et barre d’onglets",
++    el_toolbar: "Barre d’outils et onglet actif",
++    el_tab_inactive: "Autres onglets",
++    el_tab_text: "Texte des onglets",
++    el_omnibox: "Barre d’adresse",
++    el_omnibox_text: "Texte de la barre d’adresse",
++    el_icons: "Icônes de la barre d’outils",
++    el_accent: "Accent (boutons, focus, liens)",
++    el_menu: "Menus (clic droit…)",
++    el_menu_text: "Texte des menus",
++    el_panel: "Bulles, fenêtres, panneau latéral",
++    el_panel_text: "Texte des bulles et fenêtres",
++    el_page: "Pages du navigateur (Paramètres, Studio…)",
++    el_page_text: "Texte des pages du navigateur",
++    previewMenu1: "Ouvrir dans un nouvel onglet",
++    previewMenu2: "Inspecter avec Hivey Cyber",
++    aiTitle: "Hivey AI",
++    aiHint: "La sidebar IA tourne dans son propre bac à sable, sans privilège sur le navigateur. Elle ne lit une page que si vous l’appelez sur cet onglet ou autorisez le site : une page malveillante ne peut pas lui parler. Rien n’est envoyé avant que vous choisissiez un fournisseur (modèles locaux possibles).",
++    siteAccess: "Accès aux sites",
++    hardening: "Durcissement",
++    hardened: "Mode blindé (sans JIT JavaScript)",
++    hardenedHint: "Coupe les compilateurs optimisants de V8, là où frappent la plupart des failles des navigateurs. Les applications web lourdes ralentissent.",
++    devices: "Bloquer l’accès aux appareils USB, HID, série et Bluetooth",
++    devicesHint: "Une grande surface d’attaque dont peu de sites ont besoin. Un site peut toujours être autorisé dans ses paramètres.",
+     title: 'Hivey Studio',
+     subtitle: 'Faites du navigateur le vôtre : couleurs, disposition, comportement et ressources.',
+     navAppearance: 'Couleurs',
+--- a/chrome/browser/resources/hivey_studio/logo.js
++++ b/chrome/browser/resources/hivey_studio/logo.js
+@@ -0,0 +1,42 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++// The Hivey Browser logo (brand/logo.svg: a honeycomb cell holding a globe and
++// its orbit) in the theme's accent color, the same drawing as the window icon
++// (chrome/browser/hivey/hivey_app_icon.cc).
++
++const NS = 'http://www.w3.org/2000/svg';
++const CELL = 'M116 14.9 Q128 8 140 14.9 L218.9 60.5 Q230.9 67.4 230.9 81.3 L230.9 174.7 ' +
++    'Q230.9 188.6 218.9 195.5 L140 241.1 Q128 248 116 241.1 L37.1 195.5 Q25.1 188.6 25.1 174.7 ' +
++    'L25.1 81.3 Q25.1 67.4 37.1 60.5 Z';
++
++function node(tag, attributes) {
++  const element = document.createElementNS(NS, tag);
++  for (const [key, value] of Object.entries(attributes)) {
++    element.setAttribute(key, value);
++  }
++  return element;
++}
++
++export function hiveyLogo() {
++  const svg = node('svg', {viewBox: '0 0 256 256', 'aria-hidden': 'true', class: 'hivey-logo'});
++  svg.append(node('path', {d: CELL, fill: 'var(--accent)'}));
++  const orbit = node('g', {transform: 'rotate(-28 128 128)', fill: 'none', 'stroke-linecap': 'round'});
++  orbit.append(node('path', {
++    d: 'M40 128 A88 30 0 0 1 216 128',
++    stroke: 'color-mix(in srgb, black 80%, var(--accent))', 'stroke-width': '16', opacity: '0.35',
++  }));
++  svg.append(orbit);
++  svg.append(node('circle', {cx: '128', cy: '128', r: '62', fill: 'color-mix(in srgb, black 80%, var(--accent))'}));
++  const front = node('g', {transform: 'rotate(-28 128 128)', fill: 'none', 'stroke-linecap': 'round'});
++  front.append(node('path', {
++    d: 'M40 128 A88 30 0 0 0 216 128',
++    stroke: 'color-mix(in srgb, white 70%, var(--accent))', 'stroke-width': '12',
++  }));
++  svg.append(front);
++  svg.append(node('circle', {
++    cx: '106', cy: '104', r: '12', fill: 'color-mix(in srgb, white 70%, var(--accent))', opacity: '0.9',
++  }));
++  return svg;
++}
+--- a/chrome/browser/resources/hivey_studio/studio.css
++++ b/chrome/browser/resources/hivey_studio/studio.css
+@@ -13,41 +13,31 @@
+ }
+ 
+ :root {
+-  --bg: #0b0c14;
+-  --panel: #151726;
+-  --panel-2: #1d2033;
+-  --elevated: rgba(38, 42, 64, 0.55);
+-  --border: rgba(255, 255, 255, 0.09);
+-  --border-strong: rgba(255, 255, 255, 0.16);
++  /* studio.js sets --bg, --text and --accent from the colors the browser
++   * draws with (Hivey Studio follows the theme, like Settings); the values
++   * here are the Aura defaults until the state arrives. */
++  --bg: #0f111a;
+   --text: #f4f2fc;
+-  --muted: #9b9db5;
+-  --accent: #6366f1;
+-  --accent-2: #8b5cf6;
+-  --grad: linear-gradient(135deg, #6366f1 0%, #6366f1 40%, #8b5cf6 100%);
+-  --grad-soft: linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(139, 92, 246, 0.16));
++  --accent: #7c6cf6;
++  --panel: color-mix(in srgb, var(--text) 5%, var(--bg));
++  --panel-2: color-mix(in srgb, var(--text) 9%, var(--bg));
++  --elevated: color-mix(in srgb, var(--text) 12%, transparent);
++  --border: color-mix(in srgb, var(--text) 10%, transparent);
++  --border-strong: color-mix(in srgb, var(--text) 18%, transparent);
++  --muted: color-mix(in srgb, var(--text) 62%, var(--bg));
++  --accent-2: color-mix(in oklch, var(--accent) 60%, #a855f7);
++  --grad: linear-gradient(135deg, var(--accent) 0%, var(--accent) 40%, var(--accent-2) 100%);
++  --grad-soft: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent),
++                                       color-mix(in srgb, var(--accent-2) 16%, transparent));
+   --ok: #22c55e;
+   --warn: #f59e0b;
+   --danger: #f43f5e;
+-  --user: #f7a21b;
++  --user: var(--accent);
+   --radius: 14px;
+   --radius-sm: 9px;
+   color-scheme: dark;
+ }
+ 
+-@media (prefers-color-scheme: light) {
+-  :root {
+-    --bg: #f6f6fb;
+-    --panel: #ffffff;
+-    --panel-2: #f0f0f8;
+-    --elevated: rgba(255, 255, 255, 0.8);
+-    --border: rgba(20, 20, 60, 0.09);
+-    --border-strong: rgba(20, 20, 60, 0.18);
+-    --text: #16172a;
+-    --muted: #5d6079;
+-    color-scheme: light;
+-  }
+-}
+-
+ * {
+   box-sizing: border-box;
+ }
+@@ -89,23 +79,15 @@
+ }
+ 
+ .logo {
+-  width: 52px;
+-  height: 52px;
+-  display: grid;
+-  place-items: center;
+-  border-radius: 16px;
+-  background: var(--grad);
+-  box-shadow: 0 10px 40px -12px var(--accent-2);
++  width: 56px;
++  height: 56px;
+   flex: none;
++  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--accent) 45%, transparent));
+ }
+ 
+-.logo svg {
+-  width: 30px;
+-  height: 30px;
+-  fill: none;
+-  stroke: #fff;
+-  stroke-width: 2;
+-  stroke-linejoin: round;
++.hivey-logo {
++  width: 100%;
++  height: 100%;
+ }
+ 
+ h1 {
+@@ -582,17 +564,17 @@
+   border-radius: 8px;
+ }
+ 
+-/* Mini browser drawn with the user's color. */
++/* Mini browser drawn with the colors the browser uses (--pv-*). */
+ .preview {
+   margin: 10px 0 18px;
+   border-radius: 12px;
+   overflow: hidden;
+   border: 1px solid var(--border);
+-  background: var(--panel-2);
++  background: var(--pv-page);
+ }
+ 
+ .pv-frame {
+-  background: color-mix(in srgb, var(--user) 28%, var(--panel));
++  background: var(--pv-frame);
+   padding: 8px 8px 0;
+ }
+ 
+@@ -603,18 +585,20 @@
+ 
+ .pv-tab {
+   height: 26px;
+-  flex: 0 0 64px;
++  flex: 0 0 72px;
++  padding: 4px 10px;
+   border-radius: 8px 8px 0 0;
+-  background: color-mix(in srgb, var(--user) 18%, var(--panel));
++  font-size: 11.5px;
++  white-space: nowrap;
++  overflow: hidden;
++  color: color-mix(in srgb, var(--pv-tab-text) 70%, var(--pv-tab-inactive));
++  background: var(--pv-tab-inactive);
+ }
+ 
+ .pv-tab.active {
+   flex-basis: 120px;
+-  padding: 4px 10px;
+-  font-size: 11.5px;
+-  white-space: nowrap;
+-  overflow: hidden;
+-  background: color-mix(in srgb, var(--user) 10%, var(--panel));
++  color: var(--pv-tab-text);
++  background: var(--pv-toolbar);
+ }
+ 
+ .pv-toolbar {
+@@ -622,18 +606,20 @@
+   align-items: center;
+   gap: 8px;
+   padding: 8px;
+-  background: color-mix(in srgb, var(--user) 10%, var(--panel));
++  background: var(--pv-toolbar);
+ }
+ 
+ .pv-dot {
+   width: 14px;
+   height: 14px;
+   border-radius: 50%;
+-  background: color-mix(in srgb, var(--text) 25%, transparent);
++  background: var(--pv-icons);
++  opacity: 0.85;
+ }
+ 
+ .pv-dot.accent {
+-  background: var(--user);
++  background: var(--pv-accent);
++  opacity: 1;
+ }
+ 
+ .pv-omnibox {
+@@ -641,33 +627,157 @@
+   padding: 3px 12px;
+   border-radius: 999px;
+   font-size: 11.5px;
+-  color: var(--muted);
+-  background: color-mix(in srgb, var(--user) 16%, var(--panel-2));
++  color: var(--pv-omnibox-text);
++  background: var(--pv-omnibox);
+ }
+ 
+ .pv-page {
++  position: relative;
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+   padding: 16px;
++  min-height: 92px;
+ }
+ 
+ .pv-line {
+   height: 8px;
+   width: 45%;
+   border-radius: 4px;
+-  background: color-mix(in srgb, var(--text) 14%, transparent);
++  background: color-mix(in srgb, var(--pv-page-text) 18%, transparent);
+ }
+ 
+ .pv-line.wide {
+-  width: 75%;
++  width: 60%;
+ }
+ 
+ .pv-button {
+   width: 72px;
+   height: 22px;
+   border-radius: 999px;
+-  background: var(--user);
++  background: var(--pv-accent);
++}
++
++.pv-menu {
++  position: absolute;
++  right: 14px;
++  top: 12px;
++  display: flex;
++  flex-direction: column;
++  min-width: 120px;
++  padding: 4px;
++  border-radius: 8px;
++  background: var(--pv-menu);
++  box-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.5);
++}
++
++.pv-menu-item {
++  padding: 3px 8px;
++  border-radius: 5px;
++  font-size: 11px;
++  color: var(--pv-menu-text);
++}
++
++.pv-menu-item.selected {
++  background: color-mix(in srgb, var(--pv-accent) 28%, var(--pv-menu));
++}
++
++/* Themes and per-element colors. */
++.themes {
++  display: grid;
++  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
++  gap: 10px;
++  padding: 10px 0 16px;
++}
++
++.theme-card {
++  display: flex;
++  flex-direction: column;
++  align-items: flex-start;
++  gap: 4px;
++  padding: 12px;
++  border: 1px solid var(--border);
++  border-radius: 12px;
++  background: var(--panel-2);
++  color: inherit;
++  font: inherit;
++  text-align: start;
++  cursor: pointer;
++}
++
++.theme-card:hover,
++.theme-card:focus-visible {
++  border-color: var(--accent);
++  outline: none;
++}
++
++.theme-dots {
++  display: flex;
++  gap: 4px;
++  margin-bottom: 4px;
++}
++
++.theme-dot {
++  width: 22px;
++  height: 22px;
++  border-radius: 50%;
++  border: 1px solid var(--border-strong);
++}
++
++.theme-dot.material {
++  width: 70px;
++  border-radius: 11px;
++  background: conic-gradient(from 90deg, #f43f5e, #f59e0b, #10b981, #0ea5e9, #6366f1, #a855f7, #f43f5e);
++}
++
++.color-grid {
++  display: grid;
++  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
++  gap: 4px 20px;
++  padding-bottom: 12px;
++}
++
++.color-row {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  padding: 8px 0;
++  border-top: 1px solid var(--border);
++}
++
++.color-row .row-text {
++  flex: 1;
++}
++
++.color-input.small {
++  width: 34px;
++  height: 34px;
++  border-radius: 9px;
++}
++
++.icon-button {
++  display: grid;
++  place-items: center;
++  width: 32px;
++  height: 32px;
++  flex: none;
++  border: 1px solid var(--border-strong);
++  border-radius: 9px;
++  background: var(--panel-2);
++  color: var(--text);
++  cursor: pointer;
++}
++
++.icon-button:hover,
++.icon-button:focus-visible {
++  border-color: var(--accent);
++  color: var(--accent);
++  outline: none;
++}
++
++.icon-button .icon {
++  width: 17px;
++  height: 17px;
+ }
+ 
+ /* ------------------------------------------------------------- resources */
+--- a/chrome/browser/resources/hivey_studio/studio.html
++++ b/chrome/browser/resources/hivey_studio/studio.html
+@@ -11,9 +11,7 @@
+ <body>
+   <div class="aura" aria-hidden="true"></div>
+   <header class="top">
+-    <div class="logo" aria-hidden="true">
+-      <svg viewBox="0 0 32 32"><path d="M16 3l11 6.3v13.4L16 29 5 22.7V9.3z"/><path d="M16 10l5.2 3v6L16 22l-5.2-3v-6z"/></svg>
+-    </div>
++    <div class="logo" aria-hidden="true"></div>
+     <div>
+       <h1 id="title">Hivey Studio</h1>
+       <p id="subtitle" class="muted"></p>
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -9,9 +9,9 @@
+ import {addWebUiListener, sendWithPromise} from 'chrome://resources/js/cr.js';
+ 
+ import {setLanguage, t} from './i18n.js';
++import {hiveyLogo} from './logo.js';
+ 
+-const DEFAULT_COLOR = '#f7a21b';
+-
++// Accent swatches.
+ const PRESETS = [
+   {key: 'presetAmber', color: '#f7a21b'},
+   {key: 'presetAura', color: '#6366f1'},
+@@ -23,6 +23,19 @@
+   {key: 'presetGraphite', color: '#64748b'},
+ ];
+ 
++// Whole-browser color themes (chrome/browser/hivey/hivey_colors.cc), with the
++// frame, toolbar and accent colors shown on their card.
++const THEMES = [
++  {id: 'aura', swatch: ['#0b0c14', '#151726', '#7c6cf6']},
++  {id: 'amber_night', swatch: ['#0e0c09', '#1a1610', '#f7a21b']},
++  {id: 'daylight', swatch: ['#e6e7f2', '#f8f8fd', '#6366f1']},
++  {id: 'material', swatch: null},
++];
++
++// Every part of the browser that takes its own color.
++const ELEMENTS = ['frame', 'toolbar', 'tab_inactive', 'tab_text', 'omnibox', 'omnibox_text', 'icons', 'accent',
++                  'menu', 'menu_text', 'panel', 'panel_text', 'page', 'page_text'];
++
+ const SECTIONS = [
+   {id: 'appearance', nav: 'navAppearance', icon: 'palette', build: buildAppearance},
+   {id: 'layout', nav: 'navLayout', icon: 'layout', build: buildLayout},
+@@ -42,6 +55,10 @@
+   shield: ['M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z', 'M9 12l2 2 4-4'],
+   info: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 16v-4', 'M12 8h.01'],
+   restart: ['M3 12a9 9 0 1 0 3-6.7L3 8', 'M3 3v5h5'],
++  pipette: ['m2 22 1-1h3l9-9', 'M3 21v-3l9-9',
++            'm15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z'],
++  undo: ['M3 7v6h6', 'M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13'],
++  sparkles: ['M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z', 'M19 3v4', 'M21 5h-4'],
+ };
+ 
+ let state = null;
+@@ -217,61 +234,133 @@
+ 
+ // --------------------------------------------------------------- appearance
+ 
+-function themeColor() {
+-  return state.theme.color || DEFAULT_COLOR;
++function palette() {
++  return state.colors.palette;
++}
++
++function luminance(hex) {
++  const n = parseInt(hex.slice(1), 16);
++  const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map(v => v / 255);
++  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
++}
++
++// Hivey Studio takes the theme the browser draws with, like Settings does.
++function applyTheme() {
++  const colors = palette();
++  const root = document.documentElement.style;
++  root.setProperty('--bg', colors.page);
++  root.setProperty('--text', colors.page_text);
++  root.setProperty('--accent', colors.accent);
++  root.setProperty('--user', colors.accent);
++  root.setProperty('color-scheme', luminance(colors.page) < 0.5 ? 'dark' : 'light');
++}
++
++async function pickColor(element) {
++  if (!('EyeDropper' in window)) {
++    return;
++  }
++  try {
++    // The eye dropper picks any pixel on the screen, also outside the browser.
++    const {sRGBHex} = await new EyeDropper().open();
++    chrome.send('setColor', [element, sRGBHex.toLowerCase()]);
++  } catch {
++    // Cancelled with Escape.
++  }
+ }
+ 
+-function applyAccent() {
+-  document.documentElement.style.setProperty('--user', themeColor());
++function colorRow(element) {
++  const custom = state.colors.custom[element];
++  const value = custom || palette()[element];
++  const input = el('input', {type: 'color', class: 'color-input small', value, 'aria-label': t(`el_${element}`),
++                             'data-key': `color-${element}`});
++  input.addEventListener('change', () => chrome.send('setColor', [element, input.value]));
++  return el('div', {class: 'color-row'},
++            input,
++            el('span', {class: 'row-text'},
++               el('span', {class: 'row-label', text: t(`el_${element}`)}),
++               el('span', {class: 'row-hint mono', text: value})),
++            el('button', {class: 'icon-button', title: t('eyedropper'), 'aria-label': `${t('eyedropper')} ${t(`el_${element}`)}`,
++                          onclick: () => pickColor(element)}, icon('pipette')),
++            custom ? el('button', {class: 'icon-button', title: t('resetColor'),
++                                   'aria-label': `${t('resetColor')} ${t(`el_${element}`)}`,
++                                   onclick: () => chrome.send('setColor', [element, ''])}, icon('undo')) : null);
++}
++
++function themeCard(theme) {
++  const dots = theme.swatch ?
++      theme.swatch.map(color => {
++        const dot = el('span', {class: 'theme-dot'});
++        dot.style.background = color;
++        return dot;
++      }) :
++      [el('span', {class: 'theme-dot material'})];
++  return el('button', {class: 'theme-card', onclick: () => chrome.send('applyPreset', [theme.id])},
++            el('span', {class: 'theme-dots'}, ...dots),
++            el('span', {class: 'row-label', text: t(`theme_${theme.id}`)}),
++            el('span', {class: 'row-hint', text: t(`theme_${theme.id}_hint`)}));
++}
++
++function preview() {
++  const colors = palette();
++  const box = el('div', {class: 'preview', 'aria-label': t('preview')},
++                 el('div', {class: 'pv-frame'},
++                    el('div', {class: 'pv-tabs'},
++                       el('span', {class: 'pv-tab active', text: t('previewTab')}),
++                       el('span', {class: 'pv-tab', text: 'Hivey'}), el('span', {class: 'pv-tab'})),
++                    el('div', {class: 'pv-toolbar'},
++                       el('span', {class: 'pv-dot'}), el('span', {class: 'pv-dot'}),
++                       el('span', {class: 'pv-omnibox', text: t('previewAddress')}),
++                       el('span', {class: 'pv-dot accent'}))),
++                 el('div', {class: 'pv-page'},
++                    el('span', {class: 'pv-line wide'}), el('span', {class: 'pv-line'}),
++                    el('span', {class: 'pv-button'}),
++                    el('div', {class: 'pv-menu'},
++                       el('span', {class: 'pv-menu-item', text: t('previewMenu1')}),
++                       el('span', {class: 'pv-menu-item selected', text: t('previewMenu2')}))));
++  // The exact colors the browser draws with.
++  for (const element of ELEMENTS) {
++    box.style.setProperty(`--pv-${element.replace('_', '-')}`, colors[element]);
++  }
++  return box;
+ }
+ 
+ function buildAppearance() {
+   const theme = state.theme;
+-  const color = themeColor();
++  const accent = palette().accent;
+ 
+   const swatches = el('div', {class: 'swatches'});
+   for (const preset of PRESETS) {
+-    const active = preset.color.toLowerCase() === color.toLowerCase();
++    const active = preset.color.toLowerCase() === accent.toLowerCase();
+     const swatch = el('button', {
+       class: `swatch${active ? ' active' : ''}`,
+       title: t(preset.key),
+       'aria-label': t(preset.key),
+       'aria-pressed': active ? 'true' : 'false',
+-      onclick: () => chrome.send('setThemeColor', [preset.color, theme.variant === 'system' ? 'tonal' : theme.variant]),
++      onclick: () => chrome.send('setAccent', [preset.color]),
+     });
+     swatch.style.setProperty('--swatch', preset.color);
+     swatches.append(el('div', {class: 'swatch-wrap'}, swatch, el('span', {class: 'swatch-name', text: t(preset.key)})));
+   }
+-
+-  const picker = el('input', {type: 'color', class: 'color-input', value: color, 'aria-label': t('customColor')});
+-  picker.addEventListener('input', () => document.documentElement.style.setProperty('--user', picker.value));
+-  picker.addEventListener('change', () =>
+-      chrome.send('setThemeColor', [picker.value, theme.variant === 'system' ? 'tonal' : theme.variant]));
+-
+-  const preview = el('div', {class: 'preview', 'aria-label': t('preview')},
+-                     el('div', {class: 'pv-frame'},
+-                        el('div', {class: 'pv-tabs'},
+-                           el('span', {class: 'pv-tab active', text: t('previewTab')}),
+-                           el('span', {class: 'pv-tab'}), el('span', {class: 'pv-tab'})),
+-                        el('div', {class: 'pv-toolbar'},
+-                           el('span', {class: 'pv-dot'}), el('span', {class: 'pv-dot'}),
+-                           el('span', {class: 'pv-omnibox', text: t('previewAddress')}),
+-                           el('span', {class: 'pv-dot accent'}))),
+-                     el('div', {class: 'pv-page'},
+-                        el('span', {class: 'pv-line wide'}), el('span', {class: 'pv-line'}),
+-                        el('span', {class: 'pv-button'})));
++  const picker = el('input', {type: 'color', class: 'color-input', value: accent, 'aria-label': t('customColor')});
++  picker.addEventListener('change', () => chrome.send('setAccent', [picker.value]));
+ 
+   return el('div', {},
+             sectionHeader('appearanceTitle', 'appearanceHint'),
+             theme.extensionTheme ? el('div', {class: 'notice', text: t('extensionTheme')}) : null,
++            card(t('themes'), el('div', {class: 'themes'}, ...THEMES.map(themeCard))),
+             el('div', {class: 'grid-2'},
+-               card(t('presets'), swatches,
++               card(t('accentTitle'), swatches,
+                     el('div', {class: 'custom-color'},
+                        picker,
+                        el('div', {class: 'row-text'},
+                           el('span', {class: 'row-label', text: t('customColor')}),
+-                          el('span', {class: 'row-hint', text: t('customColorHint')})))),
+-               card(t('preview'), preview)),
++                          el('span', {class: 'row-hint', text: t('customColorHint')})),
++                       el('button', {class: 'icon-button', title: t('eyedropper'), 'aria-label': t('eyedropper'),
++                                     onclick: () => pickColor('accent')}, icon('pipette')))),
++               card(t('preview'), preview())),
++            card(t('elementsTitle'),
++                 el('p', {class: 'muted small', text: t('elementsHint')}),
++                 el('div', {class: 'color-grid'}, ...ELEMENTS.map(colorRow))),
+             card(null,
+                  segmented({
+                    label: t('variant'),
+@@ -282,7 +371,7 @@
+                      {value: 'vibrant', label: t('variantVibrant')},
+                      {value: 'expressive', label: t('variantExpressive')},
+                    ],
+-                   onChange: v => chrome.send('setThemeColor', [color, v]),
++                   onChange: v => chrome.send('setThemeColor', [accent, v]),
+                  }),
+                  segmented({
+                    label: t('scheme'),
+@@ -304,7 +393,10 @@
+                    onChange: on => setFlagOn({flag: 'enable-incognito-themes'}, on),
+                  }) : null,
+                  el('div', {class: 'actions'},
+-                    el('button', {class: 'button ghost', text: t('resetTheme'), onclick: () => chrome.send('resetTheme')}))));
++                    el('button', {class: 'button ghost', text: t('resetTheme'), onclick: () => {
++                      chrome.send('resetTheme');
++                      chrome.send('applyPreset', ['aura']);
++                    }}))));
+ }
+ 
+ // ------------------------------------------------------------------- layout
+@@ -515,6 +607,24 @@
+                  flagToggle({flag: 'clear-data-on-exit'}, 'clearOnExit', 'clearOnExitHint'),
+                  linkRow({label: t('secureDns'), onClick: () => openUrl('chrome://settings/security')}),
+                  linkRow({label: t('cookies'), onClick: () => openUrl('chrome://settings/cookies')})),
++            el('div', {class: 'card shield-card'},
++               el('div', {class: 'shield-badge'}, icon('sparkles')),
++               el('div', {class: 'row-text'},
++                  el('span', {class: 'row-label'}, t('aiTitle'),
++                     el('span', {class: `status ${state.ai.enabled ? 'ok' : 'warn'}`,
++                                 text: t(state.ai.enabled ? 'shieldOn' : 'shieldOff')})),
++                  el('span', {class: 'row-hint', text: t('aiHint')})),
++               el('button', {class: 'button ghost', text: t('siteAccess'),
++                             onclick: () => openUrl(`chrome://extensions/?id=${state.ai.id}`)})),
++            card(t('hardening'),
++                 toggleRow({
++                   label: t('hardened'), hint: t('hardenedHint'), checked: state.security.hardened,
++                   onChange: on => chrome.send('setSecurity', ['hardened', on]),
++                 }),
++                 toggleRow({
++                   label: t('devices'), hint: t('devicesHint'), checked: state.security.devicesBlocked,
++                   onChange: on => chrome.send('setSecurity', ['devices', on]),
++                 })),
+             card(t('builtIn'), el('p', {class: 'muted', text: t('builtInItems')})));
+ }
+ 
+@@ -575,7 +685,7 @@
+ }
+ 
+ function render() {
+-  applyAccent();
++  applyTheme();
+   buildNav();
+   const section = SECTIONS.find(s => s.id === current);
+   const main = document.getElementById('main');
+@@ -596,6 +706,7 @@
+ }
+ 
+ function buildShell() {
++  document.querySelector('.logo').replaceChildren(hiveyLogo());
+   document.getElementById('title').textContent = t('title');
+   document.getElementById('subtitle').textContent = t('subtitle');
+   document.title = t('title');
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -14,12 +14,15 @@
+ #include "base/strings/string_number_conversions.h"
+ #include "base/strings/stringprintf.h"
+ #include "base/system/sys_info.h"
++#include "base/task/sequenced_task_runner.h"
+ #include "base/time/time.h"
+ #include "build/build_config.h"
+ #include "chrome/app/chrome_command_ids.h"
+ #include "chrome/browser/about_flags.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
++#include "chrome/browser/hivey/hivey_colors.h"
+ #include "chrome/browser/hivey/hivey_resource_limits.h"
+ #include "chrome/browser/hivey/hivey_updater.h"
+ #include "chrome/browser/lifetime/application_lifetime.h"
+@@ -37,6 +40,9 @@
+ #include "extensions/browser/extension_registry.h"
+ #include "third_party/skia/include/core/SkColor.h"
+ #include "ui/base/mojom/themes.mojom.h"
++#include "ui/color/color_provider.h"
++#include "chrome/browser/ui/color/chrome_color_id.h"
++#include "content/public/browser/web_contents.h"
+ 
+ namespace {
+ 
+@@ -208,10 +214,70 @@
+   add("taskAction", &HiveyStudioHandler::HandleTaskAction);
+   add("openCustomizeToolbar", &HiveyStudioHandler::HandleOpenCustomizeToolbar);
+   add("checkForUpdates", &HiveyStudioHandler::HandleCheckForUpdates);
++  add("setColor", &HiveyStudioHandler::HandleSetColor);
++  add("setAccent", &HiveyStudioHandler::HandleSetAccent);
++  add("applyPreset", &HiveyStudioHandler::HandleApplyPreset);
++  add("setSecurity", &HiveyStudioHandler::HandleSetSecurity);
++}
++
++void HiveyStudioHandler::OnJavascriptAllowed() {
++  Profile* profile = GetProfile();
++  auto refresh = base::BindRepeating(&HiveyStudioHandler::ScheduleStateChanged,
++                                     base::Unretained(this));
++  profile_prefs_.Init(profile->GetPrefs());
++  local_state_prefs_.Init(g_browser_process->local_state());
++  for (const AllowedPref& pref : kAllowedPrefs) {
++    PrefChangeRegistrar& registrar =
++        pref.local_state ? local_state_prefs_ : profile_prefs_;
++    if (registrar.prefs()->FindPreference(pref.name)) {
++      registrar.Add(pref.name, refresh);
++    }
++  }
++  local_state_prefs_.Add(hivey::kHiveyColors, refresh);
++  // chrome://flags and Hivey Studio both store flags here.
++  local_state_prefs_.Add("browser.enabled_labs_experiments", refresh);
++  theme_observation_.Observe(ThemeServiceFactory::GetForProfile(profile));
++  content_settings_observation_.Observe(
++      HostContentSettingsMapFactory::GetForProfile(profile));
+ }
+ 
+ void HiveyStudioHandler::OnJavascriptDisallowed() {
+   usage_observer_.reset();
++  profile_prefs_.RemoveAll();
++  local_state_prefs_.RemoveAll();
++  theme_observation_.Reset();
++  content_settings_observation_.Reset();
++  weak_factory_.InvalidateWeakPtrs();
++  state_change_pending_ = false;
++}
++
++void HiveyStudioHandler::OnThemeChanged() {
++  ScheduleStateChanged();
++}
++
++void HiveyStudioHandler::OnContentSettingChanged(
++    const ContentSettingsPattern& primary_pattern,
++    const ContentSettingsPattern& secondary_pattern,
++    ContentSettingsTypeSet content_type_set) {
++  ScheduleStateChanged();
++}
++
++void HiveyStudioHandler::ScheduleStateChanged() {
++  if (state_change_pending_) {
++    return;
++  }
++  state_change_pending_ = true;
++  // After the current task, so the new colors are resolved and several
++  // changes at once send one update.
++  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
++      FROM_HERE, base::BindOnce(
++                     [](base::WeakPtr<HiveyStudioHandler> handler) {
++                       if (handler) {
++                         handler->state_change_pending_ = false;
++                         handler->FireStateChanged();
++                       }
++                     },
++                     weak_factory_.GetWeakPtr()));
+ }
+ 
+ Profile* HiveyStudioHandler::GetProfile() {
+@@ -303,6 +369,51 @@
+            registry->enabled_extensions().Contains(HIVEY_BUNDLED_SHIELD_ID));
+ }
+ 
++base::DictValue HiveyStudioHandler::BuildColorsState() {
++  // The colors the browser actually draws with (after the Material palette,
++  // themes and the user's choices), for the preview and Studio's own look.
++  const ui::ColorProvider& provider =
++      web_ui()->GetWebContents()->GetColorProvider();
++  const std::pair<const char*, ui::ColorId> kResolved[] = {
++      {"frame", ui::kColorFrameActive},
++      {"toolbar", kColorToolbar},
++      {"tab_inactive", kColorTabBackgroundInactiveFrameActive},
++      {"tab_text", kColorTabForegroundActiveFrameActive},
++      {"omnibox", kColorLocationBarBackground},
++      {"omnibox_text", kColorOmniboxText},
++      {"icons", kColorToolbarButtonIcon},
++      {"accent", ui::kColorSysPrimary},
++      {"menu", ui::kColorMenuBackground},
++      {"menu_text", ui::kColorMenuItemForeground},
++      {"panel", ui::kColorBubbleBackground},
++      {"panel_text", ui::kColorDialogForeground},
++      {"page", ui::kColorSysBase},
++      {"page_text", ui::kColorSysOnSurface},
++  };
++  base::DictValue palette;
++  for (const auto& [element, id] : kResolved) {
++    palette.Set(element, ColorToHex(provider.GetColor(id)));
++  }
++  return base::DictValue()
++      .Set("custom", g_browser_process->local_state()
++                         ->GetDict(hivey::kHiveyColors)
++                         .Clone())
++      .Set("palette", std::move(palette))
++      .Set("presets", hivey::GetHiveyColorPresetNames());
++}
++
++base::DictValue HiveyStudioHandler::BuildSecurityState() {
++  HostContentSettingsMap* map =
++      HostContentSettingsMapFactory::GetForProfile(GetProfile());
++  return base::DictValue()
++      .Set("hardened", map->GetDefaultContentSetting(
++                           ContentSettingsType::JAVASCRIPT_OPTIMIZER) ==
++                           CONTENT_SETTING_BLOCK)
++      .Set("devicesBlocked",
++           map->GetDefaultContentSetting(ContentSettingsType::USB_GUARD) ==
++               CONTENT_SETTING_BLOCK);
++}
++
+ base::DictValue HiveyStudioHandler::BuildState() {
+ #if BUILDFLAG(IS_WIN)
+   const char* platform = "win";
+@@ -320,6 +431,13 @@
+       .Set("prefs", BuildPrefsState())
+       .Set("flags", BuildFlagsState())
+       .Set("shield", BuildShieldState())
++      .Set("colors", BuildColorsState())
++      .Set("security", BuildSecurityState())
++      .Set("ai", base::DictValue()
++                     .Set("id", HIVEY_BUNDLED_AI_ID)
++                     .Set("enabled", extensions::ExtensionRegistry::Get(GetProfile())
++                                         ->enabled_extensions()
++                                         .Contains(HIVEY_BUNDLED_AI_ID)))
+       .Set("update", hivey::Updater::Get() ? hivey::Updater::Get()->GetStatus()
+                                            : base::DictValue())
+       .Set("restartNeeded", about_flags::IsRestartNeededToCommitChanges());
+@@ -487,3 +605,102 @@
+   }
+   FireStateChanged();
+ }
++
++void HiveyStudioHandler::HandleSetColor(const base::ListValue& args) {
++  // [element, "#rrggbb"] sets one element's color; "" goes back to the
++  // theme's.
++  const std::string* element = args[0].GetIfString();
++  const std::string* hex = args[1].GetIfString();
++  if (!element || !hex ||
++      std::ranges::find(hivey::kHiveyColorElements, *element) ==
++          std::end(hivey::kHiveyColorElements)) {
++    return;
++  }
++  base::DictValue colors =
++      g_browser_process->local_state()->GetDict(hivey::kHiveyColors).Clone();
++  if (hex->empty()) {
++    colors.Remove(*element);
++  } else if (hivey::ParseHexColor(*hex)) {
++    colors.Set(*element, *hex);
++  } else {
++    return;
++  }
++  g_browser_process->local_state()->SetDict(hivey::kHiveyColors,
++                                            std::move(colors));
++}
++
++void HiveyStudioHandler::HandleSetAccent(const base::ListValue& args) {
++  // The accent drives both the Material palette (user color) and the
++  // accent override, so every surface agrees.
++  const std::string* hex = args[0].GetIfString();
++  const std::optional<SkColor> color = hex ? HexToColor(*hex) : std::nullopt;
++  if (!color) {
++    return;
++  }
++  ThemeService* theme = ThemeServiceFactory::GetForProfile(GetProfile());
++  theme->SetUserColorAndBrowserColorVariant(
++      *color, theme->GetBrowserColorVariant() ==
++                      ui::mojom::BrowserColorVariant::kSystem
++                  ? ui::mojom::BrowserColorVariant::kTonalSpot
++                  : theme->GetBrowserColorVariant());
++  base::DictValue colors =
++      g_browser_process->local_state()->GetDict(hivey::kHiveyColors).Clone();
++  if (!colors.empty()) {
++    colors.Set("accent", *hex);
++    g_browser_process->local_state()->SetDict(hivey::kHiveyColors,
++                                              std::move(colors));
++  }
++}
++
++void HiveyStudioHandler::HandleApplyPreset(const base::ListValue& args) {
++  const std::string* name = args[0].GetIfString();
++  if (!name) {
++    return;
++  }
++  base::DictValue colors = hivey::GetHiveyColorPreset(*name);
++  ThemeService* theme = ThemeServiceFactory::GetForProfile(GetProfile());
++  if (*name == "material") {
++    theme->SetBrowserColorScheme(ThemeService::BrowserColorScheme::kSystem);
++  } else if (colors.empty()) {
++    return;  // Unknown preset.
++  } else {
++    theme->SetBrowserColorScheme(*name == "daylight"
++                                     ? ThemeService::BrowserColorScheme::kLight
++                                     : ThemeService::BrowserColorScheme::kDark);
++    if (const std::string* accent = colors.FindString("accent")) {
++      if (std::optional<SkColor> color = HexToColor(*accent)) {
++        theme->SetUserColorAndBrowserColorVariant(
++            *color, ui::mojom::BrowserColorVariant::kTonalSpot);
++      }
++    }
++  }
++  g_browser_process->local_state()->SetDict(hivey::kHiveyColors,
++                                            std::move(colors));
++}
++
++void HiveyStudioHandler::HandleSetSecurity(const base::ListValue& args) {
++  // ["hardened", bool]: no V8 optimizing compilers (JIT), where most V8
++  // exploits live; ["devices", bool]: block web access to USB, HID, serial
++  // and Bluetooth devices (or ask).
++  const std::string* name = args[0].GetIfString();
++  if (!name || !args[1].is_bool()) {
++    return;
++  }
++  const bool on = args[1].GetBool();
++  HostContentSettingsMap* map =
++      HostContentSettingsMapFactory::GetForProfile(GetProfile());
++  if (*name == "hardened") {
++    map->SetDefaultContentSetting(ContentSettingsType::JAVASCRIPT_OPTIMIZER,
++                                  on ? CONTENT_SETTING_BLOCK
++                                     : CONTENT_SETTING_ALLOW);
++  } else if (*name == "devices") {
++    for (ContentSettingsType type :
++         {ContentSettingsType::USB_GUARD, ContentSettingsType::HID_GUARD,
++          ContentSettingsType::SERIAL_GUARD,
++          ContentSettingsType::BLUETOOTH_GUARD,
++          ContentSettingsType::BLUETOOTH_SCANNING}) {
++      map->SetDefaultContentSetting(
++          type, on ? CONTENT_SETTING_BLOCK : CONTENT_SETTING_ASK);
++    }
++  }
++}
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
+@@ -7,8 +7,15 @@
+ 
+ #include <memory>
+ 
++#include "base/memory/weak_ptr.h"
++#include "base/scoped_observation.h"
+ #include "base/values.h"
+ #include "chrome/browser/task_manager/task_manager_observer.h"
++#include "chrome/browser/themes/theme_service.h"
++#include "chrome/browser/themes/theme_service_observer.h"
++#include "components/content_settings/core/browser/content_settings_observer.h"
++#include "components/content_settings/core/browser/host_content_settings_map.h"
++#include "components/prefs/pref_change_registrar.h"
+ #include "content/public/browser/web_ui_message_handler.h"
+ 
+ class Profile;
+@@ -17,7 +24,9 @@
+ // the browser theme, some profile and Local State prefs, a curated set of
+ // chrome://flags entries, and streams live resource usage from the task
+ // manager while the Resources section is open.
+-class HiveyStudioHandler : public content::WebUIMessageHandler {
++class HiveyStudioHandler : public content::WebUIMessageHandler,
++                           public ThemeServiceObserver,
++                           public content_settings::Observer {
+  public:
+   HiveyStudioHandler();
+   HiveyStudioHandler(const HiveyStudioHandler&) = delete;
+@@ -26,8 +35,18 @@
+ 
+   // content::WebUIMessageHandler:
+   void RegisterMessages() override;
++  void OnJavascriptAllowed() override;
+   void OnJavascriptDisallowed() override;
+ 
++  // ThemeServiceObserver:
++  void OnThemeChanged() override;
++
++  // content_settings::Observer:
++  using content_settings::Observer::OnContentSettingChanged;
++  void OnContentSettingChanged(const ContentSettingsPattern& primary_pattern,
++                               const ContentSettingsPattern& secondary_pattern,
++                               ContentSettingsTypeSet content_type_set) override;
++
+  private:
+   class UsageObserver;
+ 
+@@ -37,6 +56,8 @@
+   base::DictValue BuildPrefsState();
+   base::ListValue BuildFlagsState();
+   base::DictValue BuildShieldState();
++  base::DictValue BuildColorsState();
++  base::DictValue BuildSecurityState();
+ 
+   void HandleGetState(const base::ListValue& args);
+   void HandleSetThemeColor(const base::ListValue& args);
+@@ -51,12 +72,27 @@
+   void HandleTaskAction(const base::ListValue& args);
+   void HandleOpenCustomizeToolbar(const base::ListValue& args);
+   void HandleCheckForUpdates(const base::ListValue& args);
+-
+-  // Pushes the current state to the page ("hivey-state" event).
++  void HandleSetColor(const base::ListValue& args);
++  void HandleSetAccent(const base::ListValue& args);
++  void HandleApplyPreset(const base::ListValue& args);
++  void HandleSetSecurity(const base::ListValue& args);
++
++  // Pushes the current state to the page ("hivey-state" event), once, after
++  // the current task: a change elsewhere (a context menu, Settings, another
++  // window) is reflected in Hivey Studio at once.
+   void FireStateChanged();
++  void ScheduleStateChanged();
+   void OnUsageRefreshed(base::DictValue usage);
+ 
+   std::unique_ptr<UsageObserver> usage_observer_;
++  PrefChangeRegistrar profile_prefs_;
++  PrefChangeRegistrar local_state_prefs_;
++  base::ScopedObservation<ThemeService, ThemeServiceObserver> theme_observation_{
++      this};
++  base::ScopedObservation<HostContentSettingsMap, content_settings::Observer>
++      content_settings_observation_{this};
++  bool state_change_pending_ = false;
++  base::WeakPtrFactory<HiveyStudioHandler> weak_factory_{this};
+ };
+ 
+ #endif  // CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_STUDIO_HANDLER_H_
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_ui.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_ui.cc
+@@ -20,6 +20,7 @@
+   source->AddResourcePath("studio.css", IDR_HIVEY_STUDIO_CSS);
+   source->AddResourcePath("studio.js", IDR_HIVEY_STUDIO_JS);
+   source->AddResourcePath("i18n.js", IDR_HIVEY_STUDIO_I18N_JS);
++  source->AddResourcePath("logo.js", IDR_HIVEY_STUDIO_LOGO_JS);
+   source->SetDefaultResource(IDR_HIVEY_STUDIO_HTML);
+   // The page builds its DOM with createElement/textContent only.
+   source->OverrideContentSecurityPolicy(

@@ -1,0 +1,98 @@
+{
+  "extName": {
+    "message": "Hivey Cyber"
+  },
+  "extDescription": {
+    "message": "Security lookups for the current site, a link or selected text: Whois, IP location, DNS, certificates, VirusTotal, URLScan, Shodan, SSL Labs and more."
+  },
+  "popupNote": {
+    "message": "Each tool opens the external service in a new tab; it receives the domain or address analysed."
+  },
+  "popupNoSite": {
+    "message": "Open a website to analyse it."
+  },
+  "group_identity": {
+    "message": "Identity"
+  },
+  "group_reputation": {
+    "message": "Reputation"
+  },
+  "group_security": {
+    "message": "Site security"
+  },
+  "group_history": {
+    "message": "History"
+  },
+  "tool_whois": {
+    "message": "Whois"
+  },
+  "tool_whois_hint": {
+    "message": "Owner and registrar"
+  },
+  "tool_geoip": {
+    "message": "IP location"
+  },
+  "tool_geoip_hint": {
+    "message": "Server address and country"
+  },
+  "tool_dns": {
+    "message": "DNS records"
+  },
+  "tool_dns_hint": {
+    "message": "A, MX, TXT, NS…"
+  },
+  "tool_certificates": {
+    "message": "Certificates"
+  },
+  "tool_certificates_hint": {
+    "message": "Issued certificates (crt.sh)"
+  },
+  "tool_virustotal": {
+    "message": "VirusTotal"
+  },
+  "tool_virustotal_hint": {
+    "message": "Scan by 70 antivirus engines"
+  },
+  "tool_urlscan": {
+    "message": "URLScan"
+  },
+  "tool_urlscan_hint": {
+    "message": "Past scans and screenshots"
+  },
+  "tool_shodan": {
+    "message": "Shodan"
+  },
+  "tool_shodan_hint": {
+    "message": "Exposed services"
+  },
+  "tool_ssllabs": {
+    "message": "SSL Labs"
+  },
+  "tool_ssllabs_hint": {
+    "message": "HTTPS configuration grade"
+  },
+  "tool_headers": {
+    "message": "Security headers"
+  },
+  "tool_headers_hint": {
+    "message": "CSP, HSTS, frame options…"
+  },
+  "tool_observatory": {
+    "message": "Mozilla Observatory"
+  },
+  "tool_observatory_hint": {
+    "message": "Web security audit"
+  },
+  "tool_wayback": {
+    "message": "Wayback Machine"
+  },
+  "tool_wayback_hint": {
+    "message": "Archived versions"
+  },
+  "tool_vtSearch": {
+    "message": "Search on VirusTotal (hash, IP, domain)"
+  },
+  "tool_hibp": {
+    "message": "Check this email on Have I Been Pwned"
+  }
+}

@@ -45,14 +45,18 @@ ticked: Linux on the build host, Windows on a GitHub Actions runner.
 - [x] Any color for the whole browser, palette styles, light/dark, grayscale
 - [x] Vertical tabs, side panel position, toolbar buttons, compact mode
 - [x] Custom new tab page
+- [x] Themes and a color for every part of the browser, with a screen-wide eyedropper
+- [x] Window icon in the accent color; Settings and menus follow the theme
+- [x] Resources button with a dropdown in the toolbar
 - [ ] Built-in animations, with a reduced-motion mode
 - [ ] Theme import/export
 
 ## Phase 4: Hivey AI sidebar
 
-- [ ] Native side panel, like Leo in Brave
-- [ ] Bring your own key, or local models
-- [ ] Off by default; nothing sent until the user turns it on
+- [x] Built in, in the side panel (HiveyAI-Sidebar, signed into the browser)
+- [x] Bring your own key, or local models
+- [x] Nothing sent until the user sets a provider up; no site access until invoked on a tab
+- [x] Security tools (Hivey Cyber): WHOIS, geolocation, DNS, certificates, VirusTotal, urlscan…
 
 ## Phase 5: Distribution
 

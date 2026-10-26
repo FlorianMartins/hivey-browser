@@ -1,0 +1,54 @@
+# Web access to USB, HID, serial and Bluetooth devices blocked by default (can be set back to ask, or allowed per site).
+--- a/components/content_settings/core/browser/content_settings_registry.cc
++++ b/components/content_settings/core/browser/content_settings_registry.cc
+@@ -325,8 +325,11 @@
+            ContentSettingsInfo::INHERIT_IF_LESS_PERMISSIVE,
+            PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_AND_INSECURE_ORIGINS);
+ 
++  // Hivey: web access to USB, HID, serial and Bluetooth devices is blocked by
++  // default (a large attack surface few sites need); Settings > Site settings
++  // or Hivey Studio turns it back to "ask", or allows one site.
+   Register(ContentSettingsType::BLUETOOTH_GUARD, "bluetooth-guard",
+-           CONTENT_SETTING_ASK, WebsiteSettingsInfo::UNSYNCABLE,
++           CONTENT_SETTING_BLOCK /* Hivey */, WebsiteSettingsInfo::UNSYNCABLE,
+            /*allowlisted_primary_schemes=*/{},
+            /*valid_settings=*/{CONTENT_SETTING_ASK, CONTENT_SETTING_BLOCK},
+            WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,
+@@ -369,7 +372,8 @@
+            ContentSettingsInfo::INHERIT_IN_INCOGNITO,
+            PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_ORIGINS_ONLY);
+ 
+-  Register(ContentSettingsType::USB_GUARD, "usb-guard", CONTENT_SETTING_ASK,
++  Register(ContentSettingsType::USB_GUARD, "usb-guard",
++           CONTENT_SETTING_BLOCK /* Hivey */,
+            WebsiteSettingsInfo::UNSYNCABLE, /*allowlisted_primary_schemes=*/{},
+            /*valid_settings=*/{CONTENT_SETTING_ASK, CONTENT_SETTING_BLOCK},
+            WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,
+@@ -379,7 +383,7 @@
+            PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_ORIGINS_ONLY);
+ 
+   Register(ContentSettingsType::SERIAL_GUARD, "serial-guard",
+-           CONTENT_SETTING_ASK, WebsiteSettingsInfo::UNSYNCABLE,
++           CONTENT_SETTING_BLOCK /* Hivey */, WebsiteSettingsInfo::UNSYNCABLE,
+            /*allowlisted_primary_schemes=*/{},
+            /*valid_settings=*/{CONTENT_SETTING_ASK, CONTENT_SETTING_BLOCK},
+            WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,
+@@ -389,7 +393,7 @@
+            PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_ORIGINS_ONLY);
+ 
+   Register(ContentSettingsType::BLUETOOTH_SCANNING, "bluetooth-scanning",
+-           CONTENT_SETTING_ASK, WebsiteSettingsInfo::UNSYNCABLE,
++           CONTENT_SETTING_BLOCK /* Hivey */, WebsiteSettingsInfo::UNSYNCABLE,
+            /*allowlisted_primary_schemes=*/{},
+            /*valid_settings=*/{CONTENT_SETTING_ASK, CONTENT_SETTING_BLOCK},
+            WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,
+@@ -398,7 +402,8 @@
+            ContentSettingsInfo::INHERIT_IF_LESS_PERMISSIVE,
+            PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_ORIGINS_ONLY);
+ 
+-  Register(ContentSettingsType::HID_GUARD, "hid-guard", CONTENT_SETTING_ASK,
++  Register(ContentSettingsType::HID_GUARD, "hid-guard",
++           CONTENT_SETTING_BLOCK /* Hivey */,
+            WebsiteSettingsInfo::UNSYNCABLE, /*allowlisted_primary_schemes=*/{},
+            /*valid_settings=*/{CONTENT_SETTING_ASK, CONTENT_SETTING_BLOCK},
+            WebsiteSettingsInfo::TOP_ORIGIN_ONLY_SCOPE,

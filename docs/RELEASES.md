@@ -15,9 +15,12 @@ user (`patches/hivey/build/hivey-updater.patch`).
 
 ## The automatic pipeline
 
-`scripts/autoupdate.py` runs every night on the build host (systemd timer,
-installed by `scripts/install-autoupdate.sh`). It works in its own clone and
-build tree, at the lowest CPU and I/O priority.
+`scripts/autoupdate.py` runs every 5 minutes on the build host (systemd
+timer, installed by `scripts/install-autoupdate.sh`): a run that finds nothing
+new is a few GitHub API calls, so an update starts building within minutes of
+its release. It works in its own clone (reset to `origin/main` before each
+run, so merged changes to the pipeline apply by themselves) and build tree,
+at the lowest CPU and I/O priority.
 
 1. **New Chromium?** It takes the newest ungoogled-chromium release that
    ungoogled-chromium-windows also supports (same Chromium version), and
@@ -25,6 +28,11 @@ build tree, at the lowest CPU and I/O priority.
    `HIVEY_REVISION` back to 1, patches checked against the new source tarball
    and refreshed if they only moved (`scripts/patchcheck.py --refresh`). A
    patch that no longer applies stops here: that needs a human.
+   **New Hivey AI sidebar?** The sidebar follows the `main` branch of
+   [HiveyAI-Sidebar](https://github.com/FlorianMartins/HiveyAI-Sidebar): when
+   it has a newer commit whose checks all passed, the submodule moves to it
+   (in the Chromium branch, or in `auto/hivey-ai-<commit>` with
+   `HIVEY_REVISION` bumped). `CHANGELOG.md` gets the new version's entry.
 2. **Build.** Fresh tree, Windows and Linux, packages (`hb.py package`).
 3. **Draft release** (`scripts/release.py draft`): installers, `SHA256SUMS`,
    and the signed update manifest.
@@ -40,7 +48,8 @@ build tree, at the lowest CPU and I/O priority.
    rebuilds it, checks it on Linux and replaces `dev`.
 
 Any failure opens (or comments on) a GitHub issue labelled `autoupdate`, with
-the end of the log.
+the end of the log. The same update is not retried until something new comes
+(a Chromium release, a sidebar commit or a change on main).
 
 Every pull request that touches patches or submodules also runs
 `patchcheck.py` in CI (`.github/workflows/patch-stack.yml`, about two

@@ -1,0 +1,693 @@
+# Hivey color engine and Aura look: every part of the browser in a user color (Local State hivey.colors, postprocessing mixer, live repaint), Aura (the Hivey AI sidebar's colors, dark) by default, themed menus and internal pages, vertical tab strip in the toolbar color, no expand-on-hover by default, compact mode tightens the toolbar row, window icon in the theme's accent.
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -845,6 +845,10 @@
+     "hivey/hivey_resource_limits.h",
+     "hivey/hivey_updater.cc",
+     "hivey/hivey_updater.h",
++    "hivey/hivey_app_icon.cc",
++    "hivey/hivey_app_icon.h",
++    "hivey/hivey_colors.cc",
++    "hivey/hivey_colors.h",
+     "chrome_content_browser_client.cc",
+     "chrome_content_browser_client_binder_policies.cc",
+     "chrome_content_browser_client_binder_policies.h",
+--- a/chrome/browser/chrome_browser_main.cc
++++ b/chrome/browser/chrome_browser_main.cc
+@@ -41,6 +41,7 @@
+ #include "chrome/browser/first_run/bookmark_importer.h"
+ #include "chrome/browser/first_run/first_run_features.h"
+ #include "chrome/browser/gpu/chrome_browser_main_extra_parts_gpu.h"
++#include "chrome/browser/hivey/hivey_colors.h"
+ #include "chrome/browser/hivey/hivey_resource_limits.h"
+ #include "chrome/browser/language/url_language_histogram_factory.h"
+ #include "chrome/browser/lifetime/browser_shutdown.h"
+@@ -1062,6 +1063,11 @@
+       base::BindRepeating(color::AddComponentsColorMixers));
+   ui::ColorProviderManager::Get().AppendColorProviderInitializer(
+       base::BindRepeating(AddChromeColorMixers));
++#if !BUILDFLAG(IS_ANDROID)
++  // Hivey: the user's colors (Hivey Studio), applied after every other mixer.
++  ui::ColorProviderManager::Get().AppendColorProviderInitializer(
++      base::BindRepeating(hivey::AddHiveyColorMixer));
++#endif
+ 
+   InitializeActionIdStringMapping();
+ }
+--- a/chrome/browser/hivey/hivey_app_icon.cc
++++ b/chrome/browser/hivey/hivey_app_icon.cc
+@@ -0,0 +1,89 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/hivey/hivey_app_icon.h"
++
++#include "cc/paint/paint_flags.h"
++#include "third_party/skia/include/core/SkMatrix.h"
++#include "third_party/skia/include/core/SkPath.h"
++#include "third_party/skia/include/core/SkPathBuilder.h"
++#include "ui/gfx/canvas.h"
++#include "ui/gfx/color_utils.h"
++#include "ui/gfx/geometry/point_f.h"
++#include "ui/gfx/image/canvas_image_source.h"
++
++namespace hivey {
++
++namespace {
++
++// Draws brand/logo.svg (256 x 256 units) scaled to the image size.
++class ThemedLogoSource : public gfx::CanvasImageSource {
++ public:
++  ThemedLogoSource(SkColor accent, int size)
++      : gfx::CanvasImageSource(gfx::Size(size, size)), accent_(accent) {}
++
++  void Draw(gfx::Canvas* canvas) override {
++    const float scale = size().width() / 256.f;
++    canvas->sk_canvas()->scale(scale, scale);
++
++    const SkColor dark = color_utils::AlphaBlend(SK_ColorBLACK, accent_, 0.8f);
++    const SkColor light = color_utils::AlphaBlend(SK_ColorWHITE, accent_, 0.7f);
++    cc::PaintFlags flags;
++    flags.setAntiAlias(true);
++
++    // Rounded hexagon, pointy top.
++    const SkPath cell = SkPathBuilder()
++                            .moveTo(116, 14.9f)
++                            .quadTo(128, 8, 140, 14.9f)
++                            .lineTo(218.9f, 60.5f)
++                            .quadTo(230.9f, 67.4f, 230.9f, 81.3f)
++                            .lineTo(230.9f, 174.7f)
++                            .quadTo(230.9f, 188.6f, 218.9f, 195.5f)
++                            .lineTo(140, 241.1f)
++                            .quadTo(128, 248, 116, 241.1f)
++                            .lineTo(37.1f, 195.5f)
++                            .quadTo(25.1f, 188.6f, 25.1f, 174.7f)
++                            .lineTo(25.1f, 81.3f)
++                            .quadTo(25.1f, 67.4f, 37.1f, 60.5f)
++                            .close()
++                            .detach();
++    flags.setColor(accent_);
++    canvas->DrawPath(cell, flags);
++
++    // Orbit, tilted: the back half behind the globe, the front half over it.
++    const SkMatrix tilt = SkMatrix::RotateDeg(-28, {128, 128});
++    const SkRect orbit = SkRect::MakeLTRB(40, 98, 216, 158);
++    flags.setStyle(cc::PaintFlags::kStroke_Style);
++    flags.setStrokeCap(cc::PaintFlags::kRound_Cap);
++    flags.setStrokeWidth(16);
++    flags.setColor(SkColorSetA(dark, 0x59));
++    canvas->DrawPath(SkPathBuilder().addArc(orbit, 180, 180).detach(&tilt),
++                     flags);
++
++    flags.setStyle(cc::PaintFlags::kFill_Style);
++    flags.setColor(dark);
++    canvas->DrawCircle(gfx::PointF(128, 128), 62, flags);
++
++    flags.setStyle(cc::PaintFlags::kStroke_Style);
++    flags.setStrokeWidth(12);
++    flags.setColor(light);
++    canvas->DrawPath(SkPathBuilder().addArc(orbit, 0, 180).detach(&tilt),
++                     flags);
++
++    flags.setStyle(cc::PaintFlags::kFill_Style);
++    flags.setColor(SkColorSetA(light, 0xe6));
++    canvas->DrawCircle(gfx::PointF(106, 104), 12, flags);
++  }
++
++ private:
++  const SkColor accent_;
++};
++
++}  // namespace
++
++gfx::ImageSkia HiveyThemedAppIcon(SkColor accent, int size) {
++  return gfx::CanvasImageSource::MakeImageSkia<ThemedLogoSource>(accent, size);
++}
++
++}  // namespace hivey
+--- a/chrome/browser/hivey/hivey_app_icon.h
++++ b/chrome/browser/hivey/hivey_app_icon.h
+@@ -0,0 +1,21 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_HIVEY_APP_ICON_H_
++#define CHROME_BROWSER_HIVEY_HIVEY_APP_ICON_H_
++
++#include "third_party/skia/include/core/SkColor.h"
++#include "ui/gfx/image/image_skia.h"
++
++namespace hivey {
++
++// The Hivey Browser logo (brand/logo.svg: a honeycomb cell holding a globe
++// with its orbit) drawn in `accent`, the theme's accent color. Browser
++// windows use it as their icon (taskbar, window switcher, title bar), so the
++// icon follows the theme the user picked.
++gfx::ImageSkia HiveyThemedAppIcon(SkColor accent, int size = 256);
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_HIVEY_HIVEY_APP_ICON_H_
+--- a/chrome/browser/hivey/hivey_colors.cc
++++ b/chrome/browser/hivey/hivey_colors.cc
+@@ -0,0 +1,281 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/hivey/hivey_colors.h"
++
++#include <initializer_list>
++#include <string>
++
++#include "base/containers/span.h"
++
++#include "base/functional/bind.h"
++#include "base/strings/string_number_conversions.h"
++#include "chrome/browser/browser_process.h"
++#include "chrome/browser/ui/color/chrome_color_id.h"
++#include "components/prefs/pref_registry_simple.h"
++#include "components/prefs/pref_service.h"
++#include "ui/color/color_id.h"
++#include "ui/color/color_mixer.h"
++#include "ui/color/color_provider.h"
++#include "ui/color/color_provider_manager.h"
++#include "ui/color/color_recipe.h"
++#include "ui/gfx/color_utils.h"
++#include "ui/native_theme/native_theme.h"
++
++namespace hivey {
++
++namespace {
++
++struct ColorEntry {
++  const char* element;
++  const char* hex;
++};
++
++// Aura is the Hivey AI sidebar's look: deep ink, indigo accent.
++constexpr ColorEntry kAura[] = {
++    {"frame", "#0b0c14"},
++    {"toolbar", "#151726"},
++    {"tab_inactive", "#0b0c14"},
++    {"tab_text", "#f4f2fc"},
++    {"omnibox", "#1f2236"},
++    {"omnibox_text", "#ece9fb"},
++    {"icons", "#c4c6df"},
++    {"accent", "#7c6cf6"},
++    {"menu", "#181a2b"},
++    {"menu_text", "#f4f2fc"},
++    {"panel", "#151726"},
++    {"panel_text", "#f4f2fc"},
++    {"page", "#0f111a"},
++    {"page_text", "#f4f2fc"},
++};
++
++constexpr ColorEntry kAmberNight[] = {
++    {"frame", "#0e0c09"},
++    {"toolbar", "#1a1610"},
++    {"tab_inactive", "#0e0c09"},
++    {"tab_text", "#fbf3e4"},
++    {"omnibox", "#262015"},
++    {"omnibox_text", "#fbf3e4"},
++    {"icons", "#e2cfa9"},
++    {"accent", "#f7a21b"},
++    {"menu", "#1d1912"},
++    {"menu_text", "#fbf3e4"},
++    {"panel", "#1a1610"},
++    {"panel_text", "#fbf3e4"},
++    {"page", "#12100c"},
++    {"page_text", "#fbf3e4"},
++};
++
++constexpr ColorEntry kDaylight[] = {
++    {"frame", "#e6e7f2"},
++    {"toolbar", "#f8f8fd"},
++    {"tab_inactive", "#e6e7f2"},
++    {"tab_text", "#16172a"},
++    {"omnibox", "#eceef8"},
++    {"omnibox_text", "#16172a"},
++    {"icons", "#4a4d6b"},
++    {"accent", "#6366f1"},
++    {"menu", "#ffffff"},
++    {"menu_text", "#16172a"},
++    {"panel", "#ffffff"},
++    {"panel_text", "#16172a"},
++    {"page", "#f6f6fb"},
++    {"page_text", "#16172a"},
++};
++
++struct Preset {
++  const char* name;
++  base::span<const ColorEntry> colors;
++};
++
++// "material": no override, Chromium's palette from the user color alone.
++const Preset kPresets[] = {
++    {"aura", kAura},
++    {"amber_night", kAmberNight},
++    {"daylight", kDaylight},
++    {"material", {}},
++};
++
++SkColor Mix(SkColor foreground, SkColor background, float amount) {
++  return color_utils::AlphaBlend(foreground, background, amount);
++}
++
++}  // namespace
++
++std::optional<SkColor> ParseHexColor(std::string_view hex) {
++  uint32_t rgb = 0;
++  if (hex.size() != 7 || hex[0] != '#' ||
++      !base::HexStringToUInt(hex.substr(1), &rgb)) {
++    return std::nullopt;
++  }
++  return SkColorSetRGB((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
++}
++
++base::DictValue GetHiveyColorPreset(std::string_view name) {
++  base::DictValue colors;
++  for (const Preset& preset : kPresets) {
++    if (name == preset.name) {
++      for (const ColorEntry& entry : preset.colors) {
++        colors.Set(entry.element, entry.hex);
++      }
++    }
++  }
++  return colors;
++}
++
++base::ListValue GetHiveyColorPresetNames() {
++  base::ListValue names;
++  for (const Preset& preset : kPresets) {
++    names.Append(preset.name);
++  }
++  return names;
++}
++
++void RegisterHiveyColorsPrefs(PrefRegistrySimple* registry) {
++  registry->RegisterDictionaryPref(kHiveyColors, GetHiveyColorPreset("aura"));
++}
++
++void AddHiveyColorMixer(ui::ColorProvider* provider,
++                        const ui::ColorProviderKey& key) {
++  PrefService* local_state =
++      g_browser_process ? g_browser_process->local_state() : nullptr;
++  if (!local_state) {
++    return;
++  }
++  const base::DictValue& colors = local_state->GetDict(kHiveyColors);
++  if (colors.empty()) {
++    return;
++  }
++  auto get = [&](const char* element) -> std::optional<SkColor> {
++    const std::string* hex = colors.FindString(element);
++    return hex ? ParseHexColor(*hex) : std::nullopt;
++  };
++  ui::ColorMixer& mixer = provider->AddPostprocessingMixer();
++  auto set = [&](std::initializer_list<ui::ColorId> ids, SkColor color) {
++    for (ui::ColorId id : ids) {
++      mixer[id] = {color};
++    }
++  };
++
++  if (auto frame = get("frame")) {
++    set({ui::kColorFrameActive, ui::kColorFrameInactive, ui::kColorSysHeader,
++         ui::kColorSysHeaderInactive},
++        *frame);
++  }
++  if (auto toolbar = get("toolbar")) {
++    // The active tab, the bookmarks bar and the vertical tab strip blend
++    // into the toolbar.
++    set({kColorToolbar, kColorTabBackgroundActiveFrameActive,
++         kColorTabBackgroundActiveFrameInactive, kColorBookmarkBarBackground,
++         kColorToolbarTopSeparatorFrameActive,
++         kColorToolbarTopSeparatorFrameInactive},
++        *toolbar);
++  }
++  if (auto inactive = get("tab_inactive")) {
++    set({kColorTabBackgroundInactiveFrameActive,
++         kColorTabBackgroundInactiveFrameInactive},
++        *inactive);
++  }
++  if (auto text = get("tab_text")) {
++    set({kColorTabForegroundActiveFrameActive,
++         kColorTabForegroundActiveFrameInactive},
++        *text);
++    const SkColor base = get("tab_inactive").value_or(*text);
++    set({kColorTabForegroundInactiveFrameActive,
++         kColorTabForegroundInactiveFrameInactive},
++        Mix(*text, base, 0.7f));
++  }
++  if (auto omnibox = get("omnibox")) {
++    const SkColor text = get("omnibox_text").value_or(SK_ColorWHITE);
++    set({kColorLocationBarBackground, kColorOmniboxResultsBackground},
++        *omnibox);
++    set({kColorLocationBarBackgroundHovered,
++         kColorOmniboxResultsBackgroundHovered},
++        Mix(text, *omnibox, 0.07f));
++  }
++  if (auto text = get("omnibox_text")) {
++    set({kColorOmniboxText}, *text);
++    if (auto omnibox = get("omnibox")) {
++      set({kColorOmniboxTextDimmed}, Mix(*text, *omnibox, 0.6f));
++    }
++  }
++  if (auto icons = get("icons")) {
++    set({kColorToolbarButtonIcon, kColorToolbarText,
++         kColorBookmarkBarForeground, kColorNewTabButtonForegroundFrameActive,
++         kColorNewTabButtonForegroundFrameInactive},
++        *icons);
++    const SkColor bright = get("tab_text").value_or(*icons);
++    set({kColorToolbarButtonIconHovered, kColorToolbarButtonIconPressed},
++        bright);
++  }
++  if (auto accent = get("accent")) {
++    set({ui::kColorSysPrimary, ui::kColorAccent, ui::kColorFocusableBorderFocused,
++         ui::kColorSysStateFocusRing},
++        *accent);
++  }
++  if (auto menu = get("menu")) {
++    const SkColor text = get("menu_text").value_or(SK_ColorWHITE);
++    const SkColor accent = get("accent").value_or(text);
++    set({ui::kColorMenuBackground}, *menu);
++    set({ui::kColorMenuBorder, ui::kColorMenuSeparator}, Mix(text, *menu, 0.12f));
++    set({ui::kColorMenuItemBackgroundSelected,
++         ui::kColorMenuItemBackgroundHighlighted},
++        Mix(accent, *menu, 0.28f));
++  }
++  if (auto text = get("menu_text")) {
++    set({ui::kColorMenuItemForeground, ui::kColorMenuItemForegroundSelected,
++         ui::kColorMenuIcon},
++        *text);
++    const SkColor base = get("menu").value_or(*text);
++    set({ui::kColorMenuItemForegroundSecondary}, Mix(*text, base, 0.65f));
++  }
++  if (auto panel = get("panel")) {
++    set({ui::kColorBubbleBackground, ui::kColorDialogBackground,
++         ui::kColorTooltipBackground, ui::kColorPrimaryBackground,
++         kColorSidePanelBackground, kColorSidePanelContentBackground},
++        *panel);
++  }
++  if (auto text = get("panel_text")) {
++    set({ui::kColorDialogForeground, ui::kColorTooltipForeground,
++         ui::kColorPrimaryForeground},
++        *text);
++  }
++  if (auto page = get("page")) {
++    // The browser's own pages (Settings, History, Hivey Studio...) draw with
++    // these system tokens.
++    const SkColor text = get("page_text").value_or(SK_ColorWHITE);
++    set({ui::kColorSysBase, ui::kColorSysSurface}, *page);
++    set({ui::kColorSysSurface1}, Mix(text, *page, 0.03f));
++    set({ui::kColorSysSurface2}, Mix(text, *page, 0.05f));
++    set({ui::kColorSysSurface3}, Mix(text, *page, 0.07f));
++    set({ui::kColorSysSurface4}, Mix(text, *page, 0.09f));
++    set({ui::kColorSysSurface5}, Mix(text, *page, 0.11f));
++    set({ui::kColorSysBaseContainer}, Mix(text, *page, 0.06f));
++  }
++  if (auto text = get("page_text")) {
++    set({ui::kColorSysOnSurface}, *text);
++    const SkColor base = get("page").value_or(*text);
++    set({ui::kColorSysOnSurfaceSubtle}, Mix(*text, base, 0.7f));
++  }
++}
++
++HiveyColorsObserver::HiveyColorsObserver() {
++  if (PrefService* local_state = g_browser_process->local_state()) {
++    registrar_.Init(local_state);
++    registrar_.Add(kHiveyColors,
++                   base::BindRepeating(&HiveyColorsObserver::OnColorsChanged,
++                                       base::Unretained(this)));
++  }
++}
++
++HiveyColorsObserver::~HiveyColorsObserver() = default;
++
++void HiveyColorsObserver::OnColorsChanged() {
++  // Drop the cached color providers, then repaint every window and page.
++  ui::ColorProviderManager::Get().ResetColorProviderCache();
++  ui::NativeTheme::GetInstanceForNativeUi()->NotifyOnNativeThemeUpdated();
++  ui::NativeTheme::GetInstanceForWeb()->NotifyOnNativeThemeUpdated();
++}
++
++}  // namespace hivey
+--- a/chrome/browser/hivey/hivey_colors.h
++++ b/chrome/browser/hivey/hivey_colors.h
+@@ -0,0 +1,70 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_HIVEY_COLORS_H_
++#define CHROME_BROWSER_HIVEY_HIVEY_COLORS_H_
++
++#include <optional>
++
++#include "base/values.h"
++#include "components/prefs/pref_change_registrar.h"
++#include "third_party/skia/include/core/SkColor.h"
++
++class PrefRegistrySimple;
++
++namespace ui {
++class ColorProvider;
++class ColorProviderKey;
++}  // namespace ui
++
++namespace hivey {
++
++// Hivey's color engine. Every part of the browser can take a color of the
++// user's choosing (Hivey Studio > Colors): the frame and tab strip, the
++// toolbar and active tab, inactive tabs, tab text, the address bar and its
++// text, toolbar icons, the accent, menus, bubbles and panels, and the
++// browser's own pages (Settings, Hivey Studio...). The colors live in Local
++// State ("hivey.colors": element -> "#rrggbb"); a postprocessing color mixer
++// applies them after every other mixer (Material palette, themes), with the
++// hover, selected and secondary shades derived from them. The default is the
++// Aura preset, the look of the Hivey AI sidebar.
++inline constexpr char kHiveyColors[] = "hivey.colors";
++
++// Element keys, in Hivey Studio's order.
++inline constexpr const char* kHiveyColorElements[] = {
++    "frame",   "toolbar",   "tab_inactive", "tab_text", "omnibox",
++    "omnibox_text", "icons", "accent",     "menu",     "menu_text",
++    "panel",   "panel_text", "page",       "page_text",
++};
++
++void RegisterHiveyColorsPrefs(PrefRegistrySimple* registry);
++
++// Presets ("aura", "amber_night", "daylight", "material"), as element -> hex.
++// "material" is empty: Chromium's palette from the user color alone.
++base::DictValue GetHiveyColorPreset(std::string_view name);
++base::ListValue GetHiveyColorPresetNames();
++
++// The color mixer, appended after Chrome's (chrome_browser_main.cc).
++void AddHiveyColorMixer(ui::ColorProvider* provider,
++                        const ui::ColorProviderKey& key);
++
++std::optional<SkColor> ParseHexColor(std::string_view hex);
++
++// Repaints every window and page when the colors change.
++class HiveyColorsObserver {
++ public:
++  HiveyColorsObserver();
++  HiveyColorsObserver(const HiveyColorsObserver&) = delete;
++  HiveyColorsObserver& operator=(const HiveyColorsObserver&) = delete;
++  ~HiveyColorsObserver();
++
++ private:
++  void OnColorsChanged();
++
++  PrefChangeRegistrar registrar_;
++};
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_HIVEY_HIVEY_COLORS_H_
+--- a/chrome/browser/hivey/hivey_resource_limits.cc
++++ b/chrome/browser/hivey/hivey_resource_limits.cc
+@@ -11,6 +11,7 @@
+ #include "base/logging.h"
+ #include "base/time/time.h"
+ #include "chrome/browser/browser_process.h"
++#include "chrome/browser/hivey/hivey_colors.h"
+ #include "chrome/browser/hivey/hivey_updater.h"
+ #include "chrome/browser/net/system_network_context_manager.h"
+ #include "components/prefs/pref_registry_simple.h"
+@@ -188,9 +189,11 @@
+ void ChromeBrowserMainExtraPartsHivey::PostBrowserStart() {
+   resource_limits_ = std::make_unique<ResourceLimits>();
+   updater_ = std::make_unique<Updater>();
++  colors_ = std::make_unique<HiveyColorsObserver>();
+ }
+ 
+ void ChromeBrowserMainExtraPartsHivey::PostMainMessageLoopRun() {
++  colors_.reset();
+   updater_.reset();
+   resource_limits_.reset();
+ }
+--- a/chrome/browser/hivey/hivey_resource_limits.h
++++ b/chrome/browser/hivey/hivey_resource_limits.h
+@@ -24,6 +24,7 @@
+ 
+ namespace hivey {
+ 
++class HiveyColorsObserver;
+ class Updater;
+ 
+ // Local State prefs of the resource limiters (Hivey Studio > Resources).
+@@ -97,6 +98,7 @@
+  private:
+   std::unique_ptr<ResourceLimits> resource_limits_;
+   std::unique_ptr<Updater> updater_;
++  std::unique_ptr<HiveyColorsObserver> colors_;
+ };
+ 
+ }  // namespace hivey
+--- a/chrome/browser/prefs/browser_prefs.cc
++++ b/chrome/browser/prefs/browser_prefs.cc
+@@ -25,6 +25,7 @@
+ #include "chrome/browser/accessibility/prefers_default_scrollbar_styles_prefs.h"
+ #include "chrome/browser/browser_process_impl.h"
+ #if !BUILDFLAG(IS_ANDROID)
++#include "chrome/browser/hivey/hivey_colors.h"
+ #include "chrome/browser/hivey/hivey_resource_limits.h"
+ #include "chrome/browser/hivey/hivey_updater.h"
+ #endif
+@@ -1538,6 +1539,7 @@
+ #if !BUILDFLAG(IS_ANDROID)
+   hivey::RegisterResourceLimitsPrefs(registry);
+   hivey::RegisterUpdaterPrefs(registry);
++  hivey::RegisterHiveyColorsPrefs(registry);
+ #endif
+ #if BUILDFLAG(CHROME_FOR_TESTING)
+   chrome_for_testing::RegisterPrefs(registry);
+--- a/chrome/browser/themes/theme_service.cc
++++ b/chrome/browser/themes/theme_service.cc
+@@ -323,16 +323,17 @@
+       prefs::kDeprecatedBrowserColorSchemeDoNotUse,
+       std::to_underlying(ThemeService::BrowserColorScheme::kSystem),
+       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
++  // Hivey: dark by default, like the Aura colors (Hivey Studio changes it).
+   registry->RegisterIntegerPref(
+       prefs::kBrowserColorScheme,
+-      std::to_underlying(ThemeService::BrowserColorScheme::kSystem));
++      std::to_underlying(ThemeService::BrowserColorScheme::kDark));
+   registry->RegisterIntegerPref(
+       prefs::kDeprecatedUserColorDoNotUse, SK_ColorTRANSPARENT,
+       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+-  // Hivey: the browser palette is generated from Hivey amber by default
+-  // (Customize > Appearance changes it, "Default" brings it back).
++  // Hivey: the browser palette is generated from the Aura indigo by default
++  // (Hivey Studio changes it, "Default" brings it back).
+   registry->RegisterIntegerPref(prefs::kUserColor,
+-                                static_cast<int>(SkColorSetRGB(0xF7, 0xA2, 0x1B)));
++                                static_cast<int>(SkColorSetRGB(0x63, 0x66, 0xF1)));
+   registry->RegisterIntegerPref(
+       prefs::kDeprecatedBrowserColorVariantDoNotUse,
+       static_cast<int>(ui::mojom::BrowserColorVariant::kSystem),
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -220,7 +220,9 @@
+   return GetDefaultLayoutConstant(constant);
+ }
+ 
+-gfx::Insets GetLayoutInsets(LayoutInset inset) {
++namespace {
++
++gfx::Insets GetDefaultLayoutInsets(LayoutInset inset) {
+   const bool touch_ui = ui::TouchUiController::Get()->touch_ui();
+   switch (inset) {
+     case DOWNLOAD_ICON:
+@@ -284,3 +286,26 @@
+   }
+   NOTREACHED();
+ }
++
++}  // namespace
++
++gfx::Insets GetLayoutInsets(LayoutInset inset) {
++  // Hivey: compact mode also tightens the toolbar row (its buttons, the app
++  // menu and avatar chips, and the margins around them).
++  if (base::FeatureList::IsEnabled(kHiveyCompactUi) &&
++      !ui::TouchUiController::Get()->touch_ui()) {
++    switch (inset) {
++      case TOOLBAR_BUTTON:
++        return gfx::Insets(4);
++      case BROWSER_APP_MENU_CHIP_PADDING:
++        return gfx::Insets::TLBR(4, 4, 4, 6);
++      case AVATAR_CHIP_PADDING:
++        return gfx::Insets::TLBR(4, 10, 4, 4);
++      case TOOLBAR_INTERIOR_MARGIN:
++        return gfx::Insets::VH(3, 6);
++      default:
++        break;
++    }
++  }
++  return GetDefaultLayoutInsets(inset);
++}
+--- a/chrome/browser/ui/tabs/features.cc
++++ b/chrome/browser/ui/tabs/features.cc
+@@ -39,7 +39,7 @@
+                    kVerticalTabsExpandOnHoverDefaultEnabled,
+                    &kVerticalTabsExpandOnHover,
+                    "expand_on_hover_default_enabled",
+-                   true);
++                   false);  // Hivey: available, not on by default.
+ 
+ BASE_FEATURE_PARAM(base::TimeDelta,
+                    kVerticalTabsExpandOnHoverDelay,
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ 
++#include "chrome/browser/hivey/hivey_app_icon.h"
++
+ #include <stdint.h>
+ 
+ #include <algorithm>
+@@ -3988,6 +3990,15 @@
+         WindowMetadataController::From(browser_.get())->GetCurrentPageIcon());
+   }
+ 
++#if !BUILDFLAG(IS_CHROMEOS)
++  // Hivey: browser windows show the Hivey logo in the theme's accent color
++  // (taskbar, window switcher, title bar).
++  if (const ui::ColorProvider* colors = GetColorProvider()) {
++    return ui::ImageModel::FromImageSkia(
++        hivey::HiveyThemedAppIcon(colors->GetColor(ui::kColorSysPrimary)));
++  }
++#endif
++
+   return ui::ImageModel();
+ }
+ 
+@@ -5215,6 +5226,10 @@
+   }
+ 
+   FrameColorsChanged();
++  // Hivey: the window icon follows the theme's accent color.
++  if (browser_widget_ && CanChangeWindowIcon()) {
++    browser_widget_->UpdateWindowIcon();
++  }
+ }
+ 
+ bool BrowserView::GetDropFormats(
+--- a/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
++++ b/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
+@@ -199,7 +199,9 @@
+ 
+   SetBackground(std::make_unique<CustomCornersBackground>(
+       *this, *browser_view,
+-      /*primary_color=*/CustomCornersBackground::FrameTheme(),
++      // Hivey: the vertical tab strip takes the toolbar's color, so the
++      // tabs and the navigation bar read as one surface.
++      /*primary_color=*/CustomCornersBackground::ToolbarTheme(),
+       /*corner_color=*/CustomCornersBackground::ToolbarTheme()));
+ 
+   shadow_frame_ = AddChildView(std::make_unique<ShadowFrameView>(

@@ -724,12 +724,13 @@ def step_brand(args):
 
 
 # Extensions that ship with the browser (extensions/bundled.json), packed as
-# signed .crx files. The key decides their extension ID; keep it private and
-# stable (a new key means a new ID, so existing installs would get a second
-# copy). HB_EXTENSION_KEY overrides its location.
+# signed .crx files. Each has its own key, which decides its extension ID: keep
+# the keys private and stable (a new key means a new ID, so existing installs
+# would get a second copy). uBlock Origin Lite keeps bundled-extensions.pem
+# (HB_EXTENSION_KEY); the others use <name>.pem in HB_KEY_DIR.
 BUNDLED = BUILD / 'bundled-extensions'
-EXTENSION_KEY = Path(os.environ.get('HB_EXTENSION_KEY',
-                                    Path.home() / '.config' / 'hivey' / 'bundled-extensions.pem'))
+KEY_DIR = Path(os.environ.get('HB_KEY_DIR', Path.home() / '.config' / 'hivey'))
+EXTENSION_KEY = Path(os.environ.get('HB_EXTENSION_KEY', KEY_DIR / 'bundled-extensions.pem'))
 # Ed25519 key that signs the update manifest (scripts/release.py). The browser
 # embeds its public key and refuses any update not signed with it. Keep it
 # private; HB_UPDATE_KEY overrides its location.
@@ -784,37 +785,96 @@ def _apply_shield_defaults(unpacked, enable):
     manifest_path.write_text(json.dumps(manifest, indent=2))
 
 
-def step_bundle(args):
-    """Generated inputs of the build: the bundled extensions and the public
-    key of the update signature."""
-    update_key = _write_update_key_header()
-    spec = json.loads((ROOT / 'extensions' / 'bundled.json').read_text())['hivey-shield']
+def _extension_key(name):
+    return EXTENSION_KEY if name == 'hivey-shield' else KEY_DIR / f'{name}.pem'
+
+
+def _unpack_release_zip(name, spec, unpacked):
+    """A published .zip, sha256-pinned (uBlock Origin Lite)."""
     archive = download(spec['url'], BUILD / 'download_cache' / Path(spec['url']).name, spec['sha256'])
-    unpacked = BUNDLED / 'hivey-shield'
-    shutil.rmtree(unpacked, ignore_errors=True)
-    unpacked.mkdir(parents=True)
     with zipfile.ZipFile(archive) as zf:
         zf.extractall(unpacked)
-    manifest = json.loads((unpacked / 'manifest.json').read_text())
-    if manifest['version'] != spec['version']:
-        raise SystemExit(f"uBlock Origin Lite archive is {manifest['version']}, expected {spec['version']}")
-    _apply_shield_defaults(unpacked, spec.get('enable_rulesets', []))
-    crx = BUNDLED / 'hivey-shield.crx'
-    ext_id = crx3.pack(unpacked, EXTENSION_KEY, crx)
+    version = json.loads((unpacked / 'manifest.json').read_text())['version']
+    if version != spec['version']:
+        raise SystemExit(f"{spec['name']} archive is {version}, expected {spec['version']}")
+    if name == 'hivey-shield':
+        _apply_shield_defaults(unpacked, spec.get('enable_rulesets', []))
+    return version
+
+
+def _unpack_submodule(name, spec, unpacked):
+    """A pinned git submodule (the Hivey AI sidebar): its files plus its
+    Chromium manifest. The version is major.minor from the manifest and the
+    submodule's commit count, so each update installs as a newer version."""
+    src = ROOT / spec['path']
+    for item in spec['files']:
+        path = src / item
+        if path.is_dir():
+            shutil.copytree(path, unpacked / item)
+        else:
+            shutil.copy2(path, unpacked / item)
+    manifest = json.loads((src / spec['manifest']).read_text())
+    count = subprocess.run(['git', '-C', src, 'rev-list', '--count', 'HEAD'], check=True, capture_output=True,
+                           text=True).stdout.strip()
+    major_minor = '.'.join(manifest['version'].split('.')[:2])
+    manifest['version'] = f'{major_minor}.{count}'
+    (unpacked / 'manifest.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+    return manifest['version']
+
+
+def _unpack_directory(name, spec, unpacked):
+    """An extension kept in this repository (Hivey Cyber); PNG icons are
+    rendered from its SVG."""
+    shutil.copytree(ROOT / spec['path'], unpacked, dirs_exist_ok=True)
+    if spec.get('icon_svg'):
+        import cairosvg
+        (unpacked / 'icons').mkdir(exist_ok=True)
+        for size in (16, 32, 48, 128):
+            cairosvg.svg2png(url=str(unpacked / spec['icon_svg']), write_to=str(unpacked / f'icons/icon-{size}.png'),
+                             output_width=size, output_height=size)
+    return json.loads((unpacked / 'manifest.json').read_text())['version']
+
+
+def step_bundle(args):
+    """Generated inputs of the build: the bundled extensions (signed .crx files
+    and a header listing them) and the public key of the update signature."""
+    update_key = _write_update_key_header()
+    specs = json.loads((ROOT / 'extensions' / 'bundled.json').read_text())
+    shutil.rmtree(BUNDLED, ignore_errors=True)
+    BUNDLED.mkdir(parents=True)
+    unpackers = {'release-zip': _unpack_release_zip, 'submodule': _unpack_submodule, 'directory': _unpack_directory}
+    entries, defines, info = [], [], {}
+    for name, spec in specs.items():
+        unpacked = BUNDLED / name
+        unpacked.mkdir()
+        version = unpackers[spec['type']](name, spec, unpacked)
+        crx = BUNDLED / f'{name}.crx'
+        ext_id = crx3.pack(unpacked, _extension_key(name), crx)
+        macro = name.upper().replace('-', '_').replace('HIVEY_', 'HIVEY_BUNDLED_')
+        entries.append(f'    {{"{ext_id}", "{version}", "{name}.crx", {str(spec.get("pin", False)).lower()}}},'
+                       f'  // {spec["name"]} ({spec["license"]})')
+        defines.append(f'#define {macro}_ID "{ext_id}"')
+        info[name] = {'id': ext_id, 'version': version, 'sha256': sha256_file(crx)}
+        log(f'bundled {spec["name"]} {version}: id {ext_id}, {crx.stat().st_size // (1 << 20)} MiB')
     header = SRC / 'chrome/browser/hivey/bundled_extensions.h'
     header.parent.mkdir(parents=True, exist_ok=True)
     header.write_text(
         '// Generated by scripts/hb.py (step "bundle"). Do not edit.\n'
         '#ifndef CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n'
-        '#define CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n'
-        f'// {spec["name"]} {spec["version"]} ({spec["license"]}, {spec["source"]})\n'
-        f'#define HIVEY_BUNDLED_SHIELD_ID "{ext_id}"\n'
-        f'#define HIVEY_BUNDLED_SHIELD_VERSION "{spec["version"]}"\n'
-        '#define HIVEY_BUNDLED_SHIELD_CRX FILE_PATH_LITERAL("hivey-shield.crx")\n'
+        '#define CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n\n'
+        + '\n'.join(defines) + '\n\n'
+        '// Extensions that ship with the browser, in <module dir>/extensions.\n'
+        'struct HiveyBundledExtension {\n'
+        '  const char* id;\n'
+        '  const char* version;\n'
+        '  const char* crx;\n'
+        '  bool pinned;  // shown in the toolbar on install\n'
+        '};\n'
+        'inline constexpr HiveyBundledExtension kHiveyBundledExtensions[] = {\n'
+        + '\n'.join(entries) + '\n};\n\n'
         '#endif  // CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n')
-    log(f'bundled {spec["name"]} {spec["version"]}: id {ext_id}, {crx.stat().st_size // (1 << 20)} MiB')
     log(f'update public key {update_key}')
-    mark_done('bundle', id=ext_id, version=spec['version'], sha256=sha256_file(crx), update_key=update_key)
+    mark_done('bundle', extensions=info, update_key=update_key)
 
 
 def _stage_bundled_extensions():

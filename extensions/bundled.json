@@ -1,11 +1,32 @@
 {
   "hivey-shield": {
     "name": "uBlock Origin Lite",
+    "type": "release-zip",
     "version": "2026.1012.1545",
     "url": "https://github.com/uBlockOrigin/uBOL-home/releases/download/2026.1012.1545/uBOLite_2026.1012.1545.chromium.zip",
     "sha256": "73909c8f26d608b00a99f446192630868bea4f947ba293c29bbd18ae948d903b",
     "license": "GPL-3.0-or-later",
     "source": "https://github.com/uBlockOrigin/uBOL-home",
-    "enable_rulesets": ["adguard-spyware-url", "annoyances-cookies"]
+    "enable_rulesets": ["adguard-spyware-url", "annoyances-cookies"],
+    "pin": true
+  },
+  "hivey-ai": {
+    "name": "Hivey AI",
+    "type": "submodule",
+    "path": "third_party/hivey-ai-sidebar",
+    "manifest": "manifest.chrome.json",
+    "files": ["LICENSE", "README.md", "CHANGELOG.md", "icons", "src", "vendor", "rules"],
+    "license": "MIT",
+    "source": "https://github.com/FlorianMartins/HiveyAI-Sidebar",
+    "pin": true
+  },
+  "hivey-cyber": {
+    "name": "Hivey Cyber",
+    "type": "directory",
+    "path": "extensions/hivey-cyber",
+    "icon_svg": "icon.svg",
+    "license": "MIT",
+    "source": "https://github.com/FlorianMartins/hivey-browser/tree/main/extensions/hivey-cyber",
+    "pin": true
   }
 }

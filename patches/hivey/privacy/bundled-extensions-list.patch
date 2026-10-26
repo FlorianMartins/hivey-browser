@@ -1,0 +1,113 @@
+# Bundled extensions: the loader and the toolbar pinning read the generated list (uBlock Origin Lite, Hivey AI sidebar, Hivey Cyber); the AI sidebar starts with its site access withheld, its AI API hosts granted.
+--- a/chrome/browser/extensions/hivey_bundled_extension_loader.cc
++++ b/chrome/browser/extensions/hivey_bundled_extension_loader.cc
+@@ -17,22 +17,25 @@
+ 
+ namespace {
+ 
+-// Runs on a blocking thread: looks for the bundled .crx next to the browser.
++// Runs on a blocking thread: looks for the bundled .crx files next to the
++// browser.
+ base::DictValue BuildBundledExtensionPrefs() {
+   base::DictValue prefs;
+   base::FilePath dir;
+   if (!base::PathService::Get(chrome::DIR_EXTERNAL_EXTENSIONS, &dir)) {
+     return prefs;
+   }
+-  const base::FilePath crx = dir.Append(HIVEY_BUNDLED_SHIELD_CRX);
+-  if (!base::PathExists(crx)) {
+-    return prefs;
++  for (const HiveyBundledExtension& extension : kHiveyBundledExtensions) {
++    const base::FilePath crx = dir.AppendASCII(extension.crx);
++    if (!base::PathExists(crx)) {
++      continue;
++    }
++    prefs.Set(extension.id,
++              base::DictValue()
++                  .Set(ExternalProviderImpl::kExternalCrx, crx.AsUTF8Unsafe())
++                  .Set(ExternalProviderImpl::kExternalVersion,
++                       extension.version));
+   }
+-  prefs.Set(HIVEY_BUNDLED_SHIELD_ID,
+-            base::DictValue()
+-                .Set(ExternalProviderImpl::kExternalCrx, crx.AsUTF8Unsafe())
+-                .Set(ExternalProviderImpl::kExternalVersion,
+-                     HIVEY_BUNDLED_SHIELD_VERSION));
+   return prefs;
+ }
+ 
+--- a/chrome/browser/extensions/hivey_bundled_extension_loader.h
++++ b/chrome/browser/extensions/hivey_bundled_extension_loader.h
+@@ -11,10 +11,11 @@
+ namespace extensions {
+ 
+ // Hivey: installs the extensions that ship with the browser (uBlock Origin
+-// Lite, as <module dir>/extensions/hivey-shield.crx). Only the extension ID
+-// compiled into the browser is offered, and Chromium checks the .crx
+-// signature against that ID, so files dropped into that folder cannot
+-// install anything else. A user who removes the extension keeps it removed.
++// Lite, the Hivey AI sidebar, Hivey Cyber), as <module dir>/extensions/*.crx.
++// Only the extension IDs compiled into the browser (bundled_extensions.h) are
++// offered, and Chromium checks each .crx signature against its ID, so files
++// dropped into that folder cannot install anything else. A user who removes
++// an extension keeps it removed.
+ class HiveyBundledExtensionLoader : public ExternalLoader {
+  public:
+   HiveyBundledExtensionLoader();
+--- a/chrome/browser/ui/toolbar/toolbar_actions_model.cc
++++ b/chrome/browser/ui/toolbar/toolbar_actions_model.cc
+@@ -10,6 +10,7 @@
+ #include <vector>
+ 
+ #include "base/functional/bind.h"
++#include "base/functional/callback_helpers.h"
+ #include "base/json/values_util.h"
+ #include "base/location.h"
+ #include "base/metrics/histogram_base.h"
+@@ -17,6 +18,10 @@
+ #include "base/numerics/safe_conversions.h"
+ #include "base/observer_list.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
++#include "extensions/browser/permissions/scripting_permissions_modifier.h"
++#include "extensions/common/manifest_handlers/permissions_parser.h"
++#include "extensions/common/url_pattern.h"
++#include "extensions/browser/permissions_manager.h"
+ #include "base/one_shot_event.h"
+ #include "base/strings/utf_string_conversions.h"
+ #include "base/task/single_thread_task_runner.h"
+@@ -157,9 +162,32 @@
+       !is_enterprise_extension && !is_installed_from_sync &&
+       is_feature_enabled && is_toggle_on;
+ 
+-  // Hivey: the bundled content blocker shows its blocked-requests counter
+-  // in the toolbar from the start.
+-  const bool is_hivey_bundled = extension->id() == HIVEY_BUNDLED_SHIELD_ID;
++  // Hivey: the AI sidebar starts with its site access withheld: it reads a
++  // page only when the user invokes it on that tab (activeTab) or allows the
++  // site, so a malicious page cannot reach it by itself (prompt injection).
++  // The AI providers' API hosts it names in its manifest stay granted, so
++  // the chat works.
++  if (extension->id() == HIVEY_BUNDLED_AI_ID &&
++      extensions::PermissionsManager::Get(profile_)->CanAffectExtension(
++          *extension)) {
++    extensions::ScriptingPermissionsModifier modifier(profile_, extension);
++    modifier.SetWithholdHostPermissions(true);
++    for (const URLPattern& pattern :
++         extensions::PermissionsParser::GetRequiredPermissions(extension)
++             .explicit_hosts()) {
++      if (!pattern.match_all_urls() && !pattern.host().empty() &&
++          !pattern.match_subdomains()) {
++        modifier.GrantHostPermission(pattern, base::DoNothing());
++      }
++    }
++  }
++
++  // Hivey: bundled extensions marked "pinned" (the content blocker and its
++  // counter, the AI sidebar, the security tools) start in the toolbar.
++  const bool is_hivey_bundled = std::ranges::any_of(
++      kHiveyBundledExtensions, [&](const HiveyBundledExtension& bundled) {
++        return bundled.pinned && extension->id() == bundled.id;
++      });
+ 
+   // We can only pin extensions that have a toolbar action.
+   if (should_add_extension) {

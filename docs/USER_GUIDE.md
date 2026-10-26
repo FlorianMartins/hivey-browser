@@ -42,26 +42,52 @@ status, checks on demand, and turns automatic updates off.
   the page.
 - **No Google services, no telemetry, no crash reports**, and no request at
   startup.
+- **Devices** (USB, serial, HID, Bluetooth) are off limits to sites. If you
+  use a site that programs a board or talks to a security key over HID,
+  allow it from the address bar or turn the protection off in Hivey Studio >
+  Privacy. *Hardened mode* (same place) turns the JavaScript optimizer off
+  everywhere: slower pages, much less to attack.
+
+## Hivey AI
+
+The Hivey AI icon in the toolbar opens the **Hivey AI sidebar**. Add your API
+key (or a local model) in its settings; it then answers about the page you
+are on, summarizes, translates or writes. It reads a page only when you open
+it on that tab: other pages cannot reach it. See [PRIVACY.md](PRIVACY.md#the-hivey-ai-sidebar).
+
+## Security tools
+
+The **Hivey Cyber** icon (shield and magnifier) checks the current site:
+WHOIS, IP geolocation, DNS, certificates, VirusTotal, urlscan.io, Shodan, SSL
+Labs, security headers, Observatory and the Wayback Machine. Right-click a
+link or a selection for the same tools, or to look selected text up in
+VirusTotal or Have I Been Pwned.
 
 ## Hivey Studio
 
 | Section | What you can do |
 | --- | --- |
-| Colors | Pick a preset or **any color**: tabs, toolbar, menus and dialogs follow it. Choose the palette style (tonal, neutral, vibrant, expressive), light/dark/system mode, grayscale, and whether Incognito windows use it. |
-| Layout | **Vertical tabs** (expand on hover), **compact mode**, side panel left or right, Home and Forward buttons, bookmarks bar, tab search button, profile button, extensions menu, toolbar buttons, a **custom new tab page**, fonts and default zoom. |
+| Colors | A **theme** (Aura, Amber night, Daylight, or Chrome's Material colors), then **a color for every part of the browser**: window frame, toolbar, tabs, address bar, icons, accent, menus, panels, pages. The **eyedropper** picks a color anywhere on the screen, also outside the browser. The window icon takes the accent color. Also: palette style, light/dark/system mode, grayscale, Incognito windows. |
+| Layout | **Vertical tabs** (they can expand on hover, off by default), **compact mode** (a lower toolbar and tab strip), side panel left or right, Home and Forward buttons, bookmarks bar, tab search button, profile button, extensions menu, toolbar buttons, a **custom new tab page**, fonts and default zoom. |
 | Tabs & behaviour | Ctrl+Tab in recently-used order, the mouse wheel over the tab strip, keep the window open when closing its last tab, hide tab close buttons, pop-ups as tabs, tab previews, ask before closing. |
 | Resources | Live CPU, memory and network gauges; the **hot tabs** (show or close them); the **RAM limiter** (background tabs go to sleep above the limit), the **CPU limiter** (Windows: a hard cap per tab) and the **network limiter** (bandwidth for the whole browser, downloads included). |
-| Privacy & security | Hivey Shield status, anti-fingerprinting, secure connections, clear data on exit, secure DNS and cookie settings. |
+| Privacy & security | Hivey Shield and Hivey AI status, anti-fingerprinting, secure connections, clear data on exit, device blocking, hardened mode, secure DNS and cookie settings. |
 | About | Version and automatic updates. |
 
 Options marked ↻ apply after a restart; Hivey Studio offers a *Restart*
-button when one is pending.
+button when one is pending. Hivey Studio follows changes made elsewhere (a
+right-click on the tab strip, Settings) as they happen.
 
-![First start: Hivey Studio, with the Hivey Shield icon in the toolbar](images/hivey-studio-first-run.png)
+The **Resources** button (gauge icon) in the toolbar opens the live gauges,
+the hot tabs and the limiters in a dropdown, like an extension's popup.
 
-![Compact mode, Aura color, dark mode](images/compact-mode.png)
+![First start: Hivey Studio in the Aura theme; in the toolbar, Hivey Cyber, Hivey AI, Hivey Shield and the Resources button](images/hivey-studio-first-run.png)
 
-![Resources: live gauges, limiters and hot tabs](images/hivey-studio-resources.png)
+![Compact mode: a lower tab strip and toolbar](images/compact-mode.png)
+
+![Right-click menus take the theme, with the Hivey AI and Hivey Cyber entries](images/context-menu.png)
+
+![The Resources button: live gauges, limiters and hot tabs in a dropdown](images/hivey-studio-resources.png)
 
 ## Memory and performance
 

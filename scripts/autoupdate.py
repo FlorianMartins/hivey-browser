@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Keep Hivey Browser on the latest Chromium, unattended.
+"""Keep Hivey Browser on the latest Chromium and Hivey AI sidebar, unattended.
 
     autoupdate.py [--dry-run] [--force-release]
 
-Run daily by a systemd timer on the build host (scripts/install-autoupdate.sh).
+Run every 5 minutes by a systemd timer on the build host (scripts/install-autoupdate.sh);
+a run that finds nothing new only makes a few GitHub API calls.
 Works in its own clone ($HB_AUTO_DIR, default ../hivey-browser-auto) and
 build tree ($HB_AUTO_BUILD, default ../hivey-browser-build-auto), never in a
 developer's checkout. Each run:
@@ -14,6 +15,11 @@ developer's checkout. Each run:
    patches checked against the new source tarball and refreshed if they only
    drifted (scripts/patchcheck.py). A patch that no longer applies stops the
    run and opens an issue: that needs a human.
+   The Hivey AI sidebar (submodule third_party/hivey-ai-sidebar) follows the
+   main branch of its repository: when main has a newer commit whose CI
+   passed, the same branch (or auto/hivey-ai-<commit> without a new
+   Chromium) moves the submodule to it and bumps HIVEY_REVISION. Either way
+   CHANGELOG.md gets the entry for the new version.
 2. Releases when the resulting version has no GitHub release yet (a new
    Chromium, or a HIVEY_REVISION bump on main): fresh build of Windows and
    Linux, packages, signed draft release (scripts/release.py), checks on Linux
@@ -25,7 +31,8 @@ developer's checkout. Each run:
    main, after a release or whenever main changed since the last dev build.
 
 Any failure opens (or comments on) a GitHub issue labelled "autoupdate" with
-the end of the log. --dry-run only reports what would happen.
+the end of the log, and the same update is not retried until something new
+(Chromium, sidebar or main) comes. --dry-run only reports what would happen.
 """
 
 import argparse
@@ -49,8 +56,16 @@ AUTO_BUILD = Path(os.environ.get('HB_AUTO_BUILD', ROOT.parent / 'hivey-browser-b
 SHARED_CACHES = [Path(p) for p in os.environ.get(
     'HB_SHARED_CACHES', str(ROOT.parent / 'hivey-browser-build')).split(':') if p]
 LOG = AUTO_BUILD / 'autoupdate.log'
+# What the last failed run tried (Chromium tag, sidebar commit, main commit):
+# with checks every few minutes, the same failure is not retried until one of
+# them changes.
+FAILED = AUTO_BUILD / 'autoupdate-failed.txt'
 UG_REPO = 'ungoogled-software/ungoogled-chromium'
 UGW_REPO = 'ungoogled-software/ungoogled-chromium-windows'
+AI_REPO = 'FlorianMartins/HiveyAI-Sidebar'
+AI_PATH = 'third_party/hivey-ai-sidebar'
+MONTHS = ('janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre',
+          'novembre', 'décembre')
 
 
 class Failure(Exception):
@@ -101,6 +116,48 @@ def latest_upstream():
     raise Failure('no ungoogled-chromium release with a Windows counterpart')
 
 
+def pinned_sidebar():
+    """The sidebar commit main pins, or None before the submodule exists."""
+    if not (AUTO_DIR / AI_PATH / '.git').exists():
+        return None
+    return git('-C', AI_PATH, 'rev-parse', 'HEAD').strip()
+
+
+def latest_sidebar(pinned):
+    """Newest commit on the sidebar's main branch whose checks all passed,
+    if it is ahead of `pinned`; else None."""
+    if not pinned:
+        return None
+    for commit in gh_json('api', f'repos/{AI_REPO}/commits?sha=main&per_page=10'):
+        sha = commit['sha']
+        if sha == pinned:
+            return None
+        runs = gh_json('api', f'repos/{AI_REPO}/commits/{sha}/check-runs?per_page=100')['check_runs']
+        if runs and all(r['status'] == 'completed' and r['conclusion'] in ('success', 'skipped', 'neutral')
+                        for r in runs):
+            ahead = gh_json('api', f'repos/{AI_REPO}/compare/{pinned}...{sha}')['status'] == 'ahead'
+            return sha if ahead else None
+    return None
+
+
+def sidebar_version():
+    """The version the bundled sidebar gets (hb.py _unpack_submodule)."""
+    manifest = json.loads((AUTO_DIR / AI_PATH / 'manifest.chrome.json').read_text())
+    count = git('-C', AI_PATH, 'rev-list', '--count', 'HEAD').strip()
+    return '.'.join(manifest['version'].split('.')[:2]) + f'.{count}'
+
+
+def add_changelog(version, notes):
+    """A user-facing entry (in French, like the file) for the new version."""
+    path = AUTO_DIR / 'CHANGELOG.md'
+    text = path.read_text()
+    today = time.localtime()
+    entry = (f'## {version} — {today.tm_mday} {MONTHS[today.tm_mon - 1]} {today.tm_year}\n\n'
+             + ''.join(f'- {note}\n' for note in notes) + '\n')
+    first = text.index('\n## ') + 1
+    path.write_text(text[:first] + entry + text[first:])
+
+
 def prepare_clone():
     if not (AUTO_DIR / '.git').exists():
         run(['gh', 'repo', 'clone', REPO, AUTO_DIR], cwd=AUTO_DIR.parent)
@@ -143,22 +200,39 @@ def fresh_tree():
             shutil.rmtree(path)
 
 
-def bump(ug, ugw):
-    branch = f'auto/chromium-{ug.split("-")[0]}'
+def bump(ug, ugw, ai_sha):
+    """Branch with the new Chromium (ug, ugw) and/or sidebar commit (ai_sha)."""
+    chromium = ug.split('-')[0] if ug else None
+    branch = f'auto/chromium-{chromium}' if ug else f'auto/hivey-ai-{ai_sha[:7]}'
     git('checkout', '-B', branch)
-    for path, tag in (('third_party/ungoogled-chromium', ug), ('third_party/ungoogled-chromium-windows', ugw)):
-        run(['git', '-C', path, 'fetch', '--tags', 'origin'])
-        run(['git', '-C', path, 'checkout', '-q', tag])
-    (AUTO_DIR / 'HIVEY_REVISION').write_text('1\n')
-    hb('fetch')
-    tarball = next((AUTO_BUILD / 'download_cache').glob(f'chromium-{ug.split("-")[0]}-lite.tar.xz'))
-    check = [sys.executable, AUTO_DIR / 'scripts/patchcheck.py', tarball, AUTO_BUILD / 'pristine', '--refresh']
-    if run(check, env=hb_env(), check=False) != 0:
-        raise Failure(f'patches do not apply to Chromium {ug}: they need a manual update')
+    titles, notes = [], []
+    if ug:
+        for path, tag in (('third_party/ungoogled-chromium', ug), ('third_party/ungoogled-chromium-windows', ugw)):
+            run(['git', '-C', path, 'fetch', '--tags', 'origin'])
+            run(['git', '-C', path, 'checkout', '-q', tag])
+        (AUTO_DIR / 'HIVEY_REVISION').write_text('1\n')
+        hb('fetch')
+        tarball = next((AUTO_BUILD / 'download_cache').glob(f'chromium-{chromium}-lite.tar.xz'))
+        check = [sys.executable, AUTO_DIR / 'scripts/patchcheck.py', tarball, AUTO_BUILD / 'pristine', '--refresh']
+        if run(check, env=hb_env(), check=False) != 0:
+            raise Failure(f'patches do not apply to Chromium {ug}: they need a manual update')
+        titles.append(f'Chromium {chromium} (ungoogled-chromium {ug}, windows {ugw})')
+        notes.append(f'Basé sur **Chromium {chromium}** : les derniers correctifs de sécurité.')
+    else:
+        revision = int((AUTO_DIR / 'HIVEY_REVISION').read_text().strip()) + 1
+        (AUTO_DIR / 'HIVEY_REVISION').write_text(f'{revision}\n')
+    if ai_sha:
+        run(['git', '-C', AI_PATH, 'fetch', 'origin'])
+        run(['git', '-C', AI_PATH, 'checkout', '-q', ai_sha])
+        version = sidebar_version()
+        titles.append(f'Hivey AI sidebar {version} ({ai_sha[:7]})')
+        notes.append(f'**Hivey AI** passe en version {version} : voir ses nouveautés dans '
+                     f'[son journal](https://github.com/{AI_REPO}/blob/{ai_sha[:7]}/CHANGELOG.md).')
+    add_changelog(computed_version(), notes)
     git('add', '-A')
-    git('commit', '-q', '-m', f'Chromium {ug.split("-")[0]} (ungoogled-chromium {ug}, windows {ugw})\n\n'
+    git('commit', '-q', '-m', ', '.join(titles) + '\n\n'
         'Automatic update (scripts/autoupdate.py): submodules bumped, patches checked\n'
-        'against the new source tarball and refreshed where they had drifted.', capture=False)
+        'against the source tarball and refreshed where they had drifted.', capture=False)
     return branch
 
 
@@ -230,8 +304,9 @@ def merge(branch):
     if not existing:
         run(['gh', 'pr', 'create', '--repo', REPO, '--head', branch, '--base', 'main',
              '--title', git('log', '-1', '--format=%s').strip(),
-             '--body', 'Automatic Chromium update (scripts/autoupdate.py). Built for Windows and Linux; '
-                       'startup and privacy checks passed on both before this pull request is merged.'])
+             '--body', 'Automatic update (scripts/autoupdate.py): new Chromium and/or Hivey AI sidebar. '
+                       'Built for Windows and Linux; startup and privacy checks passed on both before '
+                       'this pull request is merged.'])
     run(['gh', 'pr', 'checks', branch, '--repo', REPO, '--watch', '--fail-fast'])
     run(['gh', 'pr', 'merge', branch, '--repo', REPO, '--squash', '--delete-branch'])
 
@@ -245,7 +320,7 @@ def report_failure(message):
         subprocess.run(['gh', 'issue', 'comment', str(issues[0]['number']), '--repo', REPO, '--body', body])
     else:
         subprocess.run(['gh', 'label', 'create', 'autoupdate', '--repo', REPO, '--force',
-                        '--description', 'Automatic Chromium update'], capture_output=True)
+                        '--description', 'Automatic Chromium and Hivey AI updates'], capture_output=True)
         subprocess.run(['gh', 'issue', 'create', '--repo', REPO, '--label', 'autoupdate',
                         '--title', f'Automatic update failed: {message}', '--body', body])
 
@@ -260,19 +335,28 @@ def main():
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        log('another run is in progress')
         return 0
+    attempt = None
     try:
         prepare_clone()
         ug, ugw = latest_upstream()
         current = (AUTO_DIR / 'third_party/ungoogled-chromium/chromium_version.txt').read_text().strip()
         newer = version_key(ug.split('-')[0]) > version_key(current)
         log(f'pinned Chromium {current}; latest upstream {ug} / {ugw}')
+        ai_pinned = pinned_sidebar()
+        ai_sha = latest_sidebar(ai_pinned)
+        log(f'pinned Hivey AI sidebar {ai_pinned and ai_pinned[:7]}; '
+            + (f'newer passing commit {ai_sha[:7]}' if ai_sha else 'up to date'))
         if args.dry_run:
-            log('dry run: ' + (f'would update to {ug}' if newer else 'no new Chromium'))
+            log('dry run: ' + (f'would update to {ug}' if newer else 'no new Chromium')
+                + (f', sidebar to {ai_sha[:7]}' if ai_sha else ''))
             return 0
         main_head = git('rev-parse', 'HEAD').strip()
-        branch = bump(ug, ugw) if newer else None
+        attempt = f'{ug if newer else "-"} {ai_sha or "-"} {main_head}'
+        if FAILED.exists() and FAILED.read_text().strip() == attempt:
+            log('this update failed before (see the autoupdate issue): waiting for something new')
+            return 0
+        branch = bump(ug if newer else None, ugw if newer else None, ai_sha) if newer or ai_sha else None
         version = computed_version()
         tag = f'v{version}'
         release = args.force_release or not release_exists(tag)
@@ -309,6 +393,8 @@ def main():
     except Failure as e:
         log(f'FAILED: {e}')
         report_failure(str(e))
+        if attempt:
+            FAILED.write_text(attempt + '\n')
         return 1
     finally:
         fcntl.flock(lock, fcntl.LOCK_UN)
