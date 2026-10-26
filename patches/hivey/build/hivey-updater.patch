@@ -626,7 +626,7 @@
  };
  
  // chrome://flags entries shown in Hivey Studio (they need a restart).
-@@ -204,6 +206,7 @@
+@@ -205,6 +207,7 @@
    add("stopUsage", &HiveyStudioHandler::HandleStopUsage);
    add("taskAction", &HiveyStudioHandler::HandleTaskAction);
    add("openCustomizeToolbar", &HiveyStudioHandler::HandleOpenCustomizeToolbar);
@@ -634,7 +634,7 @@
  }
  
  void HiveyStudioHandler::OnJavascriptDisallowed() {
-@@ -312,6 +315,8 @@
+@@ -313,6 +316,8 @@
        .Set("prefs", BuildPrefsState())
        .Set("flags", BuildFlagsState())
        .Set("shield", BuildShieldState())
@@ -643,7 +643,7 @@
        .Set("restartNeeded", about_flags::IsRestartNeededToCommitChanges());
  }
  
-@@ -463,3 +468,10 @@
+@@ -466,3 +471,10 @@
      chrome::ExecuteCommand(browser, IDC_SHOW_CUSTOMIZE_CHROME_TOOLBAR);
    }
  }

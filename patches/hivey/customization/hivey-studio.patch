@@ -1892,7 +1892,7 @@
    map.AddWebUIConfig(std::make_unique<VersionUIConfig>());
 --- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
 +++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
-@@ -0,0 +1,465 @@
+@@ -0,0 +1,468 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
@@ -1992,7 +1992,8 @@
 +}
 +
 +bool IsCuratedFlag(std::string_view name) {
-+  return std::ranges::find(kCuratedFlags, name) != std::end(kCuratedFlags);
++  return std::ranges::any_of(kCuratedFlags,
++                             [name](std::string_view flag) { return flag == name; });
 +}
 +
 +std::string ColorToHex(SkColor color) {
@@ -2334,7 +2335,9 @@
 +
 +void HiveyStudioHandler::HandleTaskAction(const base::ListValue& args) {
 +  const std::string* action = args[0].GetIfString();
-+  if (!action || !args[1].is_double() || !usage_observer_) {
++  // Task IDs arrive as integers or doubles, depending on their size.
++  if (!action || !(args[1].is_int() || args[1].is_double()) ||
++      !usage_observer_) {
 +    return;
 +  }
 +  task_manager::TaskManagerInterface* tm =

@@ -133,7 +133,7 @@
  };
  
  constexpr auto kVariants =
-@@ -278,6 +278,10 @@
+@@ -279,6 +279,10 @@
        flag.Set("kind", "multi");
        flag.Set("selected", selected);
        flag.Set("options", static_cast<int>(options->size()));
@@ -144,7 +144,7 @@
      } else {
        flag.Set("kind", "single");
        flag.Set("enabled", dict.FindBool("enabled").value_or(false));
-@@ -407,6 +411,11 @@
+@@ -408,6 +412,11 @@
    flags_ui::PrefServiceFlagsStorage storage(g_browser_process->local_state());
    if (args[1].is_bool()) {
      about_flags::SetFeatureEntryEnabled(&storage, *name, args[1].GetBool());
