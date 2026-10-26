@@ -22,3 +22,4 @@ hivey/customization/hivey-studio.patch
 hivey/build/hivey-updater.patch
 hivey/privacy/font-fingerprinting.patch
 hivey/customization/hivey-studio-more.patch
+hivey/privacy/font-fingerprinting-fallback.patch

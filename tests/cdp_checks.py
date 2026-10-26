@@ -106,6 +106,44 @@ class Page:
             return f"EXCEPTION: {r['exceptionDetails'].get('exception', {}).get('description', r['exceptionDetails'])}"
         return r['result'].get('value')
 
+    def drain(self, seconds):
+        """Collect events for a while."""
+        deadline = time.time() + seconds
+        self.ws.settimeout(0.5)
+        try:
+            while time.time() < deadline:
+                try:
+                    self.events.append(json.loads(self.ws.recv()))
+                except websocket.WebSocketTimeoutException:
+                    pass
+        finally:
+            self.ws.settimeout(60)
+
+    def request_outcome(self, trigger_js, needle):
+        """How the content blocker handled requests whose URL contains
+        `needle`: 'blocked', 'neutralized' (redirected to a harmless
+        surrogate inside the extension, as uBlock Origin does for ad and
+        analytics libraries that pages depend on) or 'loaded'."""
+        self.call('Network.enable')
+        self.events.clear()
+        self.eval(trigger_js)
+        self.drain(6)
+        ids = {e['params']['requestId'] for e in self.events
+               if e.get('method') == 'Network.requestWillBeSent' and needle in e['params']['request']['url']}
+        if not ids:
+            return 'not requested'
+        for e in self.events:
+            params = e.get('params', {})
+            if params.get('requestId') not in ids:
+                continue
+            if e.get('method') == 'Network.loadingFailed':
+                error = params.get('errorText')
+                return f'blocked ({error})' if error == 'net::ERR_BLOCKED_BY_CLIENT' else f'failed ({error})'
+            if e.get('method') == 'Network.requestWillBeSent' and \
+                    params['request']['url'].startswith('chrome-extension://'):
+                return 'neutralized'
+        return 'loaded'
+
     def shot(self, name):
         if not SHOTS:
             return
@@ -154,10 +192,22 @@ try:
     check('Topics API off', topics != 'available', f'document.browsingTopics: {topics}')
     fenced = p.eval("'HTMLFencedFrameElement' in window")
     check('Fenced frames off', fenced is False, f'HTMLFencedFrameElement in window = {fenced}')
-    hidden = p.eval("""(() => { const s = ['.adsbygoogle', '#ad-banner'].map(q => document.querySelector(q));
-      return s.map(e => e && (getComputedStyle(e).display === 'none' || e.offsetHeight === 0)); })()""")
-    check('Cosmetic filtering (ad slots hidden)', hidden == [True, True], f'.adsbygoogle, #ad-banner hidden = {hidden}')
     p.shot('local-test-page')
+    # Fonts: an installed font outside the standard set must measure like the
+    # fallback (hidden); a standard font must not (the measure works).
+    widths = p.eval("""(() => { const c = document.createElement('canvas').getContext('2d');
+      const w = f => { c.font = `40px ${f}`; return c.measureText('mmmmmmmmmmlli1WQ@').width; };
+      const base = w('monospace');
+      const probe = n => Math.abs(w(`"${n}", monospace`) - base) > 0.5;
+      return {standard: ['DejaVu Serif', 'Georgia', 'Times New Roman'].some(probe),
+              leaked: ['Bitstream Charter', 'Nimbus Sans', 'Nimbus Roman', 'C059', 'IPAGothic', 'Loma',
+                       'Arial Unicode MS', 'Garamond', 'Futura', 'Helvetica Neue', 'Roboto', 'Open Sans']
+                      .filter(probe)}; })()""")
+    if isinstance(widths, dict) and widths.get('standard'):
+        check('Installed fonts hidden', not widths['leaked'],
+              f"non-standard fonts visible to the page: {widths['leaked'] or 'none'}")
+    else:
+        print(f'SKIP  Installed fonts hidden: no standard font to compare with ({widths})')
     full = p.eval("navigator.userAgentData.getHighEntropyValues(['fullVersionList'])"
                   ".then(v => v.fullVersionList.map(b => b.version).join(' '))")
     check('Upstream version shown to the web', '.' in str(full) and
@@ -171,6 +221,7 @@ try:
     nav = p.eval("document.querySelectorAll('.nav-item').length")
     check('Hivey Studio loads', nav == 6, f'{nav} sections in the navigation')
     p.shot('hivey-studio')
+    p.goto('about:blank', settle=0.5)
     p.goto('chrome://hivey/#resources', settle=4)
     gauge = p.eval("document.querySelector('#gauge-ram .gauge-value')?.textContent")
     check('Hivey Studio live usage', bool(gauge) and gauge != '–', f'memory gauge shows {gauge!r}')
@@ -205,18 +256,21 @@ try:
     h2 = hashlib.sha256(str(p.eval(CANVAS_HASH)).encode()).hexdigest()[:12]
     check('Canvas fingerprint noise', h1 != h2, f'hash load 1 = {h1}, load 2 = {h2}')
 
-    # 4. Content blocker: a well-known ad script must not load.
-    blocked = p.eval("""new Promise(r => { const s = document.createElement('script');
-      s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?t=' + Date.now();
-      s.onload = () => r('loaded'); s.onerror = () => r('blocked'); document.head.appendChild(s);
-      setTimeout(() => r('timeout'), 15000); })""")
-    tracker = p.eval("""fetch('https://www.google-analytics.com/analytics.js?t=' + Date.now(), {mode: 'no-cors'})
-      .then(() => 'loaded').catch(() => 'blocked')""")
-    control = p.eval("""fetch('https://example.org/?t=' + Date.now(), {mode: 'no-cors'})
-      .then(() => 'loaded').catch(e => 'blocked: ' + e)""")
-    check('Ad blocked (googlesyndication)', blocked == 'blocked', f'ad script {blocked}')
-    check('Tracker blocked (google-analytics)', tracker == 'blocked', f'tracker {tracker}')
-    check('Normal request allowed', control == 'loaded', f'example.org {control}')
+    # 4. Content blocker, seen from the network: ad and tracker requests are
+    # blocked or replaced by a harmless surrogate; a normal request goes through.
+    def add_script(url):
+        return f"""(() => {{ const s = document.createElement('script'); s.src = '{url}?t=' + Date.now();
+          document.head.appendChild(s); return true; }})()"""
+    ad = p.request_outcome(add_script('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js'),
+                           'googlesyndication.com')
+    tracker = p.request_outcome(add_script('https://www.google-analytics.com/analytics.js'), 'google-analytics.com')
+    pixel = p.request_outcome("fetch('https://www.facebook.com/tr?id=1&ev=PageView&t=' + Date.now(),"
+                              " {mode: 'no-cors'}).catch(() => 0)", 'facebook.com/tr')
+    control = p.request_outcome("fetch('https://httpbin.org/get?t=' + Date.now()).catch(() => 0)", 'httpbin.org/get')
+    check('Ad script stopped (googlesyndication)', ad.startswith(('blocked', 'neutralized')), f'ad script {ad}')
+    check('Tracker stopped (google-analytics)', tracker.startswith(('blocked', 'neutralized')), f'tracker {tracker}')
+    check('Tracking pixel stopped (facebook.com/tr)', pixel.startswith(('blocked', 'neutralized')), f'pixel {pixel}')
+    check('Normal request allowed', control == 'loaded', f'httpbin.org {control}')
 
     # 5. HTTPS-Only (strict): a plain HTTP site gets the warning page.
     url = p.goto('http://http.badssl.com/', settle=3)

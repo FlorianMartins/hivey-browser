@@ -14,6 +14,7 @@ browser.
 """
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -76,7 +77,11 @@ def main():
            '--net-log-capture-mode=Default']
     if sys.platform.startswith('linux'):
         cmd.append('--password-store=basic')
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if os.geteuid() == 0:
+            # Chromium refuses to run as root with its sandbox (CI containers).
+            cmd.append('--no-sandbox')
+    browser_log = open(profile / 'browser.log', 'w')
+    proc = subprocess.Popen(cmd, stdout=browser_log, stderr=subprocess.STDOUT)
     try:
         time.sleep(args.seconds)
     finally:
@@ -86,9 +91,16 @@ def main():
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
+    browser_log.close()
     if args.keep:
         args.keep.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(netlog, args.keep / 'startup-netlog.json')
+        shutil.copy2(profile / 'browser.log', args.keep / 'startup-browser.log')
+        if netlog.exists():
+            shutil.copy2(netlog, args.keep / 'startup-netlog.json')
+    if not netlog.exists():
+        print('FAIL: the browser wrote no NetLog (did it start?)')
+        print((profile / 'browser.log').read_text()[-3000:])
+        return 1
     urls, hosts = contacts(load_netlog(netlog))
     bad = offending(urls, hosts)
     print(f'{len(urls)} requests, {len(hosts)} DNS lookups in {args.seconds} s on a fresh profile')
