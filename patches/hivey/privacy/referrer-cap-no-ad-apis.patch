@@ -1,0 +1,67 @@
+# Cross-origin referrers capped to the origin whatever the page's policy; Topics, Attribution Reporting and fenced frames off.
+--- a/components/attribution_reporting/features.cc
++++ b/components/attribution_reporting/features.cc
+@@ -9,6 +9,7 @@
+ namespace attribution_reporting::features {
+ 
+ // Controls whether the Conversion Measurement API infrastructure is enabled.
+-BASE_FEATURE(kConversionMeasurement, base::FEATURE_ENABLED_BY_DEFAULT);
++// Hivey: no Attribution Reporting (ad conversion measurement).
++BASE_FEATURE(kConversionMeasurement, base::FEATURE_DISABLED_BY_DEFAULT);
+ 
+ }  // namespace attribution_reporting::features
+--- a/net/url_request/url_request_job.cc
++++ b/net/url_request/url_request_job.cc
+@@ -339,6 +339,12 @@
+ 
+   bool same_origin = url::IsSameOriginWith(original_referrer, destination);
+ 
++  // Hivey: whatever the referrer policy, another origin gets at most the
++  // origin of the referring page, never its path or query (like Brave).
++  if (!same_origin) {
++    should_strip_to_origin = true;
++  }
++
+   if (same_origin_out_for_metrics)
+     *same_origin_out_for_metrics = same_origin;
+ 
+--- a/services/network/public/cpp/features.cc
++++ b/services/network/public/cpp/features.cc
+@@ -408,7 +408,8 @@
+ 
+ // https://github.com/patcg-individual-drafts/topics
+ // Kill switch for the Topics API.
+-BASE_FEATURE(kBrowsingTopics, base::FEATURE_ENABLED_BY_DEFAULT);
++// Hivey: no Topics API (interest-based ads).
++BASE_FEATURE(kBrowsingTopics, base::FEATURE_DISABLED_BY_DEFAULT);
+ 
+ 
+ BASE_FEATURE(kIncreaseCookieAccessCacheSize, base::FEATURE_ENABLED_BY_DEFAULT);
+--- a/third_party/blink/common/features.cc
++++ b/third_party/blink/common/features.cc
+@@ -684,7 +684,8 @@
+ // this feature does not automatically expose this element to the web, it only
+ // allows the element to be enabled by the runtime enabled feature, for origin
+ // trials.
+-BASE_FEATURE(kFencedFrames, base::FEATURE_ENABLED_BY_DEFAULT);
++// Hivey: no fenced frames (only used to render auction-selected ads).
++BASE_FEATURE(kFencedFrames, base::FEATURE_DISABLED_BY_DEFAULT);
+ 
+ // Enable sending event-level reports through reportEvent() in cross-origin
+ // subframes. This requires opt-in both from the cross-origin subframe that is
+--- a/third_party/blink/renderer/platform/weborigin/security_policy.cc
++++ b/third_party/blink/renderer/platform/weborigin/security_policy.cc
+@@ -135,6 +135,13 @@
+     final_referrer_url = get_referrer_origin();
+   }
+ 
++  // Hivey: whatever the referrer policy, another origin gets at most the
++  // origin of the referring page (document.referrer included), never its
++  // path or query. Mirrors net::URLRequestJob::ComputeReferrerForPolicy.
++  if (!SecurityOrigin::AreSameOrigin(final_referrer_url, url)) {
++    final_referrer_url = get_referrer_origin();
++  }
++
+   switch (referrer_policy_no_default) {
+     case network::mojom::ReferrerPolicy::kNever:
+       return Referrer(Referrer::NoReferrer(), referrer_policy_no_default);

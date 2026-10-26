@@ -1,0 +1,285 @@
+# Font fingerprinting protection: web pages only see the fonts that ship with Windows and common Linux desktops (font-family and local()); off with --disable-fingerprinting-noise.
+--- a/third_party/blink/renderer/core/css/css_font_selector.cc
++++ b/third_party/blink/renderer/core/css/css_font_selector.cc
+@@ -40,6 +40,7 @@
+ #include "third_party/blink/renderer/core/frame/local_frame.h"
+ #include "third_party/blink/renderer/core/frame/settings.h"
+ #include "third_party/blink/renderer/platform/fonts/font_cache.h"
++#include "third_party/blink/renderer/platform/fonts/hivey_font_allowlist.h"
+ #include "third_party/blink/renderer/platform/fonts/font_selector_client.h"
+ #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+ 
+@@ -252,6 +253,14 @@
+     return nullptr;
+   }
+ 
++  // Hivey: font fingerprinting protection. A font the page names, outside
++  // the fonts every Windows or Linux computer has, behaves as missing.
++  if (!font_family.FamilyIsGeneric() &&
++      HiveyFontAllowlist::AppliesTo(document.Url()) &&
++      !HiveyFontAllowlist::IsAllowedFamily(settings_family_name)) {
++    return nullptr;
++  }
++
+   const SimpleFontData* font_data =
+       FontCache::Get().GetFontData(request_description, settings_family_name);
+   if (font_data && request_description.HasSizeAdjust()) {
+--- a/third_party/blink/renderer/core/css/local_font_face_source.cc
++++ b/third_party/blink/renderer/core/css/local_font_face_source.cc
+@@ -8,6 +8,7 @@
+ #include "build/build_config.h"
+ #include "third_party/blink/renderer/core/css/css_custom_font_data.h"
+ #include "third_party/blink/renderer/core/css/css_font_face.h"
++#include "third_party/blink/renderer/core/execution_context/execution_context.h"
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+ #include "third_party/blink/renderer/platform/fonts/bitmap_glyphs_block_list.h"
+ #include "third_party/blink/renderer/platform/fonts/font_cache.h"
+@@ -16,6 +17,7 @@
+ #include "third_party/blink/renderer/platform/fonts/font_global_context.h"
+ #include "third_party/blink/renderer/platform/fonts/font_selector.h"
+ #include "third_party/blink/renderer/platform/fonts/font_unique_name_lookup.h"
++#include "third_party/blink/renderer/platform/fonts/hivey_font_allowlist.h"
+ #include "third_party/blink/renderer/platform/fonts/simple_font_data.h"
+ #include "third_party/blink/renderer/platform/heap/persistent.h"
+ #include "third_party/blink/renderer/platform/wtf/functional.h"
+@@ -42,6 +44,12 @@
+ 
+ bool LocalFontFaceSource::IsLocalFontAvailable(
+     const FontDescription& font_description) const {
++  // Hivey: font fingerprinting protection (see HiveyFontAllowlist).
++  if (ExecutionContext* context = font_selector_->GetExecutionContext();
++      context && HiveyFontAllowlist::AppliesTo(context->Url()) &&
++      !HiveyFontAllowlist::IsAllowedLocalName(font_name_)) {
++    return false;
++  }
+   // TODO(crbug.com/1025945): Properly handle Windows prior to 10 and Android.
+   bool font_available = FontCache::Get().IsPlatformFontUniqueNameMatchAvailable(
+       font_description, font_name_);
+@@ -77,6 +85,13 @@
+     return nullptr;
+   }
+ 
++  // Hivey: font fingerprinting protection (see HiveyFontAllowlist).
++  if (ExecutionContext* context = font_selector_->GetExecutionContext();
++      context && HiveyFontAllowlist::AppliesTo(context->Url()) &&
++      !HiveyFontAllowlist::IsAllowedLocalName(font_name_)) {
++    return nullptr;
++  }
++
+   if (IsValid() && IsLoading()) {
+     const SimpleFontData* fallback_font_data =
+         CreateLoadingFallbackFontData(font_description);
+--- a/third_party/blink/renderer/platform/BUILD.gn
++++ b/third_party/blink/renderer/platform/BUILD.gn
+@@ -655,6 +655,8 @@
+     "fonts/font.h",
+     "fonts/font_baseline.h",
+     "fonts/font_cache.cc",
++    "fonts/hivey_font_allowlist.cc",
++    "fonts/hivey_font_allowlist.h",
+     "fonts/font_cache.h",
+     "fonts/font_cache_client.h",
+     "fonts/font_cache_key.h",
+--- a/third_party/blink/renderer/platform/fonts/hivey_font_allowlist.cc
++++ b/third_party/blink/renderer/platform/fonts/hivey_font_allowlist.cc
+@@ -0,0 +1,161 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "third_party/blink/renderer/platform/fonts/hivey_font_allowlist.h"
++
++#include <algorithm>
++#include <array>
++#include <string>
++#include <string_view>
++
++#include "base/command_line.h"
++#include "third_party/blink/renderer/platform/weborigin/kurl.h"
++
++namespace blink {
++
++namespace {
++
++// Fonts installed by default with Windows 10/11 and with the usual Linux
++// desktops (Debian/Ubuntu, Fedora). Compared without case, spaces or
++// hyphens. Keep sorted.
++constexpr auto kAllowedFamilies = std::to_array<std::string_view>({
++    "arial",
++    "arialblack",
++    "bahnschrift",
++    "batang",
++    "calibri",
++    "cambria",
++    "cambriamath",
++    "candara",
++    "cantarell",
++    "cascadiacode",
++    "cascadiamono",
++    "comicsansms",
++    "consolas",
++    "constantia",
++    "corbel",
++    "couriernew",
++    "dejavusans",
++    "dejavusansmono",
++    "dejavuserif",
++    "dotum",
++    "droidsans",
++    "droidsansmono",
++    "droidserif",
++    "ebrima",
++    "fangsong",
++    "franklingothicmedium",
++    "freemono",
++    "freesans",
++    "freeserif",
++    "gabriola",
++    "gadugi",
++    "georgia",
++    "gulim",
++    "impact",
++    "inkfree",
++    "javanesetext",
++    "kaiti",
++    "leelawadeeui",
++    "liberationmono",
++    "liberationsans",
++    "liberationserif",
++    "lucidaconsole",
++    "lucidasansunicode",
++    "malgungothic",
++    "marlett",
++    "meiryo",
++    "microsofthimalaya",
++    "microsoftjhenghei",
++    "microsoftnewtailue",
++    "microsoftphagspa",
++    "microsoftsansserif",
++    "microsofttaile",
++    "microsoftyahei",
++    "microsoftyibaiti",
++    "mingliuextb",
++    "mongolianbaiti",
++    "msgothic",
++    "msuigothic",
++    "mvboli",
++    "myanmartext",
++    "nirmalaui",
++    "notocoloremoji",
++    "notomono",
++    "notosans",
++    "notosanscjk",
++    "notosansmono",
++    "notoserif",
++    "notoserifcjk",
++    "nsimsun",
++    "palatinolinotype",
++    "segoefluenticons",
++    "segoemdl2assets",
++    "segoeprint",
++    "segoescript",
++    "segoeui",
++    "segoeuiemoji",
++    "segoeuihistoric",
++    "segoeuisymbol",
++    "segoeuivariable",
++    "simhei",
++    "simsun",
++    "sitka",
++    "sylfaen",
++    "symbol",
++    "tahoma",
++    "timesnewroman",
++    "trebuchetms",
++    "ubuntu",
++    "ubuntumono",
++    "verdana",
++    "webdings",
++    "wingdings",
++    "yugothic",
++});
++static_assert(std::ranges::is_sorted(kAllowedFamilies));
++
++// Lower case, without spaces, hyphens and underscores.
++std::string Normalize(const AtomicString& name) {
++  std::string out;
++  const std::string utf8 = name.Utf8();
++  out.reserve(utf8.size());
++  for (char c : utf8) {
++    if (c == ' ' || c == '-' || c == '_') {
++      continue;
++    }
++    out.push_back(static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c));
++  }
++  return out;
++}
++
++bool Enabled() {
++  static const bool enabled = !base::CommandLine::ForCurrentProcess()->HasSwitch(
++      "disable-fingerprinting-noise");
++  return enabled;
++}
++
++}  // namespace
++
++// static
++bool HiveyFontAllowlist::AppliesTo(const KURL& url) {
++  return Enabled() && url.ProtocolIsInHttpFamily();
++}
++
++// static
++bool HiveyFontAllowlist::IsAllowedFamily(const AtomicString& family) {
++  return std::ranges::binary_search(kAllowedFamilies, Normalize(family));
++}
++
++// static
++bool HiveyFontAllowlist::IsAllowedLocalName(const AtomicString& name) {
++  // "arialboldmt" starts with "arial": allowed. Longer entries are checked
++  // too, so "Segoe UI Emoji" matches "segoeuiemoji" as well as "segoeui".
++  const std::string normalized = Normalize(name);
++  return std::ranges::any_of(kAllowedFamilies, [&](std::string_view family) {
++    return normalized.starts_with(family);
++  });
++}
++
++}  // namespace blink
+--- a/third_party/blink/renderer/platform/fonts/hivey_font_allowlist.h
++++ b/third_party/blink/renderer/platform/fonts/hivey_font_allowlist.h
+@@ -0,0 +1,36 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_HIVEY_FONT_ALLOWLIST_H_
++#define THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_HIVEY_FONT_ALLOWLIST_H_
++
++#include "third_party/blink/renderer/platform/platform_export.h"
++#include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
++
++namespace blink {
++
++class KURL;
++
++// Hivey: font fingerprinting protection. Web pages can measure which fonts
++// are installed (by name in font-family, or with local() in @font-face) and
++// use the list to recognise a computer. Web pages served over http(s) only
++// see the fonts that ship with Windows and common Linux distributions; any
++// other installed font behaves as if it were missing. Web fonts, the
++// browser's own pages and the fallback fonts used to draw characters a font
++// lacks are not affected. --disable-fingerprinting-noise turns it off.
++class PLATFORM_EXPORT HiveyFontAllowlist {
++ public:
++  // Whether the protection applies to a document at `url`.
++  static bool AppliesTo(const KURL& url);
++
++  // A family name, as in font-family: "Segoe UI".
++  static bool IsAllowedFamily(const AtomicString& family);
++
++  // A full or PostScript name, as in local(): "Arial Bold", "Arial-BoldMT".
++  static bool IsAllowedLocalName(const AtomicString& name);
++};
++
++}  // namespace blink
++
++#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_HIVEY_FONT_ALLOWLIST_H_

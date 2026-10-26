@@ -1,0 +1,82 @@
+# Font fingerprinting protection, closed paths: the fallback list no longer asks the font cache for a hidden family, document.fonts.check() and workers (OffscreenCanvas) follow the allowlist too.
+--- a/third_party/blink/renderer/core/css/css_font_selector_base.cc
++++ b/third_party/blink/renderer/core/css/css_font_selector_base.cc
+@@ -7,7 +7,9 @@
+ #include "build/build_config.h"
+ #include "third_party/blink/renderer/core/css/css_segmented_font_face.h"
+ #include "third_party/blink/renderer/core/frame/web_feature.h"
++#include "third_party/blink/renderer/core/execution_context/execution_context.h"
+ #include "third_party/blink/renderer/platform/fonts/font_cache.h"
++#include "third_party/blink/renderer/platform/fonts/hivey_font_allowlist.h"
+ #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+ #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
+ #include "third_party/blink/renderer/platform/wtf/cross_thread_copier.h"
+@@ -30,10 +32,24 @@
+   if (family.empty()) {
+     family = passed_family.FamilyName();
+   }
++  if (HiveyHidesSystemFamily(passed_family, family)) {
++    return false;
++  }
+   return FontCache::Get().IsPlatformFamilyMatchAvailable(font_description,
+                                                          family);
+ }
+ 
++bool CSSFontSelectorBase::HiveyHidesSystemFamily(
++    const FontFamily& family,
++    const AtomicString& resolved_name) const {
++  if (family.FamilyIsGeneric()) {
++    return false;
++  }
++  ExecutionContext* context = GetExecutionContext();
++  return context && HiveyFontAllowlist::AppliesTo(context->Url()) &&
++         !HiveyFontAllowlist::IsAllowedFamily(resolved_name);
++}
++
+ void CSSFontSelectorBase::ReportNotDefGlyph() const {
+   UseCounter::Count(GetUseCounter(),
+                     WebFeature::kFontShapingNotDefGlyphObserved);
+--- a/third_party/blink/renderer/core/css/css_font_selector_base.h
++++ b/third_party/blink/renderer/core/css/css_font_selector_base.h
+@@ -37,6 +37,12 @@
+   void Trace(Visitor*) const override;
+ 
+  protected:
++  // Hivey: font fingerprinting protection. Whether `family`, resolved to the
++  // system font `resolved_name`, must look missing to this page or worker
++  // (see HiveyFontAllowlist).
++  bool HiveyHidesSystemFamily(const FontFamily& family,
++                              const AtomicString& resolved_name) const;
++
+   // TODO(crbug.com/383860): We should get rid of `IsAlive()` once lifetime
+   // issue of `CSSFontSelector` is solved. It will be alive after `TreeScope`
+   // is dead.
+--- a/third_party/blink/renderer/core/css/offscreen_font_selector.cc
++++ b/third_party/blink/renderer/core/css/offscreen_font_selector.cc
+@@ -51,6 +51,10 @@
+   if (settings_family_name.empty()) {
+     return nullptr;
+   }
++  // Hivey: font fingerprinting protection in workers (OffscreenCanvas).
++  if (HiveyHidesSystemFamily(font_family, settings_family_name)) {
++    return nullptr;
++  }
+ 
+   return FontCache::Get().GetFontData(font_description, settings_family_name);
+ }
+--- a/third_party/blink/renderer/platform/fonts/font_fallback_list.cc
++++ b/third_party/blink/renderer/platform/fonts/font_fallback_list.cc
+@@ -166,7 +166,12 @@
+     const FontData* result =
+         font_selector_->GetFontData(font_description, *curr_family);
+     // Don't query system fonts for empty font family name.
+-    if (!result && !curr_family->FamilyName().empty()) {
++    // Hivey: nor for a family the selector hides (font fingerprinting
++    // protection): asking the font cache directly would reveal it.
++    if (!result && !curr_family->FamilyName().empty() &&
++        (curr_family->FamilyIsGeneric() ||
++         font_selector_->IsPlatformFamilyMatchAvailable(font_description,
++                                                        *curr_family))) {
+       result = FontCache::Get().GetFontData(font_description,
+                                             curr_family->FamilyName());
+     }

@@ -1,7 +1,7 @@
 # RAM limiter in Settings > Performance > Memory (pref hivey.memory_limit_mb), English and French strings.
 --- a/chrome/app/resources/generated_resources_fr.xtb
 +++ b/chrome/app/resources/generated_resources_fr.xtb
-@@ -10760,4 +10760,7 @@
+@@ -10849,4 +10849,7 @@
  <translation id="998347228911661591">Synchronisez vos groupes d'onglets</translation>
  <translation id="998747458861718449">I&amp;nspecter</translation>
  <translation id="998852291477823323">L'action n'a pas été autorisée en raison des règles configurées.</translation>
@@ -12,7 +12,7 @@
 \ No newline at end of file
 --- a/chrome/app/settings_strings.grdp
 +++ b/chrome/app/settings_strings.grdp
-@@ -1087,6 +1087,15 @@
+@@ -1118,6 +1118,15 @@
      <message name="IDS_SETTINGS_PERFORMANCE_MEMORY_SAVER_MODE_AGGRESSIVE_DESCRIPTION" desc="Description for the aggressive memory saver aggressiveness option">
        Get maximum memory savings. Your tabs become inactive after a shorter period of time.
      </message>
@@ -30,7 +30,7 @@
      </message>
 --- a/chrome/browser/extensions/api/settings_private/prefs_util.cc
 +++ b/chrome/browser/extensions/api/settings_private/prefs_util.cc
-@@ -1308,6 +1308,8 @@
+@@ -1304,6 +1304,8 @@
    (*s_allowlist)[performance_manager::user_tuning::prefs::
                       kMemorySaverModeAggressiveness] =
        settings_api::PrefType::kNumber;
@@ -41,7 +41,7 @@
        settings_api::PrefType::kNumber;
 --- a/chrome/browser/performance_manager/chrome_browser_main_extra_parts_performance_manager.cc
 +++ b/chrome/browser/performance_manager/chrome_browser_main_extra_parts_performance_manager.cc
-@@ -237,13 +237,10 @@
+@@ -238,13 +238,10 @@
    graph->PassToGraph(
        std::make_unique<performance_manager::policies::MemorySaverModePolicy>());
  
@@ -148,7 +148,7 @@
    protected accessor numericCheckedValue_: MemorySaverModeState =
 --- a/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
 +++ b/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
-@@ -1287,6 +1287,10 @@
+@@ -1309,6 +1309,10 @@
         IDS_SETTINGS_PERFORMANCE_MEMORY_SAVER_MODE_MEDIUM_DESCRIPTION},
        {"memorySaverModeAggressiveDescription",
         IDS_SETTINGS_PERFORMANCE_MEMORY_SAVER_MODE_AGGRESSIVE_DESCRIPTION},

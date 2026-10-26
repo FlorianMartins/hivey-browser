@@ -21,7 +21,7 @@
  }  // namespace TemplateURLPrepopulateData
 --- a/third_party/search_engines_data/resources/definitions/prepopulated_engines.json
 +++ b/third_party/search_engines_data/resources/definitions/prepopulated_engines.json
-@@ -123,10 +123,8 @@
+@@ -124,10 +124,8 @@
        "keyword": "duckduckgo.com",
        "favicon_url": "https://duckduckgo.com/favicon.ico",
        "base_builtin_resource_id": "SEARCH_ENGINE_DUCKDUCKGO",

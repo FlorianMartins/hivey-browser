@@ -1,0 +1,115 @@
+# Compact mode (shorter tabs, toolbar and address bar; chrome://flags/#hivey-compact-ui) and the Ctrl+Tab most-recently-used order setting.
+--- a/chrome/browser/about_flags.cc
++++ b/chrome/browser/about_flags.cc
+@@ -306,6 +306,7 @@
+ #include "ui/base/device_form_factor.h"
+ #else  // BUILDFLAG(IS_ANDROID)
+ #include "chrome/browser/performance_manager/policies/hivey_memory_limit_policy.h"
++#include "chrome/browser/ui/hivey_compact_ui.h"
+ #include "chrome/browser/component_updater/iwa_key_distribution_component_installer.h"
+ #include "chrome/browser/media/router/discovery/access_code/access_code_cast_sink_service.h"
+ #include "chrome/browser/media/router/media_router_feature.h"
+--- a/chrome/browser/hivey_flag_entries.h
++++ b/chrome/browser/hivey_flag_entries.h
+@@ -12,5 +12,9 @@
+      FEATURE_WITH_PARAMS_VALUE_TYPE(performance_manager::policies::kHiveyMemoryLimit,
+                                     kHiveyMemoryLimitChoices,
+                                     "HiveyMemoryLimit")},
++    {"hivey-compact-ui",
++     "Compact mode",
++     "Shorter tabs, toolbar and address bar, to leave more room to web pages. Hivey Browser flag.",
++     kOsDesktop, FEATURE_VALUE_TYPE(kHiveyCompactUi)},
+ #endif  // !BUILDFLAG(IS_ANDROID)
+ #endif  // CHROME_BROWSER_HIVEY_FLAG_ENTRIES_H_
+--- a/chrome/browser/ui/hivey_compact_ui.h
++++ b/chrome/browser/ui/hivey_compact_ui.h
+@@ -0,0 +1,14 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_HIVEY_COMPACT_UI_H_
++#define CHROME_BROWSER_UI_HIVEY_COMPACT_UI_H_
++
++#include "base/feature_list.h"
++
++// Hivey: compact mode. Shorter tabs, toolbar and address bar (like Firefox's
++// compact density). Ignored in touch mode. Defined in layout_constants.cc.
++BASE_DECLARE_FEATURE(kHiveyCompactUi);
++
++#endif  // CHROME_BROWSER_UI_HIVEY_COMPACT_UI_H_
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -4,8 +4,10 @@
+ 
+ #include "chrome/browser/ui/layout_constants.h"
+ 
++#include "base/feature_list.h"
+ #include "base/notreached.h"
+ #include "build/build_config.h"
++#include "chrome/browser/ui/hivey_compact_ui.h"
+ #include "chrome/browser/ui/tabs/features.h"
+ #include "chrome/browser/ui/ui_features.h"
+ #include "components/omnibox/common/omnibox_features.h"
+@@ -17,7 +19,11 @@
+ #include "chromeos/constants/chromeos_features.h"
+ #endif
+ 
+-int GetLayoutConstant(LayoutConstant constant) {
++BASE_FEATURE(kHiveyCompactUi, base::FEATURE_DISABLED_BY_DEFAULT);
++
++namespace {
++
++int GetDefaultLayoutConstant(LayoutConstant constant) {
+   const bool touch_ui = ui::TouchUiController::Get()->touch_ui();
+   switch (constant) {
+     case LayoutConstant::kAppMenuProfileRowAvatarIconSize:
+@@ -185,6 +191,35 @@
+   NOTREACHED();
+ }
+ 
++}  // namespace
++
++int GetLayoutConstant(LayoutConstant constant) {
++  // Hivey: compact mode (chrome://flags/#hivey-compact-ui, or Hivey Studio).
++  if (base::FeatureList::IsEnabled(kHiveyCompactUi) &&
++      !ui::TouchUiController::Get()->touch_ui()) {
++    switch (constant) {
++      case LayoutConstant::kTabHeight:
++        return 28 + GetLayoutConstant(LayoutConstant::kTabstripToolbarOverlap);
++      case LayoutConstant::kTabStripPadding:
++        return 3;
++      case LayoutConstant::kTabVerticalPadding:
++        return 4;
++      case LayoutConstant::kTabSeparatorHeight:
++        return 16;
++      case LayoutConstant::kToolbarButtonHeight:
++      case LayoutConstant::kLocationBarHeight:
++        return 28;
++      case LayoutConstant::kBookmarkBarButtonHeight:
++        return 24;
++      case LayoutConstant::kToolbarElementPadding:
++        return 2;
++      default:
++        break;
++    }
++  }
++  return GetDefaultLayoutConstant(constant);
++}
++
+ gfx::Insets GetLayoutInsets(LayoutInset inset) {
+   const bool touch_ui = ui::TouchUiController::Get()->touch_ui();
+   switch (inset) {
+--- a/chrome/browser/ui/ui_features.cc
++++ b/chrome/browser/ui/ui_features.cc
+@@ -42,7 +42,9 @@
+ #endif  // BUILDFLAG(IS_WIN)
+ );
+ 
+-BASE_FEATURE(kCtrlTabMru, base::FEATURE_DISABLED_BY_DEFAULT);
++// Hivey: offer "Ctrl+Tab cycles through tabs in recently used order" in
++// Settings > Appearance (off until the user turns it on, as in Firefox).
++BASE_FEATURE(kCtrlTabMru, base::FEATURE_ENABLED_BY_DEFAULT);
+ 
+ BASE_FEATURE(kImportExportFlags, base::FEATURE_DISABLED_BY_DEFAULT);
+ 

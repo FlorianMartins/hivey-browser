@@ -1,0 +1,13 @@
+# Linux x64 (HB_TARGET=linux, out/Linux), built against Chromium's Debian
+# sysroot so the binary runs on any recent distribution. Media and desktop
+# integration flags as in ungoogled-chromium-portablelinux.
+target_os="linux"
+target_cpu="x64"
+use_sysroot=true
+ffmpeg_branding="Chrome"
+proprietary_codecs=true
+rtc_use_pipewire=true
+use_vaapi=true
+use_kerberos=false
+use_system_libffi=false
+fatal_linker_warnings=false

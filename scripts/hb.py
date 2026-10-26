@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """Hivey Browser build orchestrator.
 
-Cross-compiles a Windows x64 build of Hivey Browser from a Linux host, on top
-of ungoogled-chromium. Every step is idempotent and records a stamp, so an
-interrupted run can be resumed with `hb.py all`.
+Builds Hivey Browser on top of ungoogled-chromium, from a Linux host:
+Windows x64 (cross-compiled, HB_TARGET=win, the default) or Linux x64
+(HB_TARGET=linux), both from the same patched tree. Every step is idempotent
+and records a stamp, so an interrupted run can be resumed with `hb.py all`.
 
     hb.py fetch       download + verify the Chromium source tarball
     hb.py unpack      extract it into $HB_BUILD_DIR/src
     hb.py prune       remove prebuilt binaries (ungoogled pruning list)
     hb.py toolchain   fetch build-only host tools + MSVC CRT/Windows SDK (xwin)
     hb.py patch       ungoogled + ungoogled-windows (selected) + Hivey patches
-    hb.py brand       apply brand/brand.json (names, paths, strings, icons)
+    hb.py brand       apply brand/brand.json, write the Hivey version
+    hb.py bundle      bundled extensions (signed .crx) + update public key
     hb.py domsub      ungoogled domain substitution
-    hb.py configure   write args.gn and run `gn gen`
-    hb.py build       ninja (low CPU/IO priority)
+    hb.py configure   write args.gn and run `gn gen` (per target)
+    hb.py build       ninja (low CPU/IO priority, per target)
+    hb.py package     installer or portable archive in $HB_BUILD_DIR/dist
     hb.py all         every step above, in order, skipping finished ones
     hb.py status      show which steps are done
 
@@ -43,7 +46,13 @@ UG = ROOT / 'third_party' / 'ungoogled-chromium'
 UGW = ROOT / 'third_party' / 'ungoogled-chromium-windows'
 BUILD = Path(os.environ.get('HB_BUILD_DIR', ROOT.parent / 'hivey-browser-build')).resolve()
 SRC = BUILD / 'src'
-OUT = SRC / 'out' / 'Default'
+# Target OS: Windows x64 (cross-compiled, out/Default) or Linux x64 (out/Linux).
+# Both are built from the same patched source tree.
+TARGET = os.environ.get('HB_TARGET', 'win')
+if TARGET not in ('win', 'linux'):
+    raise SystemExit(f'HB_TARGET must be win or linux, not {TARGET!r}')
+OUT = SRC / 'out' / ('Default' if TARGET == 'win' else 'Linux')
+DIST = BUILD / 'dist'
 TOOLS = BUILD / 'tools'
 STATE = BUILD / '.hb-state.json'
 
@@ -53,8 +62,15 @@ import domain_substitution  # noqa: E402
 import patches  # noqa: E402
 import prune_binaries  # noqa: E402
 sys.path.pop(0)
+sys.path.insert(0, str(ROOT / 'scripts'))
+import crx3  # noqa: E402
+sys.path.pop(0)
 
-STEPS = ['fetch', 'unpack', 'prune', 'toolchain', 'patch', 'brand', 'adblock', 'domsub', 'configure', 'build']
+STEPS = ['fetch', 'unpack', 'prune', 'toolchain', 'patch', 'brand', 'bundle', 'domsub', 'configure', 'build',
+         'package']
+# Steps done once per output directory (one per target OS); the others
+# prepare the shared source tree.
+PER_TARGET_STEPS = {'configure', 'build', 'package'}
 
 # Windows patches from ungoogled-chromium-windows that only make sense when the
 # build host is Windows with upstream LLVM (Microsoft rc.exe, gn.exe, python.exe,
@@ -75,8 +91,9 @@ WINDOWS_HOST_ONLY_PATCHES = {
     'ungoogled-chromium/windows/windows-no-unknown-warnings.patch',
 }
 
-# GN args from ungoogled-chromium-windows that assume upstream LLVM/Rust.
-WINDOWS_HOST_ONLY_FLAGS = {'use_sysroot'}
+# GN args from ungoogled-chromium-windows that assume upstream LLVM/Rust
+# (clang_version: upstream's major version, not the pinned clang's).
+WINDOWS_HOST_ONLY_FLAGS = {'use_sysroot', 'clang_version'}
 
 
 def log(msg):
@@ -90,14 +107,18 @@ def load_state():
         return {}
 
 
+def _state_key(step):
+    return f'{step}:{TARGET}' if step in PER_TARGET_STEPS else step
+
+
 def mark_done(step, **info):
     state = load_state()
-    state[step] = {'done': True, **info}
+    state[_state_key(step)] = {'done': True, **info}
     STATE.write_text(json.dumps(state, indent=2))
 
 
 def is_done(step):
-    return load_state().get(step, {}).get('done', False)
+    return load_state().get(_state_key(step), {}).get('done', False)
 
 
 def run(cmd, **kw):
@@ -207,22 +228,25 @@ def _toolchain_rc():
 
 
 def _toolchain_pgo():
-    """Windows x64 PGO profile (execution counters, no code), normally fetched
-    by a gclient hook; checked against the md5 GCS reports for the object."""
-    name = (SRC / 'chrome/build/win64.pgo.txt').read_text().strip()
-    dest = SRC / 'chrome/build/pgo_profiles' / name
-    if dest.exists():
-        return
-    url = _gcs('chromium-optimization-profiles/pgo_profiles', name)
-    # The object is stored gzip-compressed and GCS decompresses it on the fly;
-    # the md5 it publishes is the one of the stored (compressed) bytes.
-    req = urllib.request.Request(url, headers={'Accept-Encoding': 'gzip'})
-    with urllib.request.urlopen(req) as r:
-        md5 = [h.split('=', 1)[1] for h in r.headers.get_all('x-goog-hash') if h.startswith('md5=')][0]
-        raw = r.read()
-    if base64.b64encode(hashlib.md5(raw).digest()).decode() != md5:
-        raise SystemExit('PGO profile: md5 mismatch')
-    dest.write_bytes(gzip.decompress(raw) if raw[:2] == b'\x1f\x8b' else raw)
+    """PGO profiles of both targets (execution counters, no code), normally
+    fetched by a gclient hook; checked against the md5 GCS reports for each
+    object."""
+    for profile in ('win64', 'linux'):
+        name = (SRC / f'chrome/build/{profile}.pgo.txt').read_text().strip()
+        dest = SRC / 'chrome/build/pgo_profiles' / name
+        if dest.exists():
+            continue
+        url = _gcs('chromium-optimization-profiles/pgo_profiles', name)
+        # The object is stored gzip-compressed and GCS decompresses it on the
+        # fly; the md5 it publishes is the one of the stored (compressed) bytes.
+        req = urllib.request.Request(url, headers={'Accept-Encoding': 'gzip'})
+        with urllib.request.urlopen(req) as r:
+            md5 = [h.split('=', 1)[1] for h in r.headers.get_all('x-goog-hash') if h.startswith('md5=')][0]
+            raw = r.read()
+        if base64.b64encode(hashlib.md5(raw).digest()).decode() != md5:
+            raise SystemExit(f'PGO profile {name}: md5 mismatch')
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(gzip.decompress(raw) if raw[:2] == b'\x1f\x8b' else raw)
 
 
 def _toolchain_windows_sources():
@@ -230,7 +254,8 @@ def _toolchain_windows_sources():
 
     Versions and hashes come from ungoogled-chromium-windows' downloads.ini so
     we stay in sync with them:
-      * DirectX-Headers and webauthn headers (Microsoft, pinned commits);
+      * DirectX-Headers, webauthn and multimedia-redirection headers
+        (Microsoft, pinned commits);
       * windows.0.52.0.lib import libraries of the vendored windows_*_msvc
         crates: ungoogled prunes them as binaries, we restore them from the
         windows-rs 0.52.0 release (sha512-pinned), where they come from.
@@ -248,7 +273,8 @@ def _toolchain_windows_sources():
         return sec, zipfile.ZipFile(dest)
 
     for section, target in (('directx-headers', 'third_party/microsoft_dxheaders/src'),
-                            ('webauthn', 'third_party/microsoft_webauthn/src')):
+                            ('webauthn', 'third_party/microsoft_webauthn/src'),
+                            ('multimedia-redirection', 'third_party/microsoft_multimedia_redirection/src')):
         out = SRC / target
         if out.exists() and any(out.iterdir()):
             continue
@@ -415,9 +441,10 @@ def _toolchain_msvc():
         # No casing symlinks: the case-insensitive mount makes them useless
         # (and a symlink to its own lower-case name would loop). CRT PDBs are
         # needed: libcmt.lib objects reference them and lld-link errors out
-        # (LNK4099) when they are missing.
+        # (LNK4099) when they are missing. --copy: xwin >= 0.9 moves files out
+        # of its cache, which fails across file systems (the FUSE mount).
         run(cmd + ['splat', '--use-winsysroot-style', '--preserve-ms-arch-notation', '--disable-symlinks',
-                   '--include-debug-symbols',
+                   '--include-debug-symbols', '--copy',
                    '--output', root])
         for sub in ('Include', 'Lib'):
             src_dir = kits / sub / short_sdk
@@ -670,87 +697,133 @@ def step_patch(args):
     mark_done('patch', hivey=applied)
 
 
+def hivey_version():
+    """Chromium's version with the Hivey revision (HIVEY_REVISION, 1-99) in
+    the last field: PATCH = upstream PATCH * 100 + revision. A Hivey-only
+    release then installs as an update; web pages still see the upstream
+    version (patches/hivey/build/hivey-updater.patch)."""
+    major, minor, build, patch = (int(x) for x in chromium_version().split('.'))
+    revision = int((ROOT / 'HIVEY_REVISION').read_text().strip())
+    if not 1 <= revision <= 99 or patch * 100 + revision > 65535:
+        raise SystemExit(f'HIVEY_REVISION {revision} out of range for Chromium {chromium_version()}')
+    return major, minor, build, patch * 100 + revision
+
+
+def _write_hivey_version():
+    major, minor, build, patch = hivey_version()
+    path = SRC / 'chrome/VERSION'
+    path.write_text(f'MAJOR={major}\nMINOR={minor}\nBUILD={build}\nPATCH={patch}\n')
+    return f'{major}.{minor}.{build}.{patch}'
+
+
 def step_brand(args):
     run([sys.executable, ROOT / 'scripts' / 'branding.py', SRC])
-    mark_done('brand')
+    version = _write_hivey_version()
+    log(f'version {version}')
+    mark_done('brand', version=version)
 
 
-ADBLOCK_LISTS = {
-    'easylist': 'https://easylist.to/easylist/easylist.txt',
-    'easyprivacy': 'https://easylist.to/easylist/easyprivacy.txt',
-}
-HOST_OUT = SRC / 'out' / 'HostTools'
-HOST_ARGS = '''# Host (Linux) tools used while building Hivey Browser; never shipped.
-target_os="linux"
-target_cpu="x64"
-is_debug=false
-is_component_build=true
-symbol_level=0
-chrome_pgo_phase=0
-treat_warnings_as_errors=false
-clang_use_chrome_plugins=false
-use_official_google_api_keys=false
-safe_browsing_mode=0
-enable_reporting=false
-'''
+# Extensions that ship with the browser (extensions/bundled.json), packed as
+# signed .crx files. The key decides their extension ID; keep it private and
+# stable (a new key means a new ID, so existing installs would get a second
+# copy). HB_EXTENSION_KEY overrides its location.
+BUNDLED = BUILD / 'bundled-extensions'
+EXTENSION_KEY = Path(os.environ.get('HB_EXTENSION_KEY',
+                                    Path.home() / '.config' / 'hivey' / 'bundled-extensions.pem'))
+# Ed25519 key that signs the update manifest (scripts/release.py). The browser
+# embeds its public key and refuses any update not signed with it. Keep it
+# private; HB_UPDATE_KEY overrides its location.
+UPDATE_KEY = Path(os.environ.get('HB_UPDATE_KEY', Path.home() / '.config' / 'hivey' / 'update-signing.pem'))
 
 
-def _host_tool(target, binary):
-    """Build a Chromium tool for the Linux build host (out/HostTools)."""
-    HOST_OUT.mkdir(parents=True, exist_ok=True)
-    if not (HOST_OUT / 'args.gn').exists() or (HOST_OUT / 'args.gn').read_text() != HOST_ARGS:
-        (HOST_OUT / 'args.gn').write_text(HOST_ARGS)
-        run([TOOLS / 'gn', 'gen', HOST_OUT], cwd=SRC)
-    cmd = [TOOLS / 'ninja', '-C', HOST_OUT, '-j', str(max(1, args_jobs() // 2)), target]
-    if shutil.which('systemd-run'):
-        cmd = ['systemd-run', '--scope', '--quiet', '--collect', '-p', 'MemoryMax=8G',
-               '-p', 'CPUWeight=10', '-p', 'IOWeight=10', '--'] + cmd
-    run(cmd, cwd=SRC)
-    return HOST_OUT / binary
+def ensure_update_key():
+    if not UPDATE_KEY.exists():
+        UPDATE_KEY.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(['openssl', 'genpkey', '-algorithm', 'ed25519', '-out', UPDATE_KEY], check=True,
+                       capture_output=True)
+        UPDATE_KEY.chmod(0o600)
+    der = subprocess.run(['openssl', 'pkey', '-in', UPDATE_KEY, '-pubout', '-outform', 'DER'], check=True,
+                         capture_output=True).stdout
+    return der[-32:]  # SubjectPublicKeyInfo of Ed25519: the raw key is the last 32 bytes
 
 
-def step_adblock(args):
-    """Built-in ad/tracker blocker ruleset (EasyList + EasyPrivacy).
+def _write_update_key_header():
+    raw = ensure_update_key()
+    header = SRC / 'chrome/browser/hivey/update_public_key.h'
+    header.parent.mkdir(parents=True, exist_ok=True)
+    rows = ',\n'.join('    ' + ', '.join(f'0x{b:02x}' for b in raw[i:i + 8]) for i in range(0, 32, 8))
+    header.write_text(
+        '// Generated by scripts/hb.py (step "bundle"). Do not edit.\n'
+        '#ifndef CHROME_BROWSER_HIVEY_UPDATE_PUBLIC_KEY_H_\n'
+        '#define CHROME_BROWSER_HIVEY_UPDATE_PUBLIC_KEY_H_\n\n'
+        '#include <stdint.h>\n\n'
+        '// Ed25519 public key of the Hivey Browser update manifest signature.\n'
+        f'inline constexpr uint8_t kHiveyUpdatePublicKey[32] = {{\n{rows}}};\n\n'
+        '#endif  // CHROME_BROWSER_HIVEY_UPDATE_PUBLIC_KEY_H_\n')
+    return raw.hex()
 
-    Downloads the lists, converts them with Chromium's own ruleset_converter
-    (URL rules only: element hiding is not applied by Chromium 154) and writes
-    chrome/browser/hivey/adblock_ruleset.bin (embedded in resources.pak by
-    patches/hivey/privacy/builtin-adblock.patch) plus its version header. The
-    version changes with the lists, so profiles re-index after an update.
-    """
-    converter = _host_tool('components/subresource_filter/tools:ruleset_converter', 'ruleset_converter')
-    lists_dir = BUILD / 'adblock-lists'
-    lists_dir.mkdir(parents=True, exist_ok=True)
-    manifest, versions, inputs = {}, [], []
-    for name, url in ADBLOCK_LISTS.items():
-        dest = lists_dir / f'{name}.txt'
-        log(f'download {url}')
-        req = urllib.request.Request(url, headers={'User-Agent': 'HiveyBrowserBuild'})
-        with urllib.request.urlopen(req) as r:
-            dest.write_bytes(r.read())
-        text = dest.read_text(encoding='utf-8', errors='replace')
-        m = re.search(r'^! Version: *(\S+)', text, re.M)
-        version = m.group(1) if m else 'unknown'
-        manifest[name] = {'url': url, 'version': version, 'sha256': sha256_file(dest)}
-        versions.append(f'{name}-{version}')
-        inputs.append(str(dest))
-    out_dir = SRC / 'chrome/browser/hivey'
-    out_dir.mkdir(parents=True, exist_ok=True)
-    ruleset = out_dir / 'adblock_ruleset.bin'
-    run([converter, '--input_format=filter-list', '--output_format=unindexed-ruleset',
-         f'--input_files={",".join(inputs)}', f'--output_file_url={ruleset}'])
-    content_version = '_'.join(versions)
-    (out_dir / 'adblock_ruleset_version.h').write_text(
-        '// Generated by scripts/hb.py (step "adblock"). Do not edit.\n'
-        '#ifndef CHROME_BROWSER_HIVEY_ADBLOCK_RULESET_VERSION_H_\n'
-        '#define CHROME_BROWSER_HIVEY_ADBLOCK_RULESET_VERSION_H_\n'
-        f'#define HIVEY_ADBLOCK_RULESET_VERSION "{content_version}"\n'
-        '#endif  // CHROME_BROWSER_HIVEY_ADBLOCK_RULESET_VERSION_H_\n')
-    manifest['ruleset'] = {'version': content_version, 'bytes': ruleset.stat().st_size,
-                           'sha256': sha256_file(ruleset)}
-    (BUILD / 'adblock-lists.json').write_text(json.dumps(manifest, indent=2))
-    log(f'adblock ruleset {content_version}: {ruleset.stat().st_size // 1024} KiB')
-    mark_done('adblock', **manifest)
+
+def _apply_shield_defaults(unpacked, enable):
+    """Hivey defaults for uBlock Origin Lite: extra rulesets on at first run
+    (tracking parameters removal, cookie banners)."""
+    details_path = unpacked / 'rulesets' / 'ruleset-details.json'
+    details = json.loads(details_path.read_text())
+    known = {d['id'] for d in details}
+    missing = set(enable) - known
+    if missing:
+        raise SystemExit(f'unknown uBlock Origin Lite rulesets: {sorted(missing)}')
+    for d in details:
+        if d['id'] in enable:
+            d['enabled'] = True
+    details_path.write_text(json.dumps(details, indent=1))
+    manifest_path = unpacked / 'manifest.json'
+    manifest = json.loads(manifest_path.read_text())
+    for r in manifest['declarative_net_request']['rule_resources']:
+        if r['id'] in enable:
+            r['enabled'] = True
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+
+def step_bundle(args):
+    """Generated inputs of the build: the bundled extensions and the public
+    key of the update signature."""
+    update_key = _write_update_key_header()
+    spec = json.loads((ROOT / 'extensions' / 'bundled.json').read_text())['hivey-shield']
+    archive = download(spec['url'], BUILD / 'download_cache' / Path(spec['url']).name, spec['sha256'])
+    unpacked = BUNDLED / 'hivey-shield'
+    shutil.rmtree(unpacked, ignore_errors=True)
+    unpacked.mkdir(parents=True)
+    with zipfile.ZipFile(archive) as zf:
+        zf.extractall(unpacked)
+    manifest = json.loads((unpacked / 'manifest.json').read_text())
+    if manifest['version'] != spec['version']:
+        raise SystemExit(f"uBlock Origin Lite archive is {manifest['version']}, expected {spec['version']}")
+    _apply_shield_defaults(unpacked, spec.get('enable_rulesets', []))
+    crx = BUNDLED / 'hivey-shield.crx'
+    ext_id = crx3.pack(unpacked, EXTENSION_KEY, crx)
+    header = SRC / 'chrome/browser/hivey/bundled_extensions.h'
+    header.parent.mkdir(parents=True, exist_ok=True)
+    header.write_text(
+        '// Generated by scripts/hb.py (step "bundle"). Do not edit.\n'
+        '#ifndef CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n'
+        '#define CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n'
+        f'// {spec["name"]} {spec["version"]} ({spec["license"]}, {spec["source"]})\n'
+        f'#define HIVEY_BUNDLED_SHIELD_ID "{ext_id}"\n'
+        f'#define HIVEY_BUNDLED_SHIELD_VERSION "{spec["version"]}"\n'
+        '#define HIVEY_BUNDLED_SHIELD_CRX FILE_PATH_LITERAL("hivey-shield.crx")\n'
+        '#endif  // CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n')
+    log(f'bundled {spec["name"]} {spec["version"]}: id {ext_id}, {crx.stat().st_size // (1 << 20)} MiB')
+    log(f'update public key {update_key}')
+    mark_done('bundle', id=ext_id, version=spec['version'], sha256=sha256_file(crx), update_key=update_key)
+
+
+def _stage_bundled_extensions():
+    """Put the .crx files where the browser looks for them: <module dir>/
+    extensions (the Windows installer packs out/Default/Extensions)."""
+    dest = OUT / ('Extensions' if TARGET == 'win' else 'extensions')
+    dest.mkdir(parents=True, exist_ok=True)
+    for crx in BUNDLED.glob('*.crx'):
+        shutil.copy2(crx, dest / crx.name)
 
 
 def step_domsub(args):
@@ -767,19 +840,31 @@ def gn_args():
             if line and not line.startswith('#') and line.split('=')[0].strip() not in skip:
                 out.append(line)
         return out
-    lines = parse(UG / 'flags.gn') + parse(UGW / 'flags.windows.gn', WINDOWS_HOST_ONLY_FLAGS) + \
-        parse(ROOT / 'flags.hivey.gn')
+    lines = parse(UG / 'flags.gn')
+    if TARGET == 'win':
+        lines += parse(UGW / 'flags.windows.gn', WINDOWS_HOST_ONLY_FLAGS)
+    lines += parse(ROOT / 'flags.hivey.gn') + parse(ROOT / f'flags.hivey.{TARGET}.gn')
     merged = {}
     for line in lines:  # later files override earlier ones
         merged[line.split('=')[0].strip()] = line
     return '\n'.join(merged.values()) + '\n'
 
 
+def _build_env():
+    env = {**os.environ,
+           # Go (Dawn's generators) must never fetch toolchains or modules.
+           'GOTOOLCHAIN': 'local', 'GOPROXY': 'off', 'GOFLAGS': '-mod=mod',
+           'GOPATH': str(BUILD / 'gopath'), 'GOCACHE': str(BUILD / 'gopath' / 'cache')}
+    if TARGET == 'win':
+        ensure_winsysroot()
+        env['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '1'
+    return env
+
+
 def step_configure(args):
-    ensure_winsysroot()
+    env = _build_env()
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / 'args.gn').write_text(gn_args())
-    env = {**os.environ, 'DEPOT_TOOLS_WIN_TOOLCHAIN': '1'}
     run([TOOLS / 'gn', 'gen', OUT, '--fail-on-unused-args'], cwd=SRC, env=env)
     mark_done('configure')
 
@@ -789,12 +874,8 @@ def args_jobs():
 
 
 def step_build(args):
-    ensure_winsysroot()
-    env = {**os.environ, 'DEPOT_TOOLS_WIN_TOOLCHAIN': '1',
-           # Go (Dawn's generators) must never fetch toolchains or modules.
-           'GOTOOLCHAIN': 'local', 'GOPROXY': 'off', 'GOFLAGS': '-mod=mod',
-           'GOPATH': str(BUILD / 'gopath'), 'GOCACHE': str(BUILD / 'gopath' / 'cache')}
-    targets = args.targets or ['chrome', 'mini_installer']
+    env = _build_env()
+    targets = args.targets or (['chrome', 'mini_installer'] if TARGET == 'win' else ['chrome'])
     cmd = [TOOLS / 'ninja', '-C', OUT, '-j', str(args_jobs())] + targets
     if os.environ.get('HB_KEEP_GOING'):  # e.g. 0 = keep going past every failure
         cmd[1:1] = ['-k', os.environ['HB_KEEP_GOING']]
@@ -804,15 +885,89 @@ def step_build(args):
     if shutil.which('systemd-run') and mem_max != 'none':
         cmd = ['systemd-run', '--scope', '--quiet', '--collect', '-p', f'MemoryMax={mem_max}',
                '-p', 'MemorySwapMax=0', '-p', 'CPUWeight=10', '-p', 'IOWeight=10', '--'] + cmd
+    _stage_bundled_extensions()
     run(cmd, cwd=SRC, env=env)
     mark_done('build')
 
 
+# Files of a Linux build that make up the portable package (as in
+# ungoogled-chromium-portablelinux); optional ones are skipped when absent.
+LINUX_FILES = ['chrome', 'chrome_100_percent.pak', 'chrome_200_percent.pak', 'chrome_crashpad_handler',
+               'chrome-wrapper', 'icudtl.dat', 'libEGL.so', 'libGLESv2.so', 'libvk_swiftshader.so',
+               'libvulkan.so.1', 'locales', 'product_logo_48.png', 'resources.pak', 'v8_context_snapshot.bin',
+               'vk_swiftshader_icd.json', 'xdg-mime', 'xdg-settings', 'extensions']
+LINUX_REQUIRED = {'chrome', 'resources.pak', 'icudtl.dat', 'locales', 'v8_context_snapshot.bin'}
+
+LINUX_LAUNCHER = """#!/bin/sh
+# Hivey Browser launcher: runs the browser from wherever this folder lives.
+HERE="$(dirname "$(readlink -f "$0")")"
+export CHROME_WRAPPER="$(readlink -f "$0")"
+exec "$HERE/chrome" "$@"
+"""
+
+LINUX_DESKTOP_ENTRY = """[Desktop Entry]
+Version=1.0
+Type=Application
+Name={product_name}
+GenericName=Web Browser
+Comment=Privacy-first, customizable web browser
+Exec=hivey-browser %U
+Icon=hivey-browser
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+StartupWMClass=hivey-browser
+"""
+
+
+def step_package(args):
+    """Release artifacts in $HB_BUILD_DIR/dist, listed in SHA256SUMS.
+
+    Windows: the mini_installer.exe. Linux: a portable .tar.xz (the browser,
+    a launcher script, a .desktop entry and the icon).
+    """
+    v = dict(line.split('=') for line in (SRC / 'chrome/VERSION').read_text().split())
+    full = f"{v['MAJOR']}.{v['MINOR']}.{v['BUILD']}.{v['PATCH']}"
+    DIST.mkdir(parents=True, exist_ok=True)
+    if TARGET == 'win':
+        artifact = DIST / f'hivey-browser-{full}-windows-x64-installer.exe'
+        shutil.copy2(OUT / 'mini_installer.exe', artifact)
+    else:
+        brand = json.loads((ROOT / 'brand' / 'brand.json').read_text())
+        name = f'hivey-browser-{full}-linux-x64'
+        stage = DIST / name
+        shutil.rmtree(stage, ignore_errors=True)
+        stage.mkdir(parents=True)
+        for f in LINUX_FILES:
+            src = OUT / f
+            if not src.exists():
+                if f in LINUX_REQUIRED:
+                    raise SystemExit(f'{src} is missing: build first')
+                continue
+            if src.is_dir():
+                shutil.copytree(src, stage / f)
+            else:
+                shutil.copy2(src, stage / f)
+        (stage / 'hivey-browser').write_text(LINUX_LAUNCHER)
+        (stage / 'hivey-browser').chmod(0o755)
+        (stage / 'hivey-browser.desktop').write_text(LINUX_DESKTOP_ENTRY.format(**brand))
+        if (OUT / 'product_logo_48.png').exists():
+            shutil.copy2(OUT / 'product_logo_48.png', stage / 'hivey-browser.png')
+        artifact = DIST / f'{name}.tar.xz'
+        run(['tar', '-C', DIST, '-cJf', artifact, name])
+        shutil.rmtree(stage)
+    sums = DIST / 'SHA256SUMS'
+    lines = [l for l in (sums.read_text().splitlines() if sums.exists() else []) if not l.endswith(artifact.name)]
+    lines.append(f'{sha256_file(artifact)}  {artifact.name}')
+    sums.write_text('\n'.join(sorted(lines, key=lambda l: l.split()[-1])) + '\n')
+    log(f'package: {artifact} ({artifact.stat().st_size // (1 << 20)} MiB)')
+    mark_done('package', artifact=artifact.name)
+
+
 def step_status(args):
-    state = load_state()
-    log(f'build dir: {BUILD}  (Chromium {chromium_version()})')
+    log(f'build dir: {BUILD}  (Chromium {chromium_version()}, target {TARGET})')
     for s in STEPS:
-        print(f"  {'✔' if state.get(s, {}).get('done') else '·'} {s}")
+        print(f"  {'✔' if is_done(s) else '·'} {s}")
 
 
 def main():
@@ -829,11 +984,12 @@ def main():
     fns = {s: globals()[f'step_{s}'] for s in STEPS + ['status']}
     if args.step == 'all':
         for s in STEPS:
-            if is_done(s) and s not in ('build', 'patch'):
+            if is_done(s) and s not in ('build', 'patch', 'package'):
                 continue
             fns[s](args)
     else:
-        if args.step in STEPS and is_done(args.step) and not args.force and args.step not in ('build', 'patch'):
+        if args.step in STEPS and is_done(args.step) and not args.force and \
+                args.step not in ('build', 'patch', 'package'):
             log(f'{args.step}: already done (use --force to re-run)')
             return
         fns[args.step](args)

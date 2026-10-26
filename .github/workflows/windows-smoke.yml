@@ -1,0 +1,105 @@
+# Installs a (draft) release on a Windows runner and checks it: no network
+# request at startup on a fresh profile, then the privacy checks over DevTools.
+#
+# On a pull request it tests the release built from the branch (the version
+# computed from the submodule and HIVEY_REVISION), if a draft or published
+# release of that version exists; scripts/autoupdate.py drafts it before
+# opening its pull request, so the check gates the merge. By hand: pass a tag.
+name: Windows smoke test
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to test (e.g. v156.0.8078.4701), draft or published
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: windows smoke
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      # Draft release assets are only visible with write access.
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Release to test
+        id: release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          $tag = $env:INPUT_TAG
+          if (-not $tag) {
+            $chromium = (Get-Content third_party/ungoogled-chromium/chromium_version.txt).Trim().Split('.')
+            $revision = [int](Get-Content HIVEY_REVISION).Trim()
+            $tag = "v$($chromium[0]).$($chromium[1]).$($chromium[2]).$([int]$chromium[3] * 100 + $revision)"
+          }
+          gh release view "$tag" --repo "$env:GITHUB_REPOSITORY" --json tagName *> $null
+          if ($LASTEXITCODE -ne 0) {
+            "No release $tag yet: nothing to install (scripts/release.py draft creates it)." | Out-File $env:GITHUB_STEP_SUMMARY -Append
+            "skip=true" | Out-File $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+          "tag=$tag" | Out-File $env:GITHUB_OUTPUT -Append
+          "skip=false" | Out-File $env:GITHUB_OUTPUT -Append
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.release.outputs.skip == 'false'
+        with:
+          python-version: "3.12"
+      - name: Test dependencies
+        if: steps.release.outputs.skip == 'false'
+        run: python -m pip install websocket-client==1.8.0
+      - name: Download the installer
+        if: steps.release.outputs.skip == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern "*-windows-x64-installer.exe" --dir dist
+      - name: Install (per user, silent)
+        if: steps.release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem dist -Filter *-windows-x64-installer.exe | Select-Object -First 1
+          Start-Process -FilePath $installer.FullName -ArgumentList '--do-not-launch-chrome' -Wait
+          $exe = "$env:LOCALAPPDATA\Hivey\Browser\Application\chrome.exe"
+          if (-not (Test-Path $exe)) { throw "not installed at $exe" }
+          (Get-Item $exe).VersionInfo | Format-List ProductName, ProductVersion, CompanyName
+          "BROWSER=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: No request at startup
+        if: steps.release.outputs.skip == 'false'
+        run: python tests/startup_requests.py "$env:BROWSER" --seconds 60 --keep out
+      - name: Privacy checks
+        if: steps.release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          $profile = Join-Path $env:RUNNER_TEMP 'cdp-profile'
+          $browser = Start-Process -FilePath $env:BROWSER -PassThru -ArgumentList @(
+            "--user-data-dir=$profile", '--remote-debugging-port=9222', '--no-first-run', 'about:blank')
+          Start-Sleep -Seconds 25
+          python tests/cdp_checks.py http://127.0.0.1:9222 --shots out/shots
+          $code = $LASTEXITCODE
+          Stop-Process -Id $browser.Id -Force -ErrorAction SilentlyContinue
+          exit $code
+      - name: Keep the evidence
+        if: always() && steps.release.outputs.skip == 'false'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-smoke-${{ steps.release.outputs.tag }}
+          path: out/
+          if-no-files-found: ignore

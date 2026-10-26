@@ -1,0 +1,437 @@
+# GX-style CPU limiter (Windows: hard CPU-rate cap per tab process, live) and browser-wide network limiter (shared throttling profile in the network service); Local State prefs hivey.cpu_limit_percent and hivey.network_limit_kbps.
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -841,6 +841,8 @@
+     "chrome_browser_interface_binders_webui.h",
+     "chrome_browser_interface_binders_webui_parts_features.cc",
+     "chrome_browser_main.cc",
++    "hivey/hivey_resource_limits.cc",
++    "hivey/hivey_resource_limits.h",
+     "chrome_content_browser_client.cc",
+     "chrome_content_browser_client_binder_policies.cc",
+     "chrome_content_browser_client_binder_policies.h",
+--- a/chrome/browser/chrome_browser_main.cc
++++ b/chrome/browser/chrome_browser_main.cc
+@@ -41,6 +41,7 @@
+ #include "chrome/browser/first_run/bookmark_importer.h"
+ #include "chrome/browser/first_run/first_run_features.h"
+ #include "chrome/browser/gpu/chrome_browser_main_extra_parts_gpu.h"
++#include "chrome/browser/hivey/hivey_resource_limits.h"
+ #include "chrome/browser/language/url_language_histogram_factory.h"
+ #include "chrome/browser/lifetime/browser_shutdown.h"
+ #include "chrome/browser/media/router/chrome_media_router_factory.h"
+@@ -842,6 +843,12 @@
+ 
+   main_parts->AddParts(std::make_unique<ChromeBrowserMainExtraPartsMemory>());
+ 
++#if !BUILDFLAG(IS_ANDROID)
++  // Hivey: CPU and network limiters.
++  main_parts->AddParts(
++      std::make_unique<hivey::ChromeBrowserMainExtraPartsHivey>());
++#endif
++
+   chrome::AddMetricsExtraParts(main_parts.get());
+ 
+   main_parts->AddParts(
+--- a/chrome/browser/hivey/hivey_resource_limits.cc
++++ b/chrome/browser/hivey/hivey_resource_limits.cc
+@@ -0,0 +1,195 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/hivey/hivey_resource_limits.h"
++
++#include <utility>
++#include <vector>
++
++#include "base/functional/bind.h"
++#include "base/logging.h"
++#include "base/time/time.h"
++#include "chrome/browser/browser_process.h"
++#include "chrome/browser/net/system_network_context_manager.h"
++#include "components/prefs/pref_registry_simple.h"
++#include "components/prefs/pref_service.h"
++#include "content/public/browser/child_process_termination_info.h"
++#include "content/public/browser/render_process_host.h"
++#include "services/network/public/cpp/hivey_throttling.h"
++#include "services/network/public/mojom/network_context.mojom.h"
++
++#if BUILDFLAG(IS_WIN)
++#include <windows.h>
++#endif
++
++namespace hivey {
++
++namespace {
++
++// Identifies the browser as the client that set the limiter's conditions.
++base::UnguessableToken NetworkLimitClientId() {
++  return base::UnguessableToken::Deserialize(0x4869766579436c69ull,
++                                             0x656e740000000001ull)
++      .value();
++}
++
++#if BUILDFLAG(IS_WIN)
++int CpuLimitPercent() {
++  PrefService* local_state = g_browser_process->local_state();
++  return local_state ? local_state->GetInteger(kCpuLimitPercent) : 0;
++}
++
++// Sets (percent > 0) or removes the hard CPU-rate cap of a job object.
++// CpuRate is in hundredths of a percent of all the machine's processors.
++bool SetJobCpuRate(HANDLE job, int percent) {
++  JOBOBJECT_CPU_RATE_CONTROL_INFORMATION info = {};
++  if (percent > 0) {
++    info.ControlFlags =
++        JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
++    info.CpuRate = static_cast<DWORD>(percent) * 100;
++  }
++  return ::SetInformationJobObject(job, JobObjectCpuRateControlInformation,
++                                   &info, sizeof(info));
++}
++#endif
++
++}  // namespace
++
++void RegisterResourceLimitsPrefs(PrefRegistrySimple* registry) {
++  registry->RegisterIntegerPref(kCpuLimitPercent, 0);
++  registry->RegisterIntegerPref(kNetworkLimitKbps, 0);
++}
++
++bool IsCpuLimiterSupported() {
++#if BUILDFLAG(IS_WIN)
++  return true;
++#else
++  return false;
++#endif
++}
++
++void ApplyNetworkLimit() {
++  PrefService* local_state = g_browser_process->local_state();
++  SystemNetworkContextManager* manager =
++      g_browser_process->system_network_context_manager();
++  if (!local_state || !manager) {
++    return;
++  }
++  const int kbps = local_state->GetInteger(kNetworkLimitKbps);
++  std::vector<network::mojom::MatchedNetworkConditionsPtr> conditions;
++  if (kbps > 0) {
++    auto limit = network::mojom::NetworkConditions::New();
++    limit->latency = base::TimeDelta();
++    // Bytes per second, shared by downloads and uploads of every tab.
++    limit->download_throughput = kbps * 1000.0 / 8;
++    limit->upload_throughput = limit->download_throughput;
++    // An empty pattern matches every URL.
++    conditions.push_back(network::mojom::MatchedNetworkConditions::New(
++        std::string(), std::move(limit)));
++  }
++  // No conditions removes the limit.
++  manager->GetContext()->SetNetworkConditions(
++      network::HiveyGlobalThrottlingProfileId(), NetworkLimitClientId(),
++      std::move(conditions));
++}
++
++ResourceLimits::ResourceLimits() {
++  if (PrefService* local_state = g_browser_process->local_state()) {
++    local_state_registrar_.Init(local_state);
++    local_state_registrar_.Add(
++        kCpuLimitPercent, base::BindRepeating(&ResourceLimits::OnCpuLimitChanged,
++                                              base::Unretained(this)));
++    local_state_registrar_.Add(kNetworkLimitKbps,
++                               base::BindRepeating(&ApplyNetworkLimit));
++  }
++  ApplyNetworkLimit();
++  // Tabs opened before this point (session restore) get the CPU limit too.
++  for (auto it = content::RenderProcessHost::AllHostsIterator(); !it.IsAtEnd();
++       it.Advance()) {
++    OnRenderProcessHostCreated(it.GetCurrentValue());
++    if (it.GetCurrentValue()->IsReady()) {
++      ApplyCpuLimit(it.GetCurrentValue());
++    }
++  }
++}
++
++ResourceLimits::~ResourceLimits() = default;
++
++void ResourceLimits::OnRenderProcessHostCreated(
++    content::RenderProcessHost* host) {
++  if (!observed_hosts_.IsObservingSource(host)) {
++    observed_hosts_.AddObservation(host);
++  }
++}
++
++void ResourceLimits::RenderProcessReady(content::RenderProcessHost* host) {
++  ApplyCpuLimit(host);
++}
++
++void ResourceLimits::RenderProcessExited(
++    content::RenderProcessHost* host,
++    const content::ChildProcessTerminationInfo& info) {
++#if BUILDFLAG(IS_WIN)
++  jobs_.erase(host->GetDeprecatedID());
++#endif
++}
++
++void ResourceLimits::RenderProcessHostDestroyed(
++    content::RenderProcessHost* host) {
++#if BUILDFLAG(IS_WIN)
++  jobs_.erase(host->GetDeprecatedID());
++#endif
++  observed_hosts_.RemoveObservation(host);
++}
++
++void ResourceLimits::OnCpuLimitChanged() {
++  for (auto it = content::RenderProcessHost::AllHostsIterator(); !it.IsAtEnd();
++       it.Advance()) {
++    if (it.GetCurrentValue()->IsReady()) {
++      ApplyCpuLimit(it.GetCurrentValue());
++    }
++  }
++}
++
++void ResourceLimits::ApplyCpuLimit(content::RenderProcessHost* host) {
++#if BUILDFLAG(IS_WIN)
++  const int percent = CpuLimitPercent();
++  auto it = jobs_.find(host->GetDeprecatedID());
++  if (it == jobs_.end()) {
++    if (percent <= 0) {
++      return;
++    }
++    const base::Process& process = host->GetProcess();
++    if (!process.IsValid()) {
++      return;
++    }
++    // A new, empty job can take a process that is already in a job (its
++    // sandbox job): it becomes nested in it (Windows 8 and later).
++    base::win::ScopedHandle job(::CreateJobObject(nullptr, nullptr));
++    if (!job.is_valid() || !::AssignProcessToJobObject(job.get(), process.Handle())) {
++      PLOG(WARNING) << "Hivey CPU limiter: cannot cap renderer process";
++      return;
++    }
++    it = jobs_.emplace(host->GetDeprecatedID(), std::move(job)).first;
++  }
++  if (!SetJobCpuRate(it->second.get(), percent)) {
++    PLOG(WARNING) << "Hivey CPU limiter: cannot set the CPU rate";
++  }
++#endif
++}
++
++ChromeBrowserMainExtraPartsHivey::ChromeBrowserMainExtraPartsHivey() = default;
++
++ChromeBrowserMainExtraPartsHivey::~ChromeBrowserMainExtraPartsHivey() =
++    default;
++
++void ChromeBrowserMainExtraPartsHivey::PostBrowserStart() {
++  resource_limits_ = std::make_unique<ResourceLimits>();
++}
++
++void ChromeBrowserMainExtraPartsHivey::PostMainMessageLoopRun() {
++  resource_limits_.reset();
++}
++
++}  // namespace hivey
+--- a/chrome/browser/hivey/hivey_resource_limits.h
++++ b/chrome/browser/hivey/hivey_resource_limits.h
+@@ -0,0 +1,100 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_HIVEY_RESOURCE_LIMITS_H_
++#define CHROME_BROWSER_HIVEY_HIVEY_RESOURCE_LIMITS_H_
++
++#include <map>
++#include <memory>
++
++#include "base/scoped_multi_source_observation.h"
++#include "base/unguessable_token.h"
++#include "build/build_config.h"
++#include "chrome/browser/chrome_browser_main_extra_parts.h"
++#include "components/prefs/pref_change_registrar.h"
++#include "content/public/browser/render_process_host_creation_observer.h"
++#include "content/public/browser/render_process_host_observer.h"
++
++#if BUILDFLAG(IS_WIN)
++#include "base/win/scoped_handle.h"
++#endif
++
++class PrefRegistrySimple;
++
++namespace hivey {
++
++// Local State prefs of the resource limiters (Hivey Studio > Resources).
++// CPU limit of each tab process, in percent of the whole machine (0 = off).
++inline constexpr char kCpuLimitPercent[] = "hivey.cpu_limit_percent";
++// Browser-wide network bandwidth limit, in kilobits per second (0 = off).
++inline constexpr char kNetworkLimitKbps[] = "hivey.network_limit_kbps";
++
++void RegisterResourceLimitsPrefs(PrefRegistrySimple* registry);
++
++// Whether this platform supports the CPU limiter (Windows: job objects).
++bool IsCpuLimiterSupported();
++
++// Applies the network limit from Local State to the network service. Called
++// when the pref changes and after the network service (re)starts.
++void ApplyNetworkLimit();
++
++// Hivey's GX-style resource limiters. The RAM limiter is a performance
++// manager policy (hivey_memory_limit_policy); this applies the other two:
++//  - CPU: each renderer (tab) process gets its own Windows job object with a
++//    hard CPU-rate cap, nested in its sandbox job. Changes apply live.
++//  - Network: one throttling profile in the network service shared by every
++//    request, see network::HiveyGlobalThrottlingProfileId().
++class ResourceLimits : public content::RenderProcessHostCreationObserver,
++                       public content::RenderProcessHostObserver {
++ public:
++  ResourceLimits();
++  ResourceLimits(const ResourceLimits&) = delete;
++  ResourceLimits& operator=(const ResourceLimits&) = delete;
++  ~ResourceLimits() override;
++
++  // content::RenderProcessHostCreationObserver:
++  void OnRenderProcessHostCreated(content::RenderProcessHost* host) override;
++
++  // content::RenderProcessHostObserver:
++  void RenderProcessReady(content::RenderProcessHost* host) override;
++  void RenderProcessExited(
++      content::RenderProcessHost* host,
++      const content::ChildProcessTerminationInfo& info) override;
++  void RenderProcessHostDestroyed(content::RenderProcessHost* host) override;
++
++ private:
++  void OnCpuLimitChanged();
++  void ApplyCpuLimit(content::RenderProcessHost* host);
++
++  PrefChangeRegistrar local_state_registrar_;
++  base::ScopedMultiSourceObservation<content::RenderProcessHost,
++                                     content::RenderProcessHostObserver>
++      observed_hosts_{this};
++#if BUILDFLAG(IS_WIN)
++  // Job object of each capped renderer, by RenderProcessHost ID.
++  std::map<int, base::win::ScopedHandle> jobs_;
++#endif
++};
++
++// Owns ResourceLimits for the lifetime of the browser's main loop.
++class ChromeBrowserMainExtraPartsHivey : public ChromeBrowserMainExtraParts {
++ public:
++  ChromeBrowserMainExtraPartsHivey();
++  ChromeBrowserMainExtraPartsHivey(const ChromeBrowserMainExtraPartsHivey&) =
++      delete;
++  ChromeBrowserMainExtraPartsHivey& operator=(
++      const ChromeBrowserMainExtraPartsHivey&) = delete;
++  ~ChromeBrowserMainExtraPartsHivey() override;
++
++  // ChromeBrowserMainExtraParts:
++  void PostBrowserStart() override;
++  void PostMainMessageLoopRun() override;
++
++ private:
++  std::unique_ptr<ResourceLimits> resource_limits_;
++};
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_HIVEY_HIVEY_RESOURCE_LIMITS_H_
+--- a/chrome/browser/net/system_network_context_manager.cc
++++ b/chrome/browser/net/system_network_context_manager.cc
+@@ -4,6 +4,11 @@
+ 
+ #include "chrome/browser/net/system_network_context_manager.h"
+ 
++#if !BUILDFLAG(IS_ANDROID)
++#include "base/task/sequenced_task_runner.h"
++#include "chrome/browser/hivey/hivey_resource_limits.h"
++#endif
++
+ #include <algorithm>
+ #include <unordered_map>
+ #include <utility>
+@@ -822,6 +827,13 @@
+   // (See crbug.com/40721586 for a motivating example and investigation.)
+   url_loader_factory_.reset();
+ 
++#if !BUILDFLAG(IS_ANDROID)
++  // Hivey: a restarted network service has lost the network limiter's
++  // conditions; set them again once the system context is back.
++  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
++      FROM_HERE, base::BindOnce(&hivey::ApplyNetworkLimit));
++#endif
++
+   // Disable QUIC globally, if needed.
+   if (!is_quic_allowed_) {
+     network_service->DisableQuic();
+--- a/chrome/browser/prefs/browser_prefs.cc
++++ b/chrome/browser/prefs/browser_prefs.cc
+@@ -24,6 +24,9 @@
+ #include "chrome/browser/accessibility/page_colors_controller.h"
+ #include "chrome/browser/accessibility/prefers_default_scrollbar_styles_prefs.h"
+ #include "chrome/browser/browser_process_impl.h"
++#if !BUILDFLAG(IS_ANDROID)
++#include "chrome/browser/hivey/hivey_resource_limits.h"
++#endif
+ #include "chrome/browser/chrome_content_browser_client.h"
+ #include "chrome/browser/component_updater/component_updater_prefs.h"
+ #include "chrome/browser/context_hub/prefs.h"
+@@ -1531,6 +1534,9 @@
+   browser_shutdown::RegisterPrefs(registry);
+   BrowserProcessImpl::RegisterPrefs(registry);
+   ChromeContentBrowserClient::RegisterLocalStatePrefs(registry);
++#if !BUILDFLAG(IS_ANDROID)
++  hivey::RegisterResourceLimitsPrefs(registry);
++#endif
+ #if BUILDFLAG(CHROME_FOR_TESTING)
+   chrome_for_testing::RegisterPrefs(registry);
+ #endif
+--- a/services/network/public/cpp/hivey_throttling.h
++++ b/services/network/public/cpp/hivey_throttling.h
+@@ -0,0 +1,24 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef SERVICES_NETWORK_PUBLIC_CPP_HIVEY_THROTTLING_H_
++#define SERVICES_NETWORK_PUBLIC_CPP_HIVEY_THROTTLING_H_
++
++#include "base/unguessable_token.h"
++
++namespace network {
++
++// Hivey: throttling profile of the browser-wide network limiter. Requests
++// that DevTools does not throttle use the conditions set for this profile
++// (NetworkContext::SetNetworkConditions), so one bandwidth budget is shared
++// by every tab and download.
++inline base::UnguessableToken HiveyGlobalThrottlingProfileId() {
++  return base::UnguessableToken::Deserialize(0x48697665794e6574ull,
++                                             0x4c696d6974657221ull)
++      .value();
++}
++
++}  // namespace network
++
++#endif  // SERVICES_NETWORK_PUBLIC_CPP_HIVEY_THROTTLING_H_
+--- a/services/network/throttling/throttling_controller.cc
++++ b/services/network/throttling/throttling_controller.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "services/network/throttling/throttling_controller.h"
+ 
++#include "services/network/public/cpp/hivey_throttling.h"
++
+ #include <algorithm>
+ #include <memory>
+ 
+@@ -291,7 +293,11 @@
+   auto source_profile_map_it =
+       net_log_source_profile_map_.find(net_log_source_id);
+   if (source_profile_map_it == net_log_source_profile_map_.end()) {
+-    return nullptr;
++    // Hivey: requests that DevTools does not throttle follow the browser-wide
++    // network limiter, when one is set.
++    auto global = interceptors_.find(HiveyGlobalThrottlingProfileId());
++    return global != interceptors_.end() ? global->second.FindInterceptor(url)
++                                         : nullptr;
+   }
+   auto it = interceptors_.find(source_profile_map_it->second);
+   return it != interceptors_.end() ? it->second.FindInterceptor(url) : nullptr;

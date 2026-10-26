@@ -1,5 +1,6 @@
 # Hivey Browser patches, applied after ungoogled-chromium and ungoogled-chromium-windows.
 hivey/build/thin-lto-jobs-arg.patch
+hivey/build/thin-lto-jobs-linux.patch
 hivey/privacy/fingerprinting-noise-on-by-default.patch
 hivey/privacy/hardened-defaults.patch
 hivey/customization/hivey-default-theme.patch
@@ -8,7 +9,18 @@ hivey/privacy/webgl-gpu-info-hidden.patch
 hivey/resources/memory-saver-on.patch
 hivey/resources/ram-limiter.patch
 hivey/customization/fluent-overlay-scrollbars.patch
-hivey/privacy/builtin-adblock.patch
 hivey/privacy/duckduckgo-default-search.patch
 hivey/resources/ram-limiter-settings.patch
 hivey/build/installer-7zip-on-linux.patch
+hivey/build/linux-command-ids.patch
+hivey/privacy/referrer-cap-no-ad-apis.patch
+hivey/privacy/fingerprinting-audio-cpu.patch
+hivey/privacy/bundled-content-blocker.patch
+hivey/customization/compact-mode.patch
+hivey/resources/cpu-network-limiters.patch
+hivey/customization/hivey-studio.patch
+hivey/build/hivey-updater.patch
+hivey/privacy/font-fingerprinting.patch
+hivey/customization/hivey-studio-more.patch
+hivey/privacy/font-fingerprinting-fallback.patch
+hivey/build/installer-snapshot-blob-dep.patch
