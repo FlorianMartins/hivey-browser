@@ -1,21 +1,23 @@
 # Building Hivey Browser
 
 This guide builds Windows x64 binaries (`chrome.exe` and the
-`mini_installer.exe` installer) **on a Linux host**. No Windows machine or
-Visual Studio installation is needed.
+`mini_installer.exe` installer) and Linux x64 binaries **on a Linux host**,
+from one patched source tree. No Windows machine or Visual Studio
+installation is needed.
 
 ## Prerequisites
 
 | What | Why |
 | --- | --- |
 | Linux x86_64 (tested on Ubuntu 24.04) | build host |
-| ~120 GB free disk, 32 GB RAM | source (11 GB) + build output |
+| ~150 GB free disk, 32 GB RAM | source (11 GB) + Windows and Linux build output |
 | `python3` ≥ 3.12, `git`, `curl`, `xz` | scripts and downloads |
 | `msitools` (`msiextract`, `msiinfo`) | unpack two Windows SDK MSIs |
 | `7zip` (or `p7zip-full`) | pack the installer archive |
-| `pkg-config` | configure the Linux host tools (blocker ruleset converter) |
+| `openssl` | sign the bundled extension and the update manifest |
+| `xvfb`, Python `websocket-client` (optional) | run the tests on the Linux build |
 | Python `cairosvg`, `Pillow` | render the icons |
-| [`xwin`](https://github.com/Jake-Shadle/xwin) (`cargo install --locked xwin`) | MSVC CRT + Windows SDK |
+| [`xwin`](https://github.com/Jake-Shadle/xwin) ≥ 0.10 (release binary, or `cargo install --locked xwin` with a recent Rust) | MSVC CRT + Windows SDK |
 | `libfuse2` (Ubuntu: `libfuse2t64`) | case-insensitive mount of the Windows toolchain (ciopfs) |
 | `systemd-run` (optional) | memory-capped build |
 
@@ -25,12 +27,15 @@ Accepting the Microsoft license is required for the MSVC/SDK download: set
 ## One command
 
 ```bash
-python3 scripts/hb.py all
+python3 scripts/hb.py all                                   # Windows (HB_TARGET=win, the default)
+HB_TARGET=linux python3 scripts/hb.py configure build package  # Linux, same tree
 ```
 
 `all` runs every step below in order and skips the ones already done
 (stamps live in `$HB_BUILD_DIR/.hb-state.json`). `hb.py status` shows
 progress. Any single step can be re-run with `hb.py <step> --force`.
+`configure`, `build` and `package` are done once per target: Windows builds
+in `out/Default`, Linux in `out/Linux`.
 
 ## Steps
 
@@ -41,14 +46,38 @@ progress. Any single step can be re-run with `hb.py <step> --force`.
 | `prune` | Deletes prebuilt binaries listed by ungoogled-chromium, except the precompiled MIDL/MC outputs in `win_build_output/` (type libraries and message tables generated from the tree's `.idl`/`.mc` files): Linux has no `midl.exe`/`mc.exe`, so a cross-build needs them. |
 | `toolchain` | Fetches **build-only** tools (never shipped): Chromium's pinned clang + Windows runtime, Rust, the Linux sysroot, `rc`, Node, ninja, gn (built from source), the Windows PGO profile, Windows-only sources missing from the lite tarball, and the MSVC CRT + Windows SDK. Must run before `domsub`. |
 | `patch` | Applies ungoogled-chromium's patches, the product patches of ungoogled-chromium-windows, then `patches/series`. |
-| `brand` | Applies `brand/brand.json` (see below). |
-| `adblock` | Builds Chromium's `ruleset_converter` for the Linux host (`out/HostTools`), downloads EasyList and EasyPrivacy, converts them into the blocker ruleset embedded in `resources.pak`. Re-run with `--force` to refresh the lists. |
+| `brand` | Applies `brand/brand.json` (see below) and writes the version with the Hivey revision (`HIVEY_REVISION`, see [RELEASES.md](RELEASES.md)). |
+| `bundle` | Downloads uBlock Origin Lite (`extensions/bundled.json`, sha256-pinned), turns on the extra rulesets listed there, packs it as a signed `.crx`, and generates the headers with its extension ID and with the public key of the update signature. |
 | `domsub` | ungoogled-chromium's domain substitution. |
-| `configure` | Writes `out/Default/args.gn` and runs `gn gen`. |
-| `build` | `ninja chrome mini_installer`. |
+| `configure` | Writes `out/<target>/args.gn` (ungoogled flags, then `flags.hivey.gn`, then `flags.hivey.<target>.gn`) and runs `gn gen`. |
+| `build` | Copies the bundled `.crx` next to the browser, then `ninja chrome mini_installer` (Windows) or `ninja chrome` (Linux). |
+| `package` | `$HB_BUILD_DIR/dist`: the Windows installer, or a portable Linux `.tar.xz` (browser, launcher, `.desktop` entry, icon); `SHA256SUMS`. |
 
-Outputs: `$HB_BUILD_DIR/src/out/Default/chrome.exe` and
-`mini_installer.exe`.
+The `bundle` step creates two private keys the first time (see
+[RELEASES.md](RELEASES.md#keys)); keep them, they decide the bundled
+extension's ID and which updates installed browsers accept.
+
+## Checking patches without a build
+
+```bash
+python3 scripts/patchcheck.py $HB_BUILD_DIR/download_cache/chromium-<version>-lite.tar.xz /tmp/tree
+```
+
+applies the whole stack to the files it touches, extracted from the source
+tarball, in a few minutes. Hivey patches must apply without fuzz.
+`--refresh` rewrites the Hivey patches that only moved. CI runs it on every
+change to the patches or submodules. `/tmp/tree` then holds the files as the
+build tree has them before branding: copy them to write a new patch with
+`scripts/mkpatch.py`.
+
+## Tests
+
+```bash
+xvfb-run -a python3 tests/startup_requests.py out/Linux/chrome      # no request at startup
+python3 tests/cdp_checks.py http://127.0.0.1:9222 --shots shots/      # privacy checks
+```
+
+See [tests/README.md](../tests/README.md).
 
 ## Where every Windows piece comes from
 
@@ -96,9 +125,9 @@ The build host may also run production services. By default:
   `MemoryMax=26G`, `CPUWeight=10`, `IOWeight=10` (`HB_MEM_MAX` to change,
   `none` to disable). If a link outgrows the cap, the kernel kills the build,
   never another service;
-- ThinLTO links use 4 threads instead of all hardware threads
-  (`hivey_thin_lto_jobs` in `flags.hivey.gn`, added by
-  `patches/hivey/build/thin-lto-jobs-arg.patch`).
+- ThinLTO links use 4 threads instead of all hardware threads, on Windows
+  and Linux (`hivey_thin_lto_jobs` in `flags.hivey.gn`, added by
+  `patches/hivey/build/thin-lto-jobs-*.patch`).
 
 `--full-priority` disables the priority changes.
 
@@ -124,3 +153,7 @@ Domain substitution and branding rewrite files in place, so a hardlinked copy
 of the tree is not a snapshot. To get a pristine tree, delete
 `$HB_BUILD_DIR/src` and `.hb-state.json` (keep `download_cache/`, `tools/`,
 `winsysroot/`, `xwin-cache/`) and run `hb.py all` again.
+
+New Hivey patches can be added to an existing tree (`hb.py patch` applies
+the ones not applied yet), but not while ninja runs: a new source file is
+not in the running build's graph, and its final link would fail.
