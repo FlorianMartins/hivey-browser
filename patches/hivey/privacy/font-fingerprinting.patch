@@ -225,7 +225,7 @@
 +
 +// static
 +bool HiveyFontAllowlist::AppliesTo(const KURL& url) {
-+  return Enabled() && url.ProtocolIsInHTTPFamily();
++  return Enabled() && url.ProtocolIsInHttpFamily();
 +}
 +
 +// static
