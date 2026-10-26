@@ -40,7 +40,7 @@
      browserProcess: 'Navigateur',
 --- a/chrome/browser/resources/hivey_studio/studio.css
 +++ b/chrome/browser/resources/hivey_studio/studio.css
-@@ -965,3 +965,51 @@
+@@ -965,3 +965,60 @@
      transition: none !important;
    }
  }
@@ -68,8 +68,17 @@
 +  font-size: 17px;
 +}
 +
++body.in-bubble .gauges {
++  grid-template-columns: repeat(3, minmax(0, 1fr));
++  gap: 10px;
++}
++
 +body.in-bubble .gauge {
 +  padding: 12px 8px 10px;
++}
++
++body.in-bubble .gauge-sub {
++  display: none;
 +}
 +
 +body.in-bubble .gauge-ring {

@@ -236,11 +236,13 @@ try:
       return h ? {{access: h.hostAccess, granted: h.hosts.filter(x => x.granted).map(x => x.host)}} : null; }})""")
     check('Hivey AI site access on click', isinstance(access, dict) and access['access'] != 'ON_ALL_SITES' and
           any('api.anthropic.com' in host for host in access['granted']), f'runtime host permissions: {access}')
-    # The security tools' popup.
+    # The security tools (opened in a tab, the popup has no site to check:
+    # ask its module for a site instead).
     p.goto(f'chrome-extension://{CYBER_ID}/popup.html', settle=1.5)
-    tools = p.eval("document.querySelectorAll('.tool').length")
-    check('Hivey Cyber tools', isinstance(tools, int) and tools >= 10, f'{tools} tools in the popup')
-    p.shot('hivey-cyber')
+    tools = p.eval("""import('./tools.js').then(async m => ({count: m.TOOLS.length,
+      whois: await m.toolUrl(m.TOOLS.find(x => x.id === 'whois'), m.target('https://example.com/path'))}))""")
+    check('Hivey Cyber tools', isinstance(tools, dict) and tools['count'] >= 10 and
+          'example.com' in str(tools['whois']), f'{tools}')
     p.goto('chrome://hivey/', settle=3)
     nav = p.eval("document.querySelectorAll('.nav-item').length")
     check('Hivey Studio loads', nav == 6, f'{nav} sections in the navigation')
@@ -283,7 +285,8 @@ try:
 
     # Live refresh: a setting changed elsewhere (here, from another tab)
     # shows up at once in an open Hivey Studio.
-    p.goto('chrome://hivey/#tabs', settle=2)
+    p.goto('about:blank', settle=0.5)
+    p.goto('chrome://hivey/#layout', settle=2)
     switches = "document.querySelectorAll('.switch-input').length"
     before = p.eval(switches)
     other = Page()
@@ -292,12 +295,14 @@ try:
     time.sleep(2)
     after = p.eval(switches)
     vertical = p.eval(STUDIO_STATE + ".then(s => s.prefs['vertical_tabs.enabled'])")
-    p.shot('hivey-studio-vertical-tabs')
-    other.eval("chrome.send('setPref', ['vertical_tabs.enabled', false])")
-    time.sleep(1)
     other.close()
+    urllib.request.urlopen(f'{BASE}/json/activate/{p.id}')  # a background tab draws no frames
+    time.sleep(1)
+    p.shot('hivey-studio-vertical-tabs')
+    p.eval("chrome.send('setPref', ['vertical_tabs.enabled', false])")
+    time.sleep(1)
     check('Hivey Studio refreshes live', vertical is True and isinstance(before, int) and after == before + 1,
-          f'vertical tabs on from another tab: {before} -> {after} switches (hover option shown)')
+          f'vertical tabs {vertical} from another tab: {before} -> {after} switches (hover option shown)')
 
     # Hivey Studio, end to end: a preset changes the browser color (handler
     # and ThemeService), and the network limiter slows a download down.
