@@ -71,6 +71,17 @@ page cannot reach it on its own:
   Hivey Studio > Privacy shows its status and links to its site access;
   `chrome://extensions` turns it off.
 
+## Server country in the location bar
+
+The chip next to the address shows the country of the server the page came
+from, its IP address and the connection. The country comes from an
+IP-to-country database shipped with the browser
+([IP to Country Lite by DB-IP](https://db-ip.com), CC BY 4.0, refreshed with
+each build): **the lookup never leaves the machine**, unlike add-ons that ask
+an online service for every page. Behind a proxy or a VPN, the chip says
+"via proxy" once the page has loaded (until then it may show the proxy's
+country). The WHOIS and IP details links only open when you click them.
+
 ## Hivey Cyber: security tools
 
 The shield-and-magnifier icon in the toolbar, and the right-click menu on a

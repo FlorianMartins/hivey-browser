@@ -48,6 +48,24 @@ status, checks on demand, and turns automatic updates off.
   Privacy. *Hardened mode* (same place) turns the JavaScript optimizer off
   everywhere: slower pages, much less to attack.
 
+## The Hivey bar
+
+A column at the edge of the window gathers Hivey's tools: the workspaces of
+**Hivey Tools** (chat, web chats, agent, translation, text improvement,
+images, PDF, security, Wisebase, benchmark, MCP), which open in the side
+panel, then **Hivey Cyber**, **Hivey Shield**, **Resources** and **Hivey
+Studio**. It sits on the right, or on the left with vertical tabs.
+Right-click it to move it or hide it; right-click the tab strip (or use Hivey
+Studio > Layout) to show it again. The same tab strip menu puts vertical tabs
+on the left or the right.
+
+## Server info
+
+The chip in the address bar shows the country of the site's server (flag and
+code; the code only on Windows). Click it for the IP address, the country and
+the connection, and WHOIS or IP details links. The lookup uses a database
+shipped with the browser: nothing is sent anywhere.
+
 ## Hivey AI
 
 The Hivey AI icon in the toolbar opens the **Hivey AI sidebar**. Add your API
@@ -67,8 +85,8 @@ VirusTotal or Have I Been Pwned.
 
 | Section | What you can do |
 | --- | --- |
-| Colors | A **theme** (Aura, Amber night, Daylight, or Chrome's Material colors), then **a color for every part of the browser**: window frame, toolbar, tabs, address bar, icons, accent, menus, panels, pages. The **eyedropper** picks a color anywhere on the screen, also outside the browser. The window icon takes the accent color. Also: palette style, light/dark/system mode, grayscale, Incognito windows. |
-| Layout | **Vertical tabs** (they can expand on hover, off by default), **compact mode** (a lower toolbar and tab strip), side panel left or right, Home and Forward buttons, bookmarks bar, tab search button, profile button, extensions menu, toolbar buttons, a **custom new tab page**, fonts and default zoom. |
+| Colors | A **theme** (Aura, Midnight, Ocean, Forest, Rose, Amber night, Daylight, or Material, whose card opens a color picker for its seed color), then **a color for every part of the browser**: window frame, toolbar, tabs, address bar, icons, accent, menus, panels, pages. The **eyedropper** picks a color anywhere on the screen, also outside the browser. The window icon and the taskbar or dock icon take the accent color. Choosing a theme replaces your own colors. Also: palette style, light/dark/system mode, grayscale, Incognito windows. |
+| Layout | The **Hivey bar** (shown or hidden, left, right or automatic), **vertical tabs** on the left or right (they can expand on hover, off by default), **compact mode** (a lower toolbar and tab strip), side panel left or right, Home and Forward buttons, bookmarks bar, tab search button, profile button, extensions menu, toolbar buttons, a **custom new tab page**, fonts and default zoom. |
 | Tabs & behaviour | Ctrl+Tab in recently-used order, the mouse wheel over the tab strip, keep the window open when closing its last tab, hide tab close buttons, pop-ups as tabs, tab previews, ask before closing. |
 | Resources | Live CPU, memory and network gauges; the **hot tabs** (show or close them); the **RAM limiter** (background tabs go to sleep above the limit), the **CPU limiter** (Windows: a hard cap per tab) and the **network limiter** (bandwidth for the whole browser, downloads included). |
 | Privacy & security | Hivey Shield and Hivey AI status, anti-fingerprinting, secure connections, clear data on exit, device blocking, hardened mode, secure DNS and cookie settings. |
