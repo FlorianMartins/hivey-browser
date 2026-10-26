@@ -63,7 +63,7 @@ jobs:
           python-version: "3.12"
       - name: Test dependencies
         if: steps.release.outputs.skip == 'false'
-        run: python -m pip install websocket-client==1.8.0
+        run: python -m pip install websocket-client==1.8.0 pillow==11.3.0
       - name: Download the installer
         if: steps.release.outputs.skip == 'false'
         shell: pwsh
@@ -96,6 +96,9 @@ jobs:
           $code = $LASTEXITCODE
           Stop-Process -Id $browser.Id -Force -ErrorAction SilentlyContinue
           exit $code
+      - name: UI screenshots (themes, vertical tabs, Hivey bar)
+        if: steps.release.outputs.skip == 'false'
+        run: python tests/ui_shots.py "$env:BROWSER" out/ui
       - name: Keep the evidence
         if: always() && steps.release.outputs.skip == 'false'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
