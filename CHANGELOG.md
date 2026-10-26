@@ -6,9 +6,12 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
 ## 156.0.8078.4702 — 26 octobre 2026
 
 ### Hivey AI intégré
-- La **sidebar Hivey AI** est livrée avec le navigateur (son icône dans la barre
-  d'outils) : votre clé API ou un modèle local, aucun serveur Hivey entre
-  vous et le fournisseur.
+- La **sidebar Hivey AI** (version 2.201.298) est livrée avec le navigateur
+  (son icône dans la barre d'outils) : votre clé API ou un modèle local,
+  aucun serveur Hivey entre vous et le fournisseur.
+- Ses **mises à jour arrivent automatiquement** : chaque nouvelle version
+  validée de la sidebar est intégrée, testée et publiée dans le navigateur
+  dans la foulée.
 - **Pas une passoire** : elle ne lit une page que si vous l'ouvrez sur cet
   onglet. Une page piégée ne peut pas la piloter (injection de prompt).
 
