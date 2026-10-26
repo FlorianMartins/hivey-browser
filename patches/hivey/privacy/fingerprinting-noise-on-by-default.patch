@@ -33,7 +33,7 @@
  
 --- a/content/browser/renderer_host/render_process_host_impl.cc
 +++ b/content/browser/renderer_host/render_process_host_impl.cc
-@@ -3926,6 +3926,7 @@
+@@ -3938,6 +3938,7 @@
        switches::kFingerprintingClientRectsNoise,
        switches::kFingerprintingCanvasMeasureTextNoise,
        switches::kFingerprintingCanvasImageDataNoise,
@@ -43,7 +43,7 @@
        switches::kForceHighContrast,
 --- a/content/child/runtime_features.cc
 +++ b/content/child/runtime_features.cc
-@@ -416,6 +416,12 @@
+@@ -380,6 +380,12 @@
         switches::kFingerprintingCanvasMeasureTextNoise, true},
        {wrf::EnableFingerprintingCanvasImageDataNoise,
         switches::kFingerprintingCanvasImageDataNoise, true},
@@ -55,10 +55,10 @@
 +       switches::kDisableFingerprintingNoise, false},
    };
  
-   for (const auto& mapping : switchToFeatureMapping) {
+   for (const auto& mapping : switch_to_feature_mapping) {
 --- a/third_party/blink/renderer/platform/runtime_enabled_features.json5
 +++ b/third_party/blink/renderer/platform/runtime_enabled_features.json5
-@@ -3061,12 +3061,18 @@
+@@ -3144,12 +3144,18 @@
      },
      {
        name: "FingerprintingClientRectsNoise",

@@ -1,7 +1,7 @@
 # Hardened defaults: Global Privacy Control on, HTTPS-Only (strict) mode on.
 --- a/chrome/browser/ui/browser_ui_prefs.cc
 +++ b/chrome/browser/ui/browser_ui_prefs.cc
-@@ -221,7 +221,8 @@
+@@ -225,7 +225,8 @@
  #endif
  
    registry->RegisterBooleanPref(
@@ -13,7 +13,7 @@
        prefs::kHttpsFirstBalancedMode, false,
 --- a/third_party/blink/renderer/platform/runtime_enabled_features.json5
 +++ b/third_party/blink/renderer/platform/runtime_enabled_features.json5
-@@ -3397,6 +3397,9 @@
+@@ -3512,6 +3512,9 @@
      },
      {
        name: "GlobalPrivacyControlForce",

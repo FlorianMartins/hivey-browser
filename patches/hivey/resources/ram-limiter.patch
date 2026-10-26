@@ -1,7 +1,7 @@
 # RAM limiter (like Opera GX): keep the browser under a user-chosen memory limit by putting background tabs to sleep. chrome://flags/#hivey-memory-limit.
 --- a/chrome/browser/about_flags.cc
 +++ b/chrome/browser/about_flags.cc
-@@ -307,6 +307,7 @@
+@@ -305,6 +305,7 @@
  #include "ui/android/ui_android_features.h"
  #include "ui/base/device_form_factor.h"
  #else  // BUILDFLAG(IS_ANDROID)
@@ -9,7 +9,7 @@
  #include "chrome/browser/component_updater/iwa_key_distribution_component_installer.h"
  #include "chrome/browser/media/router/discovery/access_code/access_code_cast_sink_service.h"
  #include "chrome/browser/media/router/media_router_feature.h"
-@@ -4985,11 +4986,13 @@
+@@ -5206,11 +5207,13 @@
  // When adding a new choice, add it to the end of the list.
  #include "chrome/browser/ungoogled_flag_choices.h"
  #include "chrome/browser/bromite_flag_choices.h"
@@ -94,7 +94,7 @@
  #include "chrome/browser/performance_manager/policies/termination_target_policy.h"
  #include "chrome/browser/performance_manager/policies/transient_keep_alive_policy.h"
  #include "chrome/browser/performance_manager/policies/working_set_trimmer_policy.h"
-@@ -235,6 +236,14 @@
+@@ -236,6 +237,14 @@
  
    graph->PassToGraph(
        std::make_unique<performance_manager::policies::MemorySaverModePolicy>());

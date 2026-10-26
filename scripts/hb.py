@@ -230,7 +230,8 @@ def _toolchain_windows_sources():
 
     Versions and hashes come from ungoogled-chromium-windows' downloads.ini so
     we stay in sync with them:
-      * DirectX-Headers and webauthn headers (Microsoft, pinned commits);
+      * DirectX-Headers, webauthn and multimedia-redirection headers
+        (Microsoft, pinned commits);
       * windows.0.52.0.lib import libraries of the vendored windows_*_msvc
         crates: ungoogled prunes them as binaries, we restore them from the
         windows-rs 0.52.0 release (sha512-pinned), where they come from.
@@ -248,7 +249,8 @@ def _toolchain_windows_sources():
         return sec, zipfile.ZipFile(dest)
 
     for section, target in (('directx-headers', 'third_party/microsoft_dxheaders/src'),
-                            ('webauthn', 'third_party/microsoft_webauthn/src')):
+                            ('webauthn', 'third_party/microsoft_webauthn/src'),
+                            ('multimedia-redirection', 'third_party/microsoft_multimedia_redirection/src')):
         out = SRC / target
         if out.exists() and any(out.iterdir()):
             continue
@@ -415,9 +417,10 @@ def _toolchain_msvc():
         # No casing symlinks: the case-insensitive mount makes them useless
         # (and a symlink to its own lower-case name would loop). CRT PDBs are
         # needed: libcmt.lib objects reference them and lld-link errors out
-        # (LNK4099) when they are missing.
+        # (LNK4099) when they are missing. --copy: xwin >= 0.9 moves files out
+        # of its cache, which fails across file systems (the FUSE mount).
         run(cmd + ['splat', '--use-winsysroot-style', '--preserve-ms-arch-notation', '--disable-symlinks',
-                   '--include-debug-symbols',
+                   '--include-debug-symbols', '--copy',
                    '--output', root])
         for sub in ('Include', 'Lib'):
             src_dir = kits / sub / short_sdk

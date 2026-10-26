@@ -1,7 +1,7 @@
 # Hivey amber as the default browser color (tonal spot palette); the user can change it in Customize.
 --- a/chrome/browser/themes/theme_service.cc
 +++ b/chrome/browser/themes/theme_service.cc
-@@ -320,14 +320,17 @@
+@@ -329,14 +329,17 @@
    registry->RegisterIntegerPref(
        prefs::kDeprecatedUserColorDoNotUse, SK_ColorTRANSPARENT,
        user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
