@@ -56,6 +56,28 @@ def artifacts(ver):
     return found
 
 
+# Release assets have the same names in every release, so these links always
+# serve the latest published version:
+#   https://github.com/<repo>/releases/latest/download/<name>
+STABLE_NAMES = {'windows-x64': 'hivey-browser-windows-x64-installer.exe',
+                'linux-x64': 'hivey-browser-linux-x64.tar.xz'}
+
+
+def stage(found, names, directory):
+    """Hard links to the artifacts under their published names, with their
+    SHA256SUMS."""
+    shutil.rmtree(directory, ignore_errors=True)
+    directory.mkdir(parents=True)
+    staged = {}
+    for platform, path in found.items():
+        dest = directory / names[platform]
+        os.link(path, dest)
+        staged[platform] = dest
+    sums = directory / 'SHA256SUMS'
+    sums.write_text(''.join(f'{hb.sha256_file(f)}  {f.name}\n' for f in staged.values()))
+    return staged, sums
+
+
 def gh(*args, **kw):
     return subprocess.run(['gh', *args, '--repo', REPO], check=True, text=True, **kw)
 
@@ -102,8 +124,12 @@ def release_notes(ver):
 
 Installed browsers update by themselves (Hivey Studio > About). To install:
 
-- **Windows x64**: run `hivey-browser-{ver}-windows-x64-installer.exe` (per-user install, no admin rights).
-- **Linux x64**: extract `hivey-browser-{ver}-linux-x64.tar.xz` and run `hivey-browser`.
+- **Windows x64**: run `{STABLE_NAMES['windows-x64']}` (per-user install, no admin rights).
+- **Linux x64**: extract `{STABLE_NAMES['linux-x64']}` and run `hivey-browser`.
+
+Permanent links to the latest version:
+https://github.com/{REPO}/releases/latest/download/{STABLE_NAMES['windows-x64']} and
+https://github.com/{REPO}/releases/latest/download/{STABLE_NAMES['linux-x64']}
 
 `SHA256SUMS` lists the checksums. `hivey-update.json` is the signed (Ed25519) update manifest.
 """
@@ -112,12 +138,20 @@ Installed browsers update by themselves (Hivey Studio > About). To install:
 def cmd_draft(args):
     ver = version()
     tag = f'v{ver}'
-    found = artifacts(ver)
+    found, sums = stage(artifacts(ver), STABLE_NAMES, hb.DIST / 'release')
     manifest, sig = write_manifest(ver, tag, found)
-    files = [str(p) for p in found.values()] + [str(manifest), str(sig), str(hb.DIST / 'SHA256SUMS')]
+    files = [str(p) for p in found.values()] + [str(manifest), str(sig), str(sums)]
     exists = subprocess.run(['gh', 'release', 'view', tag, '--repo', REPO], capture_output=True).returncode == 0
     if exists:
+        # --target: the draft's branch may be gone (deleted by the merge).
+        gh('release', 'edit', tag, '--target', args.target, '--notes', release_notes(ver))
         gh('release', 'upload', tag, '--clobber', *files)
+        # Assets of an earlier draft under other names (versioned names).
+        keep = {Path(f).name for f in files}
+        current = json.loads(gh('release', 'view', tag, '--json', 'assets', capture_output=True).stdout)
+        for asset in current['assets']:
+            if asset['name'] not in keep:
+                gh('release', 'delete-asset', tag, asset['name'], '--yes')
     else:
         gh('release', 'create', tag, '--draft', '--title', f'Hivey Browser {ver}', '--notes', release_notes(ver),
            '--target', args.target, *files)
@@ -131,18 +165,9 @@ DEV_NAMES = {'windows-x64': 'hivey-browser-dev-windows-x64-installer.exe',
 
 def cmd_dev(args):
     ver = version()
-    found = artifacts(ver)
     sha = args.commit
-    stage = hb.DIST / 'dev'
-    shutil.rmtree(stage, ignore_errors=True)
-    stage.mkdir(parents=True)
-    files = []
-    for platform, path in found.items():
-        dest = stage / DEV_NAMES[platform]
-        shutil.copy2(path, dest)
-        files.append(dest)
-    (stage / 'SHA256SUMS').write_text(''.join(f'{hb.sha256_file(f)}  {f.name}\n' for f in files))
-    files.append(stage / 'SHA256SUMS')
+    staged, sums = stage(artifacts(ver), DEV_NAMES, hb.DIST / 'dev')
+    files = [*staged.values(), sums]
     notes = (f'Build de dev {ver} (commit {sha[:12]}). Canal de test, remplacé à chaque build de main ; '
              'ce n\'est pas une version publiée : les navigateurs installés ne le prennent jamais.\n\n'
              + changelog_section(ver))

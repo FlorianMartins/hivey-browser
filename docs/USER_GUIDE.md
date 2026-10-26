@@ -2,12 +2,12 @@
 
 ## Install
 
-- **Windows x64**: run `hivey-browser-<version>-windows-x64-installer.exe`
-  from the [latest release](https://github.com/FlorianMartins/hivey-browser/releases/latest).
+- **Windows x64**: run [hivey-browser-windows-x64-installer.exe](https://github.com/FlorianMartins/hivey-browser/releases/latest/download/hivey-browser-windows-x64-installer.exe)
+  (always the latest version).
   It installs for your user only (no administrator rights) and keeps its data
   in `%LOCALAPPDATA%\Hivey\Browser\User Data`, separate from Chrome or
   Chromium.
-- **Linux x64**: extract `hivey-browser-<version>-linux-x64.tar.xz` anywhere
+- **Linux x64**: extract [hivey-browser-linux-x64.tar.xz](https://github.com/FlorianMartins/hivey-browser/releases/latest/download/hivey-browser-linux-x64.tar.xz) anywhere
   and run `hivey-browser`. `hivey-browser.desktop` and `hivey-browser.png`
   are there for your menu.
 
