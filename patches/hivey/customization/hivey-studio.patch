@@ -1,0 +1,2497 @@
+# Hivey Studio (chrome://hivey, app menu, first-run tab): colors and theme, layout, tab behaviour, resource limiters with live usage and hot tabs, privacy shields; English and French.
+--- a/chrome/app/chrome_command_ids.h
++++ b/chrome/app/chrome_command_ids.h
+@@ -276,6 +276,7 @@
+ #define IDC_SHOW_GOOGLE_LENS_SHORTCUT   40282
+ #define IDC_SHOW_CUSTOMIZE_CHROME_SIDE_PANEL 40283
+ #define IDC_SHOW_CUSTOMIZE_CHROME_TOOLBAR 40284
++#define IDC_HIVEY_STUDIO                40960
+ #define IDC_TASK_MANAGER_APP_MENU       40285
+ #define IDC_TASK_MANAGER_SHORTCUT       40286
+ #define IDC_TASK_MANAGER_CONTEXT_MENU   40287
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -1930,6 +1930,9 @@
+         <message name="IDS_SETTINGS" desc="The text label of the Settings menu item">
+           Settin&amp;gs
+         </message>
++        <message name="IDS_HIVEY_STUDIO" desc="The text label of the Hivey Studio menu item (product name, not translated)" translateable="false">
++          Hivey &amp;Studio
++        </message>
+         <message name="IDS_OPTIONS" desc="The text label of the Options menu item">
+           &amp;Options
+         </message>
+@@ -1982,6 +1985,9 @@
+         <message name="IDS_SETTINGS" desc="In Title Case: The text label of the Settings menu item">
+           &amp;Settings
+         </message>
++        <message name="IDS_HIVEY_STUDIO" desc="In Title Case: The text label of the Hivey Studio menu item (product name, not translated)" translateable="false">
++          Hivey &amp;Studio
++        </message>
+         <message name="IDS_OPTIONS" desc="In Title Case: The text label of the Options menu item">
+           &amp;Options
+         </message>
+--- a/chrome/browser/browser_resources.grd
++++ b/chrome/browser/browser_resources.grd
+@@ -92,6 +92,13 @@
+       </if>
+     </structures>
+     <includes>
++      <if expr="not is_android">
++        <!-- Hivey Studio (chrome://hivey). -->
++        <include name="IDR_HIVEY_STUDIO_HTML" file="resources\hivey_studio\studio.html" type="BINDATA" />
++        <include name="IDR_HIVEY_STUDIO_CSS" file="resources\hivey_studio\studio.css" type="BINDATA" />
++        <include name="IDR_HIVEY_STUDIO_JS" file="resources\hivey_studio\studio.js" type="BINDATA" />
++        <include name="IDR_HIVEY_STUDIO_I18N_JS" file="resources\hivey_studio\i18n.js" type="BINDATA" />
++      </if>
+       <if expr="is_win or is_macosx or is_linux">
+         <!-- First Run audio resources -->
+         <include name="IDR_INTRO_SOUND_ALL_SET_FLAC" file="resources\intro\sounds\all_set.flac" type="BINDATA" />
+--- a/chrome/browser/chrome_browser_main.cc
++++ b/chrome/browser/chrome_browser_main.cc
+@@ -1331,7 +1331,8 @@
+   if (first_run::IsChromeFirstRun()) {
+     if (!base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kApp) &&
+         !base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kAppId)) {
+-      browser_creator_->AddFirstRunTabs({GURL("chrome://ungoogled-first-run")});
++      // Hivey: welcome the user in Hivey Studio.
++      browser_creator_->AddFirstRunTabs({GURL("chrome://hivey/")});
+       browser_creator_->AddFirstRunTabs(master_prefs_->new_tabs);
+     }
+   }
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -0,0 +1,308 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++// Hivey Studio strings. The page follows the browser's UI language (French
++// or English).
++
++const STRINGS = {
++  en: {
++    title: 'Hivey Studio',
++    subtitle: 'Make the browser yours: colors, layout, behaviour and resources.',
++    navAppearance: 'Colors',
++    navLayout: 'Layout',
++    navTabs: 'Tabs & behaviour',
++    navResources: 'Resources',
++    navPrivacy: 'Privacy & security',
++    navAbout: 'About',
++
++    appearanceTitle: 'Colors & theme',
++    appearanceHint: 'The whole browser is colored from the color you pick: tabs, toolbar, menus and dialogs.',
++    presets: 'Presets',
++    customColor: 'Custom color',
++    customColorHint: 'Any color: the browser derives a full palette from it.',
++    variant: 'Palette style',
++    variantTonal: 'Tonal',
++    variantNeutral: 'Neutral',
++    variantVibrant: 'Vibrant',
++    variantExpressive: 'Expressive',
++    scheme: 'Mode',
++    schemeSystem: 'System',
++    schemeLight: 'Light',
++    schemeDark: 'Dark',
++    grayscale: 'Grayscale',
++    grayscaleHint: 'A colorless browser frame, easy on the eyes.',
++    incognitoThemes: 'Colors in Incognito windows',
++    incognitoThemesHint: 'Use your theme in Incognito windows too.',
++    resetTheme: 'Back to Hivey colors',
++    extensionTheme: 'A theme extension is installed: it takes precedence over these colors.',
++    preview: 'Preview',
++    previewTab: 'Hivey Studio',
++    previewAddress: 'hivey://studio',
++
++    presetAmber: 'Hivey amber',
++    presetAura: 'Aura',
++    presetViolet: 'Violet',
++    presetOcean: 'Ocean',
++    presetMint: 'Mint',
++    presetCoral: 'Coral',
++    presetRose: 'Rose',
++    presetGraphite: 'Graphite',
++
++    layoutTitle: 'Layout',
++    layoutHint: 'Where things are. Changes apply at once unless marked "restart".',
++    verticalTabs: 'Vertical tabs',
++    verticalTabsHint: 'Tabs in a sidebar on the left, like Firefox and Edge.',
++    expandOnHover: 'Expand vertical tabs on hover',
++    sidePanel: 'Side panel position',
++    left: 'Left',
++    right: 'Right',
++    homeButton: 'Home button',
++    forwardButton: 'Forward button',
++    bookmarkBar: 'Bookmarks bar',
++    tabSearch: 'Tab search button in the tab strip',
++    compactMode: 'Compact mode',
++    compactModeHint: 'Shorter tabs, toolbar and address bar: more room for pages.',
++    customizeToolbar: 'Choose toolbar buttons…',
++    customizeToolbarHint: 'Pin or unpin buttons (downloads, history, print, task manager…).',
++
++    tabsTitle: 'Tabs & behaviour',
++    tabsHint: 'How tabs and windows behave.',
++    ctrlTabMru: 'Ctrl+Tab cycles through recently used tabs',
++    hoverImages: 'Tab previews on hover',
++    hoverMemory: 'Show memory use in tab previews',
++    hoverCards: 'Tab hover cards',
++    hoverCardsDefault: 'Cards',
++    hoverCardsTooltip: 'Simple tooltip',
++    hoverCardsNone: 'None',
++    scrollTabs: 'Mouse wheel over the tab strip',
++    scrollTabsDefault: 'Scrolls the tab strip',
++    scrollTabsAlways: 'Switches tabs',
++    scrollTabsNever: 'Does nothing',
++    keepWindow: 'Keep the window open when closing its last tab',
++    hideCloseButtons: 'Hide tab close buttons',
++    hideCloseButtonsHint: 'Close tabs with a middle click or Ctrl+W.',
++    popupsToTabs: 'Open pop-ups as tabs',
++    closeConfirmation: 'Ask before closing',
++    closeConfirmationDefault: 'Never',
++    closeConfirmationLast: 'When closing the last window',
++    closeConfirmationMultiple: 'When closing a window among several',
++    avatarButton: 'Profile button',
++    avatarDefault: 'Automatic',
++    avatarAlways: 'Always',
++    avatarIncognito: 'Incognito and Guest only',
++    avatarNever: 'Never',
++    hideExtensionsMenu: 'Hide the extensions menu',
++    removeGrabHandle: 'Remove the empty space next to the tabs',
++    hideFullscreenExit: 'No "exit full screen" button',
++    bookmarkBarNtp: 'Hide the bookmarks bar on new tabs',
++    disableLinkDrag: 'Do not drag links and images',
++
++    resourcesTitle: 'Resources',
++    resourcesHint: 'Keep the browser light, like a gaming browser: limits apply live.',
++    cpu: 'CPU',
++    ram: 'Memory',
++    network: 'Network',
++    ofMachine: 'of the machine',
++    ramLimiter: 'RAM limiter',
++    ramLimiterHint: 'Above this, tabs you have not used for a while go to sleep.',
++    cpuLimiter: 'CPU limiter',
++    cpuLimiterHint: 'Maximum share of the processor each tab can use.',
++    cpuLimiterUnsupported: 'Available on Windows.',
++    networkLimiter: 'Network limiter',
++    networkLimiterHint: 'Bandwidth for the whole browser, downloads included.',
++    noLimit: 'No limit',
++    perTab: 'per tab',
++    hotTabs: 'Hot tabs',
++    hotTabsHint: 'What uses the most right now.',
++    show: 'Show',
++    close: 'Close',
++    browserProcess: 'Browser',
++    memorySaver: 'Memory Saver and tab sleeping…',
++
++    privacyTitle: 'Privacy & security',
++    privacyHint: 'Protections that are on by default. Nothing leaves your computer unless you ask.',
++    shield: 'Hivey Shield (uBlock Origin Lite)',
++    shieldHint: 'Blocks ads, trackers, cookie banners, tracking parameters and malware sites. Click its toolbar icon to adjust a site.',
++    shieldOn: 'Active',
++    shieldOff: 'Off',
++    shieldMissing: 'Not installed',
++    manage: 'Manage',
++    antiFingerprint: 'Anti-fingerprinting',
++    antiFingerprintHint: 'Noise in Canvas, text metrics, element boxes and audio; processor count capped. Sites cannot recognise you from your hardware.',
++    httpsOnly: 'Always use secure connections',
++    httpsOnlyHint: 'Warns before loading any page over plain HTTP.',
++    clearOnExit: 'Clear browsing data on exit',
++    clearOnExitHint: 'Cookies, cache and site data are deleted when the browser closes.',
++    secureDns: 'Encrypted DNS (Quad9)…',
++    cookies: 'Third-party cookies blocked…',
++    builtIn: 'Always on',
++    builtInItems: 'Referrers cut to the origin across sites · Global Privacy Control · no Topics or Attribution Reporting · WebRTC does not leak your local IP · no telemetry, no Google services.',
++
++    aboutTitle: 'About',
++    version: 'Version',
++    aboutText: 'Hivey Browser is built on ungoogled-chromium. Every change is a public patch.',
++    sourceCode: 'Source code',
++    flags: 'All flags (advanced)…',
++
++    restartNeeded: 'Some changes apply after a restart.',
++    restart: 'Restart now',
++    on: 'On',
++    off: 'Off',
++  },
++  fr: {
++    title: 'Hivey Studio',
++    subtitle: 'Faites du navigateur le vôtre : couleurs, disposition, comportement et ressources.',
++    navAppearance: 'Couleurs',
++    navLayout: 'Disposition',
++    navTabs: 'Onglets et comportement',
++    navResources: 'Ressources',
++    navPrivacy: 'Confidentialité et sécurité',
++    navAbout: 'À propos',
++
++    appearanceTitle: 'Couleurs et thème',
++    appearanceHint: 'Tout le navigateur prend la couleur choisie : onglets, barre d’outils, menus et fenêtres.',
++    presets: 'Préréglages',
++    customColor: 'Couleur personnalisée',
++    customColorHint: 'N’importe quelle couleur : le navigateur en tire une palette complète.',
++    variant: 'Style de palette',
++    variantTonal: 'Tonal',
++    variantNeutral: 'Neutre',
++    variantVibrant: 'Vif',
++    variantExpressive: 'Expressif',
++    scheme: 'Mode',
++    schemeSystem: 'Système',
++    schemeLight: 'Clair',
++    schemeDark: 'Sombre',
++    grayscale: 'Niveaux de gris',
++    grayscaleHint: 'Un cadre sans couleur, reposant pour les yeux.',
++    incognitoThemes: 'Couleurs en navigation privée',
++    incognitoThemesHint: 'Utiliser aussi votre thème dans les fenêtres de navigation privée.',
++    resetTheme: 'Revenir aux couleurs Hivey',
++    extensionTheme: 'Une extension de thème est installée : elle passe avant ces couleurs.',
++    preview: 'Aperçu',
++    previewTab: 'Hivey Studio',
++    previewAddress: 'hivey://studio',
++
++    presetAmber: 'Ambre Hivey',
++    presetAura: 'Aura',
++    presetViolet: 'Violet',
++    presetOcean: 'Océan',
++    presetMint: 'Menthe',
++    presetCoral: 'Corail',
++    presetRose: 'Rose',
++    presetGraphite: 'Graphite',
++
++    layoutTitle: 'Disposition',
++    layoutHint: 'Où se trouvent les éléments. Les changements s’appliquent aussitôt, sauf ceux marqués « redémarrage ».',
++    verticalTabs: 'Onglets verticaux',
++    verticalTabsHint: 'Les onglets dans une barre latérale à gauche, comme dans Firefox et Edge.',
++    expandOnHover: 'Déployer les onglets verticaux au survol',
++    sidePanel: 'Position du panneau latéral',
++    left: 'Gauche',
++    right: 'Droite',
++    homeButton: 'Bouton Accueil',
++    forwardButton: 'Bouton Suivant',
++    bookmarkBar: 'Barre de favoris',
++    tabSearch: 'Bouton de recherche d’onglets dans la barre d’onglets',
++    compactMode: 'Mode compact',
++    compactModeHint: 'Onglets, barre d’outils et barre d’adresse plus fins : plus de place pour les pages.',
++    customizeToolbar: 'Choisir les boutons de la barre d’outils…',
++    customizeToolbarHint: 'Épingler ou retirer des boutons (téléchargements, historique, impression, gestionnaire de tâches…).',
++
++    tabsTitle: 'Onglets et comportement',
++    tabsHint: 'Comment se comportent les onglets et les fenêtres.',
++    ctrlTabMru: 'Ctrl+Tab parcourt les onglets récemment utilisés',
++    hoverImages: 'Aperçu des onglets au survol',
++    hoverMemory: 'Afficher la mémoire utilisée dans l’aperçu',
++    hoverCards: 'Infobulles des onglets',
++    hoverCardsDefault: 'Cartes',
++    hoverCardsTooltip: 'Info-bulle simple',
++    hoverCardsNone: 'Aucune',
++    scrollTabs: 'Molette sur la barre d’onglets',
++    scrollTabsDefault: 'Fait défiler la barre',
++    scrollTabsAlways: 'Change d’onglet',
++    scrollTabsNever: 'Ne fait rien',
++    keepWindow: 'Garder la fenêtre ouverte en fermant son dernier onglet',
++    hideCloseButtons: 'Masquer les boutons de fermeture des onglets',
++    hideCloseButtonsHint: 'Fermez les onglets d’un clic molette ou avec Ctrl+W.',
++    popupsToTabs: 'Ouvrir les fenêtres pop-up dans des onglets',
++    closeConfirmation: 'Demander avant de fermer',
++    closeConfirmationDefault: 'Jamais',
++    closeConfirmationLast: 'En fermant la dernière fenêtre',
++    closeConfirmationMultiple: 'En fermant une fenêtre parmi plusieurs',
++    avatarButton: 'Bouton du profil',
++    avatarDefault: 'Automatique',
++    avatarAlways: 'Toujours',
++    avatarIncognito: 'Navigation privée et invité seulement',
++    avatarNever: 'Jamais',
++    hideExtensionsMenu: 'Masquer le menu des extensions',
++    removeGrabHandle: 'Supprimer l’espace vide à côté des onglets',
++    hideFullscreenExit: 'Pas de bouton « Quitter le plein écran »',
++    bookmarkBarNtp: 'Masquer la barre de favoris sur les nouveaux onglets',
++    disableLinkDrag: 'Ne pas faire glisser les liens et les images',
++
++    resourcesTitle: 'Ressources',
++    resourcesHint: 'Un navigateur léger, comme un navigateur gaming : les limites s’appliquent en direct.',
++    cpu: 'Processeur',
++    ram: 'Mémoire',
++    network: 'Réseau',
++    ofMachine: 'de la machine',
++    ramLimiter: 'Limiteur de RAM',
++    ramLimiterHint: 'Au-delà, les onglets inutilisés depuis un moment se mettent en veille.',
++    cpuLimiter: 'Limiteur de processeur',
++    cpuLimiterHint: 'Part maximale du processeur que chaque onglet peut utiliser.',
++    cpuLimiterUnsupported: 'Disponible sous Windows.',
++    networkLimiter: 'Limiteur de réseau',
++    networkLimiterHint: 'Débit pour tout le navigateur, téléchargements compris.',
++    noLimit: 'Aucune limite',
++    perTab: 'par onglet',
++    hotTabs: 'Onglets gourmands',
++    hotTabsHint: 'Ce qui consomme le plus en ce moment.',
++    show: 'Afficher',
++    close: 'Fermer',
++    browserProcess: 'Navigateur',
++    memorySaver: 'Économiseur de mémoire et mise en veille des onglets…',
++
++    privacyTitle: 'Confidentialité et sécurité',
++    privacyHint: 'Des protections actives par défaut. Rien ne quitte votre ordinateur sans votre accord.',
++    shield: 'Hivey Shield (uBlock Origin Lite)',
++    shieldHint: 'Bloque publicités, traqueurs, bannières cookies, paramètres de suivi et sites malveillants. Cliquez sur son icône pour régler un site.',
++    shieldOn: 'Actif',
++    shieldOff: 'Désactivé',
++    shieldMissing: 'Non installé',
++    manage: 'Gérer',
++    antiFingerprint: 'Anti-empreinte',
++    antiFingerprintHint: 'Bruit dans Canvas, la mesure du texte, les boîtes des éléments et l’audio ; nombre de processeurs plafonné. Les sites ne peuvent pas vous reconnaître à votre matériel.',
++    httpsOnly: 'Toujours utiliser des connexions sécurisées',
++    httpsOnlyHint: 'Avertit avant de charger une page en HTTP non chiffré.',
++    clearOnExit: 'Effacer les données de navigation à la fermeture',
++    clearOnExitHint: 'Cookies, cache et données des sites sont supprimés à la fermeture du navigateur.',
++    secureDns: 'DNS chiffré (Quad9)…',
++    cookies: 'Cookies tiers bloqués…',
++    builtIn: 'Toujours actif',
++    builtInItems: 'Referrer réduit à l’origine entre sites · Global Privacy Control · ni Topics ni Attribution Reporting · WebRTC ne divulgue pas votre IP locale · aucune télémétrie, aucun service Google.',
++
++    aboutTitle: 'À propos',
++    version: 'Version',
++    aboutText: 'Hivey Browser est construit sur ungoogled-chromium. Chaque modification est un patch public.',
++    sourceCode: 'Code source',
++    flags: 'Tous les flags (avancé)…',
++
++    restartNeeded: 'Certains changements s’appliquent après un redémarrage.',
++    restart: 'Redémarrer',
++    on: 'Activé',
++    off: 'Désactivé',
++  },
++};
++
++let current = STRINGS.en;
++
++export function setLanguage(locale) {
++  current = (locale || '').toLowerCase().startsWith('fr') ? STRINGS.fr : STRINGS.en;
++  document.documentElement.lang = current === STRINGS.fr ? 'fr' : 'en';
++}
++
++export function t(key) {
++  return current[key] ?? STRINGS.en[key] ?? key;
++}
+--- a/chrome/browser/resources/hivey_studio/studio.css
++++ b/chrome/browser/resources/hivey_studio/studio.css
+@@ -0,0 +1,836 @@
++/* Copyright 2026 The Hivey Browser contributors
++ * Use of this source code is governed by the MIT license that can be found in
++ * the LICENSE file of the Hivey Browser repository. */
++
++/* Hivey Studio: the Hivey AI sidebar's look (deep ink background, glass
++ * cards, indigo-to-violet accents, soft aura). --user is the browser color
++ * the user picked; it tints the preview and the active controls. */
++
++@property --fill {
++  syntax: '<number>';
++  inherits: false;
++  initial-value: 0;
++}
++
++:root {
++  --bg: #0b0c14;
++  --panel: #151726;
++  --panel-2: #1d2033;
++  --elevated: rgba(38, 42, 64, 0.55);
++  --border: rgba(255, 255, 255, 0.09);
++  --border-strong: rgba(255, 255, 255, 0.16);
++  --text: #f4f2fc;
++  --muted: #9b9db5;
++  --accent: #6366f1;
++  --accent-2: #8b5cf6;
++  --grad: linear-gradient(135deg, #6366f1 0%, #6366f1 40%, #8b5cf6 100%);
++  --grad-soft: linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(139, 92, 246, 0.16));
++  --ok: #22c55e;
++  --warn: #f59e0b;
++  --danger: #f43f5e;
++  --user: #f7a21b;
++  --radius: 14px;
++  --radius-sm: 9px;
++  color-scheme: dark;
++}
++
++@media (prefers-color-scheme: light) {
++  :root {
++    --bg: #f6f6fb;
++    --panel: #ffffff;
++    --panel-2: #f0f0f8;
++    --elevated: rgba(255, 255, 255, 0.8);
++    --border: rgba(20, 20, 60, 0.09);
++    --border-strong: rgba(20, 20, 60, 0.18);
++    --text: #16172a;
++    --muted: #5d6079;
++    color-scheme: light;
++  }
++}
++
++* {
++  box-sizing: border-box;
++}
++
++html,
++body {
++  margin: 0;
++  min-height: 100%;
++  background: var(--bg);
++  color: var(--text);
++  font: 14px/1.5 system-ui, 'Segoe UI Variable Text', 'Segoe UI', Ubuntu, Cantarell, sans-serif;
++  -webkit-font-smoothing: antialiased;
++}
++
++.aura {
++  position: fixed;
++  inset: 0;
++  pointer-events: none;
++  background:
++    radial-gradient(620px circle at 0% 0%, color-mix(in srgb, var(--accent-2) 22%, transparent), transparent 60%),
++    radial-gradient(520px circle at 100% 0%, color-mix(in srgb, var(--user) 12%, transparent), transparent 60%);
++  z-index: 0;
++}
++
++.top,
++.layout,
++.restart-bar {
++  position: relative;
++  z-index: 1;
++}
++
++.top {
++  display: flex;
++  align-items: center;
++  gap: 16px;
++  max-width: 1120px;
++  margin: 0 auto;
++  padding: 36px 32px 8px;
++}
++
++.logo {
++  width: 52px;
++  height: 52px;
++  display: grid;
++  place-items: center;
++  border-radius: 16px;
++  background: var(--grad);
++  box-shadow: 0 10px 40px -12px var(--accent-2);
++  flex: none;
++}
++
++.logo svg {
++  width: 30px;
++  height: 30px;
++  fill: none;
++  stroke: #fff;
++  stroke-width: 2;
++  stroke-linejoin: round;
++}
++
++h1 {
++  margin: 0;
++  font-size: 28px;
++  letter-spacing: -0.02em;
++  background: linear-gradient(90deg, var(--text), color-mix(in srgb, var(--accent-2) 60%, var(--text)));
++  -webkit-background-clip: text;
++  background-clip: text;
++  color: transparent;
++}
++
++h2 {
++  margin: 0 0 4px;
++  font-size: 22px;
++  letter-spacing: -0.01em;
++}
++
++.muted {
++  color: var(--muted);
++  margin: 0;
++}
++
++.small {
++  font-size: 12.5px;
++}
++
++.mono {
++  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
++  color: var(--muted);
++}
++
++.layout {
++  display: grid;
++  grid-template-columns: 240px minmax(0, 1fr);
++  gap: 28px;
++  max-width: 1120px;
++  margin: 0 auto;
++  padding: 24px 32px 120px;
++}
++
++/* ------------------------------------------------------------- navigation */
++
++.rail {
++  position: sticky;
++  top: 24px;
++  align-self: start;
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++}
++
++.nav-item {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  padding: 10px 14px;
++  border: 1px solid transparent;
++  border-radius: 12px;
++  background: none;
++  color: var(--muted);
++  font: inherit;
++  font-weight: 500;
++  text-align: start;
++  cursor: pointer;
++  position: relative;
++  transition: background 0.15s, color 0.15s;
++}
++
++.nav-item:hover {
++  background: var(--elevated);
++  color: var(--text);
++}
++
++.nav-item.active {
++  background: var(--grad-soft);
++  border-color: var(--border);
++  color: var(--text);
++}
++
++.nav-item.active::before {
++  content: '';
++  position: absolute;
++  inset-inline-start: -10px;
++  top: 10px;
++  bottom: 10px;
++  width: 3px;
++  border-radius: 3px;
++  background: var(--grad);
++}
++
++.icon {
++  width: 20px;
++  height: 20px;
++  fill: none;
++  stroke: currentColor;
++  stroke-width: 1.8;
++  stroke-linecap: round;
++  stroke-linejoin: round;
++  flex: none;
++}
++
++.nav-item.active .icon {
++  stroke: var(--accent);
++}
++
++main {
++  outline: none;
++  display: flex;
++  flex-direction: column;
++  gap: 16px;
++  min-width: 0;
++}
++
++main > div {
++  display: flex;
++  flex-direction: column;
++  gap: 16px;
++}
++
++.section-header {
++  margin-bottom: 4px;
++}
++
++/* ------------------------------------------------------------------ cards */
++
++.card {
++  background: color-mix(in srgb, var(--panel) 88%, transparent);
++  border: 1px solid var(--border);
++  border-radius: var(--radius);
++  padding: 8px 20px;
++  backdrop-filter: blur(12px);
++}
++
++.card-title {
++  margin: 14px 0 4px;
++  font-size: 11.5px;
++  font-weight: 700;
++  letter-spacing: 0.08em;
++  text-transform: uppercase;
++  color: color-mix(in srgb, var(--accent) 70%, var(--text));
++}
++
++.grid-2 {
++  display: grid;
++  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
++  gap: 16px;
++}
++
++.notice {
++  padding: 12px 16px;
++  border-radius: var(--radius-sm);
++  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
++  background: color-mix(in srgb, var(--warn) 10%, transparent);
++}
++
++/* ------------------------------------------------------------------- rows */
++
++.row {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 16px;
++  min-height: 56px;
++  padding: 10px 0;
++  border-top: 1px solid var(--border);
++  width: 100%;
++}
++
++.card > .row:first-child,
++.card > .card-title + .row {
++  border-top: none;
++}
++
++.row.disabled {
++  opacity: 0.55;
++}
++
++.row-text {
++  display: flex;
++  flex-direction: column;
++  gap: 2px;
++  min-width: 0;
++}
++
++.row-label {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  font-weight: 550;
++}
++
++.row-hint {
++  color: var(--muted);
++  font-size: 12.5px;
++}
++
++.pill {
++  font-size: 11px;
++  padding: 0 7px;
++  border-radius: 999px;
++  border: 1px solid var(--border-strong);
++  color: var(--muted);
++}
++
++.link-row {
++  background: none;
++  border-inline: none;
++  border-bottom: none;
++  color: inherit;
++  font: inherit;
++  text-align: start;
++  cursor: pointer;
++}
++
++.link-row:hover .row-label {
++  color: var(--accent);
++}
++
++.chevron {
++  font-size: 22px;
++  color: var(--muted);
++}
++
++/* ---------------------------------------------------------------- switch */
++
++.switch {
++  position: relative;
++  flex: none;
++  width: 44px;
++  height: 24px;
++}
++
++.switch-input {
++  position: absolute;
++  inset: 0;
++  margin: 0;
++  opacity: 0;
++  cursor: pointer;
++  z-index: 1;
++}
++
++.switch-track {
++  position: absolute;
++  inset: 0;
++  border-radius: 999px;
++  background: var(--panel-2);
++  border: 1px solid var(--border-strong);
++  transition: background 0.2s;
++}
++
++.switch-track::after {
++  content: '';
++  position: absolute;
++  top: 3px;
++  left: 3px;
++  width: 16px;
++  height: 16px;
++  border-radius: 50%;
++  background: var(--muted);
++  transition: transform 0.2s, background 0.2s;
++}
++
++.switch-input:checked + .switch-track {
++  background: var(--grad);
++  border-color: transparent;
++  box-shadow: 0 0 18px -6px var(--accent-2);
++}
++
++.switch-input:checked + .switch-track::after {
++  transform: translateX(20px);
++  background: #fff;
++}
++
++.switch-input:focus-visible + .switch-track {
++  outline: 2px solid var(--accent);
++  outline-offset: 2px;
++}
++
++/* ------------------------------------------------------- selects, buttons */
++
++.select {
++  flex: none;
++  min-width: 190px;
++  padding: 8px 12px;
++  border-radius: var(--radius-sm);
++  border: 1px solid var(--border-strong);
++  background: var(--panel-2);
++  color: var(--text);
++  font: inherit;
++}
++
++.select:focus-visible,
++.button:focus-visible,
++.segment:focus-visible,
++.swatch:focus-visible,
++.nav-item:focus-visible,
++.link-row:focus-visible {
++  outline: 2px solid var(--accent);
++  outline-offset: 2px;
++}
++
++.button {
++  padding: 8px 16px;
++  border-radius: 10px;
++  border: 1px solid var(--border-strong);
++  background: var(--panel-2);
++  color: var(--text);
++  font: inherit;
++  font-weight: 550;
++  cursor: pointer;
++}
++
++.button:hover {
++  border-color: var(--accent);
++}
++
++.button.primary {
++  background: var(--grad);
++  border-color: transparent;
++  color: #fff;
++}
++
++.button.ghost {
++  background: transparent;
++}
++
++.button.danger:hover {
++  border-color: var(--danger);
++  color: var(--danger);
++}
++
++.button.small {
++  padding: 4px 10px;
++  font-size: 12.5px;
++}
++
++.actions {
++  display: flex;
++  justify-content: flex-end;
++  padding: 14px 0;
++  border-top: 1px solid var(--border);
++}
++
++.field {
++  padding: 14px 0;
++  border-top: 1px solid var(--border);
++}
++
++.card > .field:first-child {
++  border-top: none;
++}
++
++.field-label {
++  font-weight: 550;
++  margin-bottom: 10px;
++}
++
++.segmented {
++  display: inline-flex;
++  flex-wrap: wrap;
++  gap: 4px;
++  padding: 4px;
++  border-radius: 12px;
++  background: var(--panel-2);
++  border: 1px solid var(--border);
++}
++
++.segment {
++  padding: 7px 16px;
++  border: none;
++  border-radius: 9px;
++  background: none;
++  color: var(--muted);
++  font: inherit;
++  font-weight: 550;
++  cursor: pointer;
++}
++
++.segment.active {
++  background: var(--grad);
++  color: #fff;
++  box-shadow: 0 4px 18px -8px var(--accent-2);
++}
++
++/* ---------------------------------------------------------------- colors */
++
++.swatches {
++  display: grid;
++  grid-template-columns: repeat(4, minmax(0, 1fr));
++  gap: 14px 8px;
++  padding: 10px 0 16px;
++}
++
++.swatch-wrap {
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  gap: 6px;
++}
++
++.swatch {
++  width: 44px;
++  height: 44px;
++  border-radius: 50%;
++  border: 2px solid transparent;
++  background:
++    radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--swatch) 55%, #fff), var(--swatch) 65%);
++  cursor: pointer;
++  transition: transform 0.15s, box-shadow 0.15s;
++}
++
++.swatch:hover {
++  transform: scale(1.08);
++}
++
++.swatch.active {
++  border-color: var(--text);
++  box-shadow: 0 0 0 4px color-mix(in srgb, var(--swatch) 35%, transparent), 0 8px 24px -6px var(--swatch);
++}
++
++.swatch-name {
++  font-size: 11.5px;
++  color: var(--muted);
++  text-align: center;
++}
++
++.custom-color {
++  display: flex;
++  align-items: center;
++  gap: 14px;
++  padding: 14px 0;
++  border-top: 1px solid var(--border);
++}
++
++.color-input {
++  flex: none;
++  width: 44px;
++  height: 44px;
++  padding: 0;
++  border: 2px solid var(--border-strong);
++  border-radius: 12px;
++  background: none;
++  cursor: pointer;
++}
++
++.color-input::-webkit-color-swatch-wrapper {
++  padding: 3px;
++}
++
++.color-input::-webkit-color-swatch {
++  border: none;
++  border-radius: 8px;
++}
++
++/* Mini browser drawn with the user's color. */
++.preview {
++  margin: 10px 0 18px;
++  border-radius: 12px;
++  overflow: hidden;
++  border: 1px solid var(--border);
++  background: var(--panel-2);
++}
++
++.pv-frame {
++  background: color-mix(in srgb, var(--user) 28%, var(--panel));
++  padding: 8px 8px 0;
++}
++
++.pv-tabs {
++  display: flex;
++  gap: 4px;
++}
++
++.pv-tab {
++  height: 26px;
++  flex: 0 0 64px;
++  border-radius: 8px 8px 0 0;
++  background: color-mix(in srgb, var(--user) 18%, var(--panel));
++}
++
++.pv-tab.active {
++  flex-basis: 120px;
++  padding: 4px 10px;
++  font-size: 11.5px;
++  white-space: nowrap;
++  overflow: hidden;
++  background: color-mix(in srgb, var(--user) 10%, var(--panel));
++}
++
++.pv-toolbar {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  padding: 8px;
++  background: color-mix(in srgb, var(--user) 10%, var(--panel));
++}
++
++.pv-dot {
++  width: 14px;
++  height: 14px;
++  border-radius: 50%;
++  background: color-mix(in srgb, var(--text) 25%, transparent);
++}
++
++.pv-dot.accent {
++  background: var(--user);
++}
++
++.pv-omnibox {
++  flex: 1;
++  padding: 3px 12px;
++  border-radius: 999px;
++  font-size: 11.5px;
++  color: var(--muted);
++  background: color-mix(in srgb, var(--user) 16%, var(--panel-2));
++}
++
++.pv-page {
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++  padding: 16px;
++}
++
++.pv-line {
++  height: 8px;
++  width: 45%;
++  border-radius: 4px;
++  background: color-mix(in srgb, var(--text) 14%, transparent);
++}
++
++.pv-line.wide {
++  width: 75%;
++}
++
++.pv-button {
++  width: 72px;
++  height: 22px;
++  border-radius: 999px;
++  background: var(--user);
++}
++
++/* ------------------------------------------------------------- resources */
++
++.gauges {
++  display: grid;
++  grid-template-columns: repeat(3, minmax(0, 1fr));
++  gap: 16px;
++}
++
++.gauge {
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  gap: 4px;
++  padding: 20px 12px 16px;
++  border-radius: var(--radius);
++  border: 1px solid var(--border);
++  background: color-mix(in srgb, var(--panel) 88%, transparent);
++}
++
++.gauge-ring {
++  --fill: 0;
++  width: 112px;
++  height: 112px;
++  border-radius: 50%;
++  display: grid;
++  place-items: center;
++  background:
++    radial-gradient(closest-side, var(--panel) 78%, transparent 80% 100%),
++    conic-gradient(var(--accent) 0, var(--accent-2) calc(var(--fill) * 100%), var(--panel-2) 0);
++  transition: --fill 0.6s;
++}
++
++.gauge-value {
++  font-size: 20px;
++  font-weight: 700;
++  font-variant-numeric: tabular-nums;
++}
++
++.gauge-label {
++  margin-top: 8px;
++  font-weight: 600;
++}
++
++.gauge-sub {
++  font-size: 12px;
++  min-height: 1.5em;
++}
++
++.tasks {
++  list-style: none;
++  margin: 0;
++  padding: 0 0 8px;
++}
++
++.task {
++  display: grid;
++  grid-template-columns: minmax(0, 1fr) 56px 76px 84px auto;
++  align-items: center;
++  gap: 12px;
++  padding: 10px 0;
++  border-top: 1px solid var(--border);
++  font-variant-numeric: tabular-nums;
++}
++
++.task-title {
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.task-metric {
++  color: var(--muted);
++  text-align: end;
++  font-size: 12.5px;
++}
++
++.task-actions {
++  display: flex;
++  gap: 6px;
++  justify-content: flex-end;
++}
++
++/* --------------------------------------------------------------- privacy */
++
++.shield-card {
++  display: flex;
++  align-items: center;
++  gap: 16px;
++  padding: 18px 20px;
++  background: var(--grad-soft), color-mix(in srgb, var(--panel) 88%, transparent);
++}
++
++.shield-badge {
++  width: 48px;
++  height: 48px;
++  flex: none;
++  display: grid;
++  place-items: center;
++  border-radius: 14px;
++  background: var(--grad);
++  color: #fff;
++  box-shadow: 0 10px 30px -12px var(--accent-2);
++}
++
++.shield-card .row-text {
++  flex: 1;
++}
++
++.status {
++  font-size: 11.5px;
++  font-weight: 600;
++  padding: 1px 9px;
++  border-radius: 999px;
++  border: 1px solid currentColor;
++}
++
++.status.ok {
++  color: var(--ok);
++}
++
++.status.warn {
++  color: var(--warn);
++}
++
++/* ---------------------------------------------------------- restart bar */
++
++.restart-bar {
++  position: fixed;
++  left: 50%;
++  bottom: 24px;
++  transform: translateX(-50%);
++  display: flex;
++  align-items: center;
++  gap: 14px;
++  padding: 10px 12px 10px 18px;
++  border-radius: 16px;
++  border: 1px solid var(--border-strong);
++  background: color-mix(in srgb, var(--panel) 92%, transparent);
++  backdrop-filter: blur(16px);
++  box-shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.6);
++  z-index: 2;
++}
++
++.restart-bar[hidden] {
++  display: none;
++}
++
++@media (max-width: 860px) {
++  .layout {
++    grid-template-columns: 1fr;
++    padding: 16px 16px 120px;
++  }
++
++  .top {
++    padding: 24px 16px 0;
++  }
++
++  .rail {
++    position: static;
++    flex-direction: row;
++    overflow-x: auto;
++  }
++
++  .nav-item.active::before {
++    display: none;
++  }
++
++  .gauges {
++    grid-template-columns: 1fr;
++  }
++
++  .task {
++    grid-template-columns: minmax(0, 1fr) auto;
++  }
++
++  .task-metric {
++    display: none;
++  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  * {
++    transition: none !important;
++  }
++}
+--- a/chrome/browser/resources/hivey_studio/studio.html
++++ b/chrome/browser/resources/hivey_studio/studio.html
+@@ -0,0 +1,28 @@
++<!doctype html>
++<html dir="ltr" lang="en">
++<head>
++  <meta charset="utf-8">
++  <meta name="color-scheme" content="dark light">
++  <meta name="viewport" content="width=device-width, initial-scale=1">
++  <title>Hivey Studio</title>
++  <link rel="stylesheet" href="studio.css">
++  <script type="module" src="studio.js"></script>
++</head>
++<body>
++  <div class="aura" aria-hidden="true"></div>
++  <header class="top">
++    <div class="logo" aria-hidden="true">
++      <svg viewBox="0 0 32 32"><path d="M16 3l11 6.3v13.4L16 29 5 22.7V9.3z"/><path d="M16 10l5.2 3v6L16 22l-5.2-3v-6z"/></svg>
++    </div>
++    <div>
++      <h1 id="title">Hivey Studio</h1>
++      <p id="subtitle" class="muted"></p>
++    </div>
++  </header>
++  <div class="layout">
++    <nav id="nav" class="rail" aria-label="Hivey Studio"></nav>
++    <main id="main" tabindex="-1"></main>
++  </div>
++  <div id="restart" class="restart-bar" role="status" hidden></div>
++</body>
++</html>
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -0,0 +1,574 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++// Hivey Studio (chrome://hivey). The page builds its DOM with
++// createElement/textContent only (Trusted Types are enforced) and talks to
++// HiveyStudioHandler through chrome.send.
++
++import {addWebUiListener, sendWithPromise} from 'chrome://resources/js/cr.js';
++
++import {setLanguage, t} from './i18n.js';
++
++const DEFAULT_COLOR = '#f7a21b';
++
++const PRESETS = [
++  {key: 'presetAmber', color: '#f7a21b'},
++  {key: 'presetAura', color: '#6366f1'},
++  {key: 'presetViolet', color: '#8b5cf6'},
++  {key: 'presetOcean', color: '#0ea5e9'},
++  {key: 'presetMint', color: '#10b981'},
++  {key: 'presetCoral', color: '#f43f5e'},
++  {key: 'presetRose', color: '#ec4899'},
++  {key: 'presetGraphite', color: '#64748b'},
++];
++
++const SECTIONS = [
++  {id: 'appearance', nav: 'navAppearance', icon: 'palette', build: buildAppearance},
++  {id: 'layout', nav: 'navLayout', icon: 'layout', build: buildLayout},
++  {id: 'tabs', nav: 'navTabs', icon: 'tabs', build: buildTabs},
++  {id: 'resources', nav: 'navResources', icon: 'gauge', build: buildResources},
++  {id: 'privacy', nav: 'navPrivacy', icon: 'shield', build: buildPrivacy},
++  {id: 'about', nav: 'navAbout', icon: 'info', build: buildAbout},
++];
++
++// 24x24 stroke icons (Lucide-style paths).
++const ICONS = {
++  palette: ['M12 22a10 10 0 1 1 10-10c0 2.2-1.8 3.5-4 3.5h-1.6a1.9 1.9 0 0 0-1.4 3.2A1.9 1.9 0 0 1 12 22z',
++            'M7.5 10.5h.01', 'M12 7.5h.01', 'M16.5 10.5h.01'],
++  layout: ['M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', 'M9 3v18', 'M9 9h12'],
++  tabs: ['M3 8a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', 'M13 6h4l2 3'],
++  gauge: ['M12 14l4-4', 'M3.3 19a10 10 0 1 1 17.4 0', 'M12 14h.01'],
++  shield: ['M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10z', 'M9 12l2 2 4-4'],
++  info: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 16v-4', 'M12 8h.01'],
++  restart: ['M3 12a9 9 0 1 0 3-6.7L3 8', 'M3 3v5h5'],
++};
++
++let state = null;
++let current = 'appearance';
++let usageStarted = false;
++
++// ------------------------------------------------------------------ helpers
++
++function el(tag, props = {}, ...children) {
++  const node = document.createElement(tag);
++  for (const [key, value] of Object.entries(props)) {
++    if (key === 'class') {
++      node.className = value;
++    } else if (key === 'text') {
++      node.textContent = value;
++    } else if (key.startsWith('on')) {
++      node.addEventListener(key.slice(2), value);
++    } else if (value !== undefined && value !== null && value !== false) {
++      node.setAttribute(key, value === true ? '' : value);
++    }
++  }
++  for (const child of children.flat()) {
++    if (child !== null && child !== undefined && child !== false) {
++      node.append(child);
++    }
++  }
++  return node;
++}
++
++function icon(name) {
++  const ns = 'http://www.w3.org/2000/svg';
++  const svg = document.createElementNS(ns, 'svg');
++  svg.setAttribute('viewBox', '0 0 24 24');
++  svg.setAttribute('aria-hidden', 'true');
++  svg.classList.add('icon');
++  for (const d of ICONS[name] || []) {
++    const path = document.createElementNS(ns, 'path');
++    path.setAttribute('d', d);
++    svg.append(path);
++  }
++  return svg;
++}
++
++function pref(name) {
++  return state.prefs[name];
++}
++
++function hasPref(name) {
++  return name in state.prefs;
++}
++
++function flag(name) {
++  return state.flags.find(f => f.name === name);
++}
++
++function setPref(name, value) {
++  chrome.send('setPref', [name, value]);
++}
++
++function setFlag(name, value) {
++  chrome.send('setFlag', [name, value]);
++}
++
++// A flag shown as a switch: single-value flags use "enabled"; multi-value
++// ones are on when option `onOption` is selected (0 = default = off).
++function flagIsOn(spec) {
++  const f = flag(spec.flag);
++  if (!f) {
++    return false;
++  }
++  const on = f.kind === 'single' ? f.enabled : f.selected === (spec.onOption ?? 1);
++  return spec.invert ? !on : on;
++}
++
++function setFlagOn(spec, on) {
++  const f = flag(spec.flag);
++  if (!f) {
++    return;
++  }
++  const wanted = spec.invert ? !on : on;
++  setFlag(spec.flag, f.kind === 'single' ? wanted : (wanted ? (spec.onOption ?? 1) : 0));
++}
++
++// ----------------------------------------------------------------- controls
++
++function toggleRow({label, hint, checked, onChange, restart, disabled}) {
++  const id = `t${Math.random().toString(36).slice(2)}`;
++  const input = el('input', {type: 'checkbox', role: 'switch', id, class: 'switch-input', disabled, 'data-key': label});
++  input.checked = !!checked;
++  input.addEventListener('change', () => onChange(input.checked));
++  return el('div', {class: `row${disabled ? ' disabled' : ''}`},
++            el('label', {class: 'row-text', for: id},
++               el('span', {class: 'row-label'}, label, restart ? el('span', {class: 'pill', text: '↻'}) : null),
++               hint ? el('span', {class: 'row-hint', text: hint}) : null),
++            el('span', {class: 'switch'}, input, el('span', {class: 'switch-track', 'aria-hidden': 'true'})));
++}
++
++function selectRow({label, hint, value, options, onChange, restart, disabled}) {
++  const select = el('select', {class: 'select', disabled, 'aria-label': label, 'data-key': label});
++  for (const option of options) {
++    const node = el('option', {value: String(option.value), text: option.label});
++    if (String(option.value) === String(value)) {
++      node.selected = true;
++    }
++    select.append(node);
++  }
++  select.addEventListener('change', () => {
++    const option = options[select.selectedIndex];
++    onChange(option.value);
++  });
++  return el('div', {class: `row${disabled ? ' disabled' : ''}`},
++            el('div', {class: 'row-text'},
++               el('span', {class: 'row-label'}, label, restart ? el('span', {class: 'pill', text: '↻'}) : null),
++               hint ? el('span', {class: 'row-hint', text: hint}) : null),
++            select);
++}
++
++function segmented({label, value, options, onChange}) {
++  const group = el('div', {class: 'segmented', role: 'radiogroup', 'aria-label': label});
++  for (const option of options) {
++    const button = el('button', {
++      class: `segment${option.value === value ? ' active' : ''}`,
++      role: 'radio',
++      'aria-checked': option.value === value ? 'true' : 'false',
++      text: option.label,
++      'data-key': `${label}/${option.value}`,
++      onclick: () => onChange(option.value),
++    });
++    group.append(button);
++  }
++  return el('div', {class: 'field'}, el('div', {class: 'field-label', text: label}), group);
++}
++
++function linkRow({label, hint, onClick}) {
++  return el('button', {class: 'row link-row', onclick: onClick},
++            el('span', {class: 'row-text'},
++               el('span', {class: 'row-label', text: label}),
++               hint ? el('span', {class: 'row-hint', text: hint}) : null),
++            el('span', {class: 'chevron', 'aria-hidden': 'true', text: '›'}));
++}
++
++function card(title, ...children) {
++  return el('section', {class: 'card'}, title ? el('h3', {class: 'card-title', text: title}) : null, ...children);
++}
++
++function sectionHeader(titleKey, hintKey) {
++  return el('header', {class: 'section-header'},
++            el('h2', {text: t(titleKey)}),
++            el('p', {class: 'muted', text: t(hintKey)}));
++}
++
++function openUrl(url) {
++  window.open(url, '_blank');
++}
++
++// --------------------------------------------------------------- appearance
++
++function themeColor() {
++  return state.theme.color || DEFAULT_COLOR;
++}
++
++function applyAccent() {
++  document.documentElement.style.setProperty('--user', themeColor());
++}
++
++function buildAppearance() {
++  const theme = state.theme;
++  const color = themeColor();
++
++  const swatches = el('div', {class: 'swatches'});
++  for (const preset of PRESETS) {
++    const active = preset.color.toLowerCase() === color.toLowerCase();
++    const swatch = el('button', {
++      class: `swatch${active ? ' active' : ''}`,
++      title: t(preset.key),
++      'aria-label': t(preset.key),
++      'aria-pressed': active ? 'true' : 'false',
++      onclick: () => chrome.send('setThemeColor', [preset.color, theme.variant === 'system' ? 'tonal' : theme.variant]),
++    });
++    swatch.style.setProperty('--swatch', preset.color);
++    swatches.append(el('div', {class: 'swatch-wrap'}, swatch, el('span', {class: 'swatch-name', text: t(preset.key)})));
++  }
++
++  const picker = el('input', {type: 'color', class: 'color-input', value: color, 'aria-label': t('customColor')});
++  picker.addEventListener('input', () => document.documentElement.style.setProperty('--user', picker.value));
++  picker.addEventListener('change', () =>
++      chrome.send('setThemeColor', [picker.value, theme.variant === 'system' ? 'tonal' : theme.variant]));
++
++  const preview = el('div', {class: 'preview', 'aria-label': t('preview')},
++                     el('div', {class: 'pv-frame'},
++                        el('div', {class: 'pv-tabs'},
++                           el('span', {class: 'pv-tab active', text: t('previewTab')}),
++                           el('span', {class: 'pv-tab'}), el('span', {class: 'pv-tab'})),
++                        el('div', {class: 'pv-toolbar'},
++                           el('span', {class: 'pv-dot'}), el('span', {class: 'pv-dot'}),
++                           el('span', {class: 'pv-omnibox', text: t('previewAddress')}),
++                           el('span', {class: 'pv-dot accent'}))),
++                     el('div', {class: 'pv-page'},
++                        el('span', {class: 'pv-line wide'}), el('span', {class: 'pv-line'}),
++                        el('span', {class: 'pv-button'})));
++
++  return el('div', {},
++            sectionHeader('appearanceTitle', 'appearanceHint'),
++            theme.extensionTheme ? el('div', {class: 'notice', text: t('extensionTheme')}) : null,
++            el('div', {class: 'grid-2'},
++               card(t('presets'), swatches,
++                    el('div', {class: 'custom-color'},
++                       picker,
++                       el('div', {class: 'row-text'},
++                          el('span', {class: 'row-label', text: t('customColor')}),
++                          el('span', {class: 'row-hint', text: t('customColorHint')})))),
++               card(t('preview'), preview)),
++            card(null,
++                 segmented({
++                   label: t('variant'),
++                   value: theme.variant === 'system' ? 'tonal' : theme.variant,
++                   options: [
++                     {value: 'tonal', label: t('variantTonal')},
++                     {value: 'neutral', label: t('variantNeutral')},
++                     {value: 'vibrant', label: t('variantVibrant')},
++                     {value: 'expressive', label: t('variantExpressive')},
++                   ],
++                   onChange: v => chrome.send('setThemeColor', [color, v]),
++                 }),
++                 segmented({
++                   label: t('scheme'),
++                   value: theme.scheme,
++                   options: [
++                     {value: 'system', label: t('schemeSystem')},
++                     {value: 'light', label: t('schemeLight')},
++                     {value: 'dark', label: t('schemeDark')},
++                   ],
++                   onChange: v => chrome.send('setColorScheme', [v]),
++                 }),
++                 toggleRow({
++                   label: t('grayscale'), hint: t('grayscaleHint'), checked: theme.grayscale,
++                   onChange: on => chrome.send('setGrayscale', [on]),
++                 }),
++                 flag('enable-incognito-themes') ? toggleRow({
++                   label: t('incognitoThemes'), hint: t('incognitoThemesHint'), restart: true,
++                   checked: flagIsOn({flag: 'enable-incognito-themes'}),
++                   onChange: on => setFlagOn({flag: 'enable-incognito-themes'}, on),
++                 }) : null,
++                 el('div', {class: 'actions'},
++                    el('button', {class: 'button ghost', text: t('resetTheme'), onclick: () => chrome.send('resetTheme')}))));
++}
++
++// ------------------------------------------------------------------- layout
++
++function prefToggle(name, labelKey, hintKey) {
++  if (!hasPref(name)) {
++    return null;
++  }
++  return toggleRow({
++    label: t(labelKey), hint: hintKey ? t(hintKey) : null, checked: pref(name),
++    onChange: on => setPref(name, on),
++  });
++}
++
++function flagToggle(spec, labelKey, hintKey) {
++  if (!flag(spec.flag)) {
++    return null;
++  }
++  return toggleRow({
++    label: t(labelKey), hint: hintKey ? t(hintKey) : null, restart: true,
++    checked: flagIsOn(spec), onChange: on => setFlagOn(spec, on),
++  });
++}
++
++function flagSelect(name, labelKey, optionKeys) {
++  const f = flag(name);
++  if (!f || f.kind !== 'multi') {
++    return null;
++  }
++  return selectRow({
++    label: t(labelKey), restart: true, value: f.selected,
++    options: optionKeys.map((key, index) => ({value: index, label: t(key)})),
++    onChange: v => setFlag(name, Number(v)),
++  });
++}
++
++function buildLayout() {
++  const vertical = hasPref('vertical_tabs.enabled') && pref('vertical_tabs.enabled');
++  return el('div', {},
++            sectionHeader('layoutTitle', 'layoutHint'),
++            card(null,
++                 prefToggle('vertical_tabs.enabled', 'verticalTabs', 'verticalTabsHint'),
++                 vertical ? prefToggle('vertical_tabs.expand_on_hover', 'expandOnHover') : null,
++                 flagToggle({flag: 'hivey-compact-ui'}, 'compactMode', 'compactModeHint'),
++                 hasPref('side_panel.is_right_aligned') ? selectRow({
++                   label: t('sidePanel'), value: pref('side_panel.is_right_aligned') ? 1 : 0,
++                   options: [{value: 0, label: t('left')}, {value: 1, label: t('right')}],
++                   onChange: v => setPref('side_panel.is_right_aligned', Number(v) === 1),
++                 }) : null),
++            card(null,
++                 prefToggle('browser.show_home_button', 'homeButton'),
++                 prefToggle('browser.show_forward_button', 'forwardButton'),
++                 prefToggle('bookmark_bar.show_on_all_tabs', 'bookmarkBar'),
++                 flagToggle({flag: 'bookmark-bar-ntp'}, 'bookmarkBarNtp'),
++                 prefToggle('tab_search.pinned_to_tabstrip', 'tabSearch'),
++                 flagToggle({flag: 'hide-extensions-menu'}, 'hideExtensionsMenu'),
++                 flagToggle({flag: 'remove-grab-handle'}, 'removeGrabHandle'),
++                 flagSelect('show-avatar-button', 'avatarButton',
++                            ['avatarDefault', 'avatarAlways', 'avatarIncognito', 'avatarNever']),
++                 linkRow({
++                   label: t('customizeToolbar'), hint: t('customizeToolbarHint'),
++                   onClick: () => chrome.send('openCustomizeToolbar'),
++                 })));
++}
++
++// --------------------------------------------------------------------- tabs
++
++function buildTabs() {
++  return el('div', {},
++            sectionHeader('tabsTitle', 'tabsHint'),
++            card(null,
++                 prefToggle('browser.ctrl_tab_mru', 'ctrlTabMru'),
++                 flagSelect('scroll-tabs', 'scrollTabs', ['scrollTabsDefault', 'scrollTabsAlways', 'scrollTabsNever']),
++                 flagToggle({flag: 'close-window-with-last-tab'}, 'keepWindow'),
++                 flagToggle({flag: 'hide-tab-close-buttons'}, 'hideCloseButtons', 'hideCloseButtonsHint'),
++                 flagToggle({flag: 'popups-to-tabs'}, 'popupsToTabs'),
++                 flagToggle({flag: 'disable-link-drag'}, 'disableLinkDrag'),
++                 flagToggle({flag: 'hide-fullscreen-exit-ui'}, 'hideFullscreenExit'),
++                 flagSelect('close-confirmation', 'closeConfirmation',
++                            ['closeConfirmationDefault', 'closeConfirmationLast', 'closeConfirmationMultiple'])),
++            card(null,
++                 flagSelect('tab-hover-cards', 'hoverCards', ['hoverCardsDefault', 'hoverCardsNone', 'hoverCardsTooltip']),
++                 prefToggle('browser.hovercard.image_previews_enabled', 'hoverImages'),
++                 prefToggle('browser.hovercard.memory_usage_enabled', 'hoverMemory')));
++}
++
++// ---------------------------------------------------------------- resources
++
++function formatMb(mb) {
++  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`;
++}
++
++function formatRate(kbps) {
++  return kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mb/s` : `${Math.round(kbps)} kb/s`;
++}
++
++function gauge(id, labelKey) {
++  return el('div', {class: 'gauge', id},
++            el('div', {class: 'gauge-ring'}, el('div', {class: 'gauge-value', text: '–'})),
++            el('div', {class: 'gauge-label', text: t(labelKey)}),
++            el('div', {class: 'gauge-sub muted', text: ''}));
++}
++
++function buildResources() {
++  const memoryOptions = [0, 2, 4, 6, 8, 12, 16].map(gb => ({value: gb * 1024, label: gb ? `${gb} GB` : t('noLimit')}));
++  const cpuOptions = [0, 10, 25, 50, 75].map(p => ({value: p, label: p ? `${p} % ${t('perTab')}` : t('noLimit')}));
++  const networkOptions = [0, 1, 5, 10, 25, 50, 100].map(m => ({value: m * 1000, label: m ? `${m} Mb/s` : t('noLimit')}));
++  return el('div', {},
++            sectionHeader('resourcesTitle', 'resourcesHint'),
++            el('div', {class: 'gauges'}, gauge('gauge-cpu', 'cpu'), gauge('gauge-ram', 'ram'), gauge('gauge-net', 'network')),
++            card(null,
++                 hasPref('hivey.memory_limit_mb') ? selectRow({
++                   label: t('ramLimiter'), hint: t('ramLimiterHint'), value: pref('hivey.memory_limit_mb'),
++                   options: memoryOptions, onChange: v => setPref('hivey.memory_limit_mb', Number(v)),
++                 }) : null,
++                 hasPref('hivey.cpu_limit_percent') ? selectRow({
++                   label: t('cpuLimiter'),
++                   hint: state.cpuLimiterSupported ? t('cpuLimiterHint') : t('cpuLimiterUnsupported'),
++                   value: pref('hivey.cpu_limit_percent'), options: cpuOptions,
++                   disabled: !state.cpuLimiterSupported,
++                   onChange: v => setPref('hivey.cpu_limit_percent', Number(v)),
++                 }) : null,
++                 hasPref('hivey.network_limit_kbps') ? selectRow({
++                   label: t('networkLimiter'), hint: t('networkLimiterHint'), value: pref('hivey.network_limit_kbps'),
++                   options: networkOptions, onChange: v => setPref('hivey.network_limit_kbps', Number(v)),
++                 }) : null,
++                 linkRow({label: t('memorySaver'), onClick: () => openUrl('chrome://settings/performance')})),
++            card(t('hotTabs'),
++                 el('p', {class: 'muted small', text: t('hotTabsHint')}),
++                 el('ol', {class: 'tasks', id: 'tasks'})));
++}
++
++function setGauge(id, fraction, value, sub) {
++  const node = document.getElementById(id);
++  if (!node) {
++    return;
++  }
++  node.querySelector('.gauge-ring').style.setProperty('--fill', String(Math.max(0, Math.min(1, fraction))));
++  node.querySelector('.gauge-value').textContent = value;
++  node.querySelector('.gauge-sub').textContent = sub;
++}
++
++function onUsage(usage) {
++  const cores = Math.max(1, usage.cores);
++  const cpuShare = usage.cpu / cores;
++  setGauge('gauge-cpu', cpuShare / 100, `${Math.round(cpuShare)} %`, t('ofMachine'));
++  const limitMb = pref('hivey.memory_limit_mb') || 0;
++  setGauge('gauge-ram', limitMb ? usage.memoryMb / limitMb : Math.min(1, usage.memoryMb / 8192),
++           formatMb(usage.memoryMb), limitMb ? `/ ${formatMb(limitMb)}` : '');
++  const limitKbps = pref('hivey.network_limit_kbps') || 0;
++  setGauge('gauge-net', limitKbps ? usage.networkKbps / limitKbps : Math.min(1, usage.networkKbps / 50000),
++           formatRate(usage.networkKbps), limitKbps ? `/ ${formatRate(limitKbps)}` : '');
++
++  const list = document.getElementById('tasks');
++  if (!list) {
++    return;
++  }
++  const hot = usage.tasks.filter(task => task.type !== 1 /* BROWSER */)
++                  .sort((a, b) => (b.cpu - a.cpu) || (b.memoryMb - a.memoryMb))
++                  .slice(0, 8);
++  list.replaceChildren(...hot.map(task => el('li', {class: 'task'},
++      el('span', {class: 'task-title', title: task.title, text: task.title}),
++      el('span', {class: 'task-metric', text: `${Math.round(task.cpu / cores)} %`}),
++      el('span', {class: 'task-metric', text: formatMb(task.memoryMb)}),
++      el('span', {class: 'task-metric', text: formatRate(task.networkKbps)}),
++      el('span', {class: 'task-actions'},
++         task.isTab ? el('button', {class: 'button small ghost', text: t('show'),
++                                    onclick: () => chrome.send('taskAction', ['activate', task.id])}) : null,
++         task.killable ? el('button', {class: 'button small danger', text: t('close'),
++                                       onclick: () => chrome.send('taskAction', ['kill', task.id])}) : null))));
++}
++
++function updateUsageSubscription() {
++  const wanted = current === 'resources' && document.visibilityState === 'visible';
++  if (wanted !== usageStarted) {
++    usageStarted = wanted;
++    chrome.send(wanted ? 'startUsage' : 'stopUsage');
++  }
++}
++
++// ------------------------------------------------------------------ privacy
++
++function buildPrivacy() {
++  const shield = state.shield;
++  const shieldStatus = !shield.installed ? 'shieldMissing' : (shield.enabled ? 'shieldOn' : 'shieldOff');
++  return el('div', {},
++            sectionHeader('privacyTitle', 'privacyHint'),
++            el('div', {class: 'card shield-card'},
++               el('div', {class: 'shield-badge'}, icon('shield')),
++               el('div', {class: 'row-text'},
++                  el('span', {class: 'row-label'}, t('shield'),
++                     el('span', {class: `status ${shield.enabled ? 'ok' : 'warn'}`, text: t(shieldStatus)})),
++                  el('span', {class: 'row-hint', text: t('shieldHint')})),
++               el('button', {class: 'button ghost', text: t('manage'),
++                             onclick: () => openUrl(`chrome://extensions/?id=${shield.id}`)})),
++            card(null,
++                 flagToggle({flag: 'disable-fingerprinting-noise', invert: true}, 'antiFingerprint', 'antiFingerprintHint'),
++                 prefToggle('https_only_mode_enabled', 'httpsOnly', 'httpsOnlyHint'),
++                 flagToggle({flag: 'clear-data-on-exit'}, 'clearOnExit', 'clearOnExitHint'),
++                 linkRow({label: t('secureDns'), onClick: () => openUrl('chrome://settings/security')}),
++                 linkRow({label: t('cookies'), onClick: () => openUrl('chrome://settings/cookies')})),
++            card(t('builtIn'), el('p', {class: 'muted', text: t('builtInItems')})));
++}
++
++// -------------------------------------------------------------------- about
++
++function buildAbout() {
++  return el('div', {},
++            sectionHeader('aboutTitle', 'aboutText'),
++            card(null,
++                 el('div', {class: 'row'},
++                    el('span', {class: 'row-label', text: t('version')}),
++                    el('span', {class: 'mono', text: state.version})),
++                 linkRow({label: t('sourceCode'),
++                          onClick: () => openUrl('https://github.com/FlorianMartins/hivey-browser')}),
++                 linkRow({label: t('flags'), onClick: () => openUrl('chrome://flags')})));
++}
++
++// ---------------------------------------------------------------- page shell
++
++function buildNav() {
++  const nav = document.getElementById('nav');
++  nav.replaceChildren(...SECTIONS.map(section => el('button', {
++    class: `nav-item${section.id === current ? ' active' : ''}`,
++    'aria-current': section.id === current ? 'page' : null,
++    onclick: () => select(section.id),
++  }, icon(section.icon), el('span', {text: t(section.nav)}))));
++}
++
++function render() {
++  applyAccent();
++  buildNav();
++  const section = SECTIONS.find(s => s.id === current);
++  const main = document.getElementById('main');
++  main.replaceChildren(section.build());
++  document.getElementById('restart').hidden = !state.restartNeeded;
++  updateUsageSubscription();
++}
++
++function select(id) {
++  if (id === current) {
++    return;
++  }
++  current = id;
++  history.replaceState(null, '', `#${id}`);
++  render();
++  document.getElementById('main').focus({preventScroll: true});
++  window.scrollTo({top: 0});
++}
++
++function buildShell() {
++  document.getElementById('title').textContent = t('title');
++  document.getElementById('subtitle').textContent = t('subtitle');
++  document.title = t('title');
++  const bar = document.getElementById('restart');
++  bar.replaceChildren(icon('restart'), el('span', {text: t('restartNeeded')}),
++                      el('button', {class: 'button primary', text: t('restart'), onclick: () => chrome.send('restart')}));
++}
++
++async function main() {
++  state = await sendWithPromise('getState');
++  setLanguage(state.language);
++  const fromHash = location.hash.slice(1);
++  if (SECTIONS.some(s => s.id === fromHash)) {
++    current = fromHash;
++  }
++  buildShell();
++  render();
++  addWebUiListener('hivey-state', newState => {
++    state = newState;
++    // Re-render after the current event, keeping keyboard focus on the
++    // control the user just used.
++    setTimeout(() => {
++      const key = document.activeElement?.dataset?.key;
++      render();
++      if (key) {
++        document.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus();
++      }
++    });
++  });
++  addWebUiListener('hivey-usage', onUsage);
++  document.addEventListener('visibilitychange', updateUsageSubscription);
++}
++
++main();
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -2177,6 +2177,13 @@
+   ]
+ 
+   if (!is_android) {
++    # Hivey: Hivey Studio (chrome://hivey).
++    sources += [
++      "webui/hivey/hivey_studio_handler.cc",
++      "webui/hivey/hivey_studio_handler.h",
++      "webui/hivey/hivey_studio_ui.cc",
++      "webui/hivey/hivey_studio_ui.h",
++    ]
+     deps += [
+       ":browser_content_setting_bubble_model_delegate",
+       ":browser_content_setting_bubble_model_delegate_impl",
+--- a/chrome/browser/ui/browser_command_controller.cc
++++ b/chrome/browser/ui/browser_command_controller.cc
+@@ -1302,6 +1302,10 @@
+     case IDC_OPTIONS:
+       ShowSettings(webui::GetBrowserForOpeningWebUi(browser_));
+       break;
++    case IDC_HIVEY_STUDIO:
++      ShowSingletonTab(webui::GetBrowserForOpeningWebUi(browser_),
++                       GURL("chrome://hivey/"));
++      break;
+     case IDC_EDIT_SEARCH_ENGINES:
+       ShowSearchEngineSettings(webui::GetBrowserForOpeningWebUi(browser_));
+       break;
+@@ -2098,6 +2102,8 @@
+                                         !forced_incognito && !is_guest);
+   command_updater->UpdateCommandEnabled(IDC_OPTIONS,
+                                         !forced_incognito || is_guest);
++  command_updater->UpdateCommandEnabled(IDC_HIVEY_STUDIO,
++                                        !forced_incognito || is_guest);
+   command_updater->UpdateCommandEnabled(IDC_PERFORMANCE,
+                                         !forced_incognito && !is_guest);
+ }
+--- a/chrome/browser/ui/toolbar/app_menu_model.cc
++++ b/chrome/browser/ui/toolbar/app_menu_model.cc
+@@ -2255,6 +2255,10 @@
+ #endif
+ #endif
+ 
++  // Hivey: Hivey Studio, right above Settings.
++  AddItemWithStringIdAndVectorIcon(this, IDC_HIVEY_STUDIO, IDS_HIVEY_STUDIO,
++                                   vector_icons::kTuneIcon);
++
+   AddItemWithStringIdAndVectorIcon(
+       this, IDC_OPTIONS, IDS_SETTINGS,
+       features::IsRoundedIconsEnabled() ? kSettingsIcon : kSettingsMenuOldIcon);
+--- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
++++ b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
+@@ -58,6 +58,9 @@
+ #include "chrome/browser/ui/webui/sync_internals/sync_internals_ui.h"
+ #include "chrome/browser/ui/webui/translate_internals/translate_internals_ui.h"
+ #include "chrome/browser/ui/webui/ungoogled_first_run.h"
++#if !BUILDFLAG(IS_ANDROID)
++#include "chrome/browser/ui/webui/hivey/hivey_studio_ui.h"
++#endif
+ #include "chrome/browser/ui/webui/usb_internals/usb_internals_ui.h"
+ #include "chrome/browser/ui/webui/version/version_ui.h"
+ #include "components/enterprise/buildflags/buildflags.h"
+@@ -326,6 +329,9 @@
+   map.AddWebUIConfig(std::make_unique<SyncInternalsUIConfig>());
+   map.AddWebUIConfig(std::make_unique<TranslateInternalsUIConfig>());
+   map.AddWebUIConfig(std::make_unique<UngoogledFirstRunUIConfig>());
++#if !BUILDFLAG(IS_ANDROID)
++  map.AddWebUIConfig(std::make_unique<HiveyStudioUIConfig>());
++#endif
+   map.AddWebUIConfig(std::make_unique<UsbInternalsUIConfig>());
+   map.AddWebUIConfig(std::make_unique<user_actions_ui::UserActionsUIConfig>());
+   map.AddWebUIConfig(std::make_unique<VersionUIConfig>());
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -0,0 +1,465 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/ui/webui/hivey/hivey_studio_handler.h"
++
++#include <algorithm>
++#include <set>
++#include <string>
++#include <vector>
++
++#include "base/containers/fixed_flat_map.h"
++#include "base/functional/bind.h"
++#include "base/strings/string_number_conversions.h"
++#include "base/strings/stringprintf.h"
++#include "base/system/sys_info.h"
++#include "base/time/time.h"
++#include "build/build_config.h"
++#include "chrome/app/chrome_command_ids.h"
++#include "chrome/browser/about_flags.h"
++#include "chrome/browser/browser_process.h"
++#include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/browser/hivey/hivey_resource_limits.h"
++#include "chrome/browser/lifetime/application_lifetime.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/task_manager/task_manager_interface.h"
++#include "chrome/browser/themes/theme_service.h"
++#include "chrome/browser/themes/theme_service_factory.h"
++#include "chrome/browser/ui/browser_commands.h"
++#include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
++#include "components/prefs/pref_service.h"
++#include "components/version_info/version_info.h"
++#include "components/webui/flags/flags_state.h"
++#include "components/webui/flags/pref_service_flags_storage.h"
++#include "content/public/browser/web_ui.h"
++#include "extensions/browser/extension_registry.h"
++#include "third_party/skia/include/core/SkColor.h"
++#include "ui/base/mojom/themes.mojom.h"
++
++namespace {
++
++// Settings Hivey Studio may read and write. Anything else is refused.
++struct AllowedPref {
++  const char* name;
++  bool local_state;
++};
++constexpr AllowedPref kAllowedPrefs[] = {
++    {"vertical_tabs.enabled", false},
++    {"vertical_tabs.expand_on_hover", false},
++    {"side_panel.is_right_aligned", false},
++    {"browser.show_home_button", false},
++    {"browser.show_forward_button", false},
++    {"bookmark_bar.show_on_all_tabs", false},
++    {"tab_search.pinned_to_tabstrip", false},
++    {"browser.ctrl_tab_mru", false},
++    {"browser.hovercard.image_previews_enabled", false},
++    {"browser.hovercard.memory_usage_enabled", false},
++    {"https_only_mode_enabled", false},
++    {"hivey.memory_limit_mb", true},
++    {hivey::kCpuLimitPercent, true},
++    {hivey::kNetworkLimitKbps, true},
++};
++
++// chrome://flags entries shown in Hivey Studio (they need a restart).
++constexpr const char* kCuratedFlags[] = {
++    "hivey-compact-ui",     "scroll-tabs",          "close-window-with-last-tab",
++    "tab-hover-cards",      "hide-tab-close-buttons", "show-avatar-button",
++    "hide-extensions-menu", "remove-grab-handle",   "hide-fullscreen-exit-ui",
++    "popups-to-tabs",       "close-confirmation",   "bookmark-bar-ntp",
++    "disable-link-drag",    "clear-data-on-exit",   "enable-incognito-themes",
++    "disable-fingerprinting-noise",
++};
++
++constexpr auto kVariants =
++    base::MakeFixedFlatMap<std::string_view, ui::mojom::BrowserColorVariant>({
++        {"system", ui::mojom::BrowserColorVariant::kSystem},
++        {"tonal", ui::mojom::BrowserColorVariant::kTonalSpot},
++        {"neutral", ui::mojom::BrowserColorVariant::kNeutral},
++        {"vibrant", ui::mojom::BrowserColorVariant::kVibrant},
++        {"expressive", ui::mojom::BrowserColorVariant::kExpressive},
++    });
++
++constexpr auto kSchemes =
++    base::MakeFixedFlatMap<std::string_view, ThemeService::BrowserColorScheme>({
++        {"system", ThemeService::BrowserColorScheme::kSystem},
++        {"light", ThemeService::BrowserColorScheme::kLight},
++        {"dark", ThemeService::BrowserColorScheme::kDark},
++    });
++
++const AllowedPref* FindAllowedPref(std::string_view name) {
++  for (const AllowedPref& pref : kAllowedPrefs) {
++    if (name == pref.name) {
++      return &pref;
++    }
++  }
++  return nullptr;
++}
++
++bool IsCuratedFlag(std::string_view name) {
++  return std::ranges::find(kCuratedFlags, name) != std::end(kCuratedFlags);
++}
++
++std::string ColorToHex(SkColor color) {
++  return base::StringPrintf("#%02x%02x%02x", SkColorGetR(color),
++                            SkColorGetG(color), SkColorGetB(color));
++}
++
++// Parses "#rrggbb".
++std::optional<SkColor> HexToColor(const std::string& hex) {
++  uint32_t rgb = 0;
++  if (hex.size() != 7 || hex[0] != '#' ||
++      !base::HexStringToUInt(std::string_view(hex).substr(1), &rgb)) {
++    return std::nullopt;
++  }
++  return SkColorSetRGB((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
++}
++
++}  // namespace
++
++// Streams task manager data (CPU, memory, network per task) to the page,
++// once per second, while the Resources section is visible.
++class HiveyStudioHandler::UsageObserver
++    : public task_manager::TaskManagerObserver {
++ public:
++  using Callback = base::RepeatingCallback<void(base::DictValue)>;
++
++  explicit UsageObserver(Callback callback)
++      : TaskManagerObserver(base::Seconds(1),
++                            task_manager::REFRESH_TYPE_CPU |
++                                task_manager::REFRESH_TYPE_MEMORY_FOOTPRINT |
++                                task_manager::REFRESH_TYPE_NETWORK_USAGE),
++        callback_(std::move(callback)) {
++    task_manager::TaskManagerInterface::GetTaskManager()->AddObserver(this);
++  }
++
++  ~UsageObserver() override {
++    if (observed_task_manager()) {
++      observed_task_manager()->RemoveObserver(this);
++    }
++  }
++
++  // task_manager::TaskManagerObserver:
++  void OnTasksRefreshed(const task_manager::TaskIdList& task_ids) override {
++    task_manager::TaskManagerInterface* tm = observed_task_manager();
++    double total_cpu = 0;
++    int64_t total_memory = 0;
++    int64_t total_network = 0;
++    base::ListValue tasks;
++    std::set<base::ProcessId> counted_processes;
++    for (task_manager::TaskId id : task_ids) {
++      const double cpu = tm->GetPlatformIndependentCPUUsage(id);
++      const int64_t memory =
++          tm->GetMemoryFootprintUsage(id).value_or(base::ByteSize()).InBytes();
++      const int64_t network = tm->GetNetworkUsage(id).InBytes();
++      total_network += network;
++      // CPU and memory are per process: count each process once.
++      if (counted_processes.insert(tm->GetProcessId(id)).second) {
++        total_cpu += std::max(cpu, 0.0);
++        total_memory += memory;
++      }
++      tasks.Append(base::DictValue()
++                       .Set("id", static_cast<double>(id))
++                       .Set("title", tm->GetTitle(id))
++                       .Set("type", static_cast<int>(tm->GetType(id)))
++                       .Set("isTab", tm->GetTabId(id).is_valid())
++                       .Set("cpu", std::max(cpu, 0.0))
++                       .Set("memoryMb", static_cast<double>(memory) / (1 << 20))
++                       .Set("networkKbps", network * 8 / 1000.0)
++                       .Set("killable", tm->IsTaskKillable(id)));
++    }
++    callback_.Run(
++        base::DictValue()
++            .Set("tasks", std::move(tasks))
++            .Set("cpu", total_cpu)
++            .Set("memoryMb", static_cast<double>(total_memory) / (1 << 20))
++            .Set("networkKbps", total_network * 8 / 1000.0)
++            .Set("cores", static_cast<int>(base::SysInfo::NumberOfProcessors())));
++  }
++
++ private:
++  Callback callback_;
++};
++
++HiveyStudioHandler::HiveyStudioHandler() = default;
++
++HiveyStudioHandler::~HiveyStudioHandler() = default;
++
++void HiveyStudioHandler::RegisterMessages() {
++  const auto add = [this](const char* name,
++                          void (HiveyStudioHandler::*method)(
++                              const base::ListValue&)) {
++    web_ui()->RegisterMessageCallback(
++        name, base::BindRepeating(method, base::Unretained(this)));
++  };
++  add("getState", &HiveyStudioHandler::HandleGetState);
++  add("setThemeColor", &HiveyStudioHandler::HandleSetThemeColor);
++  add("setColorScheme", &HiveyStudioHandler::HandleSetColorScheme);
++  add("setGrayscale", &HiveyStudioHandler::HandleSetGrayscale);
++  add("resetTheme", &HiveyStudioHandler::HandleResetTheme);
++  add("setPref", &HiveyStudioHandler::HandleSetPref);
++  add("setFlag", &HiveyStudioHandler::HandleSetFlag);
++  add("restart", &HiveyStudioHandler::HandleRestart);
++  add("startUsage", &HiveyStudioHandler::HandleStartUsage);
++  add("stopUsage", &HiveyStudioHandler::HandleStopUsage);
++  add("taskAction", &HiveyStudioHandler::HandleTaskAction);
++  add("openCustomizeToolbar", &HiveyStudioHandler::HandleOpenCustomizeToolbar);
++}
++
++void HiveyStudioHandler::OnJavascriptDisallowed() {
++  usage_observer_.reset();
++}
++
++Profile* HiveyStudioHandler::GetProfile() {
++  return Profile::FromWebUI(web_ui());
++}
++
++base::DictValue HiveyStudioHandler::BuildThemeState() {
++  ThemeService* theme = ThemeServiceFactory::GetForProfile(GetProfile());
++  std::string variant = "system";
++  for (const auto& [name, value] : kVariants) {
++    if (value == theme->GetBrowserColorVariant()) {
++      variant = std::string(name);
++    }
++  }
++  std::string scheme = "system";
++  for (const auto& [name, value] : kSchemes) {
++    if (value == theme->GetBrowserColorScheme()) {
++      scheme = std::string(name);
++    }
++  }
++  const std::optional<SkColor> color = theme->GetUserColor();
++  return base::DictValue()
++      .Set("color", color ? ColorToHex(*color) : std::string())
++      .Set("variant", variant)
++      .Set("scheme", scheme)
++      .Set("grayscale", theme->GetIsGrayscale())
++      .Set("extensionTheme", theme->UsingExtensionTheme());
++}
++
++base::DictValue HiveyStudioHandler::BuildPrefsState() {
++  base::DictValue prefs;
++  for (const AllowedPref& pref : kAllowedPrefs) {
++    PrefService* service = pref.local_state ? g_browser_process->local_state()
++                                            : GetProfile()->GetPrefs();
++    if (const PrefService::Preference* p =
++            service ? service->FindPreference(pref.name) : nullptr) {
++      prefs.Set(pref.name, p->GetValue()->Clone());
++    }
++  }
++  return prefs;
++}
++
++base::ListValue HiveyStudioHandler::BuildFlagsState() {
++  flags_ui::PrefServiceFlagsStorage storage(g_browser_process->local_state());
++  base::ListValue supported;
++  base::ListValue unsupported;
++  about_flags::GetFlagFeatureEntries(&storage, flags_ui::kOwnerAccessToFlags,
++                                     supported, unsupported);
++  base::ListValue flags;
++  for (const base::Value& entry : supported) {
++    const base::DictValue& dict = entry.GetDict();
++    const std::string* name = dict.FindString("internal_name");
++    if (!name || !IsCuratedFlag(*name)) {
++      continue;
++    }
++    base::DictValue flag;
++    flag.Set("name", *name);
++    if (const base::ListValue* options = dict.FindList("options")) {
++      int selected = 0;
++      for (size_t i = 0; i < options->size(); ++i) {
++        if ((*options)[i].GetDict().FindBool("selected").value_or(false)) {
++          selected = static_cast<int>(i);
++        }
++      }
++      flag.Set("kind", "multi");
++      flag.Set("selected", selected);
++      flag.Set("options", static_cast<int>(options->size()));
++    } else {
++      flag.Set("kind", "single");
++      flag.Set("enabled", dict.FindBool("enabled").value_or(false));
++    }
++    flags.Append(std::move(flag));
++  }
++  return flags;
++}
++
++base::DictValue HiveyStudioHandler::BuildShieldState() {
++  extensions::ExtensionRegistry* registry =
++      extensions::ExtensionRegistry::Get(GetProfile());
++  return base::DictValue()
++      .Set("id", HIVEY_BUNDLED_SHIELD_ID)
++      .Set("installed",
++           registry->GetInstalledExtension(HIVEY_BUNDLED_SHIELD_ID) != nullptr)
++      .Set("enabled",
++           registry->enabled_extensions().Contains(HIVEY_BUNDLED_SHIELD_ID));
++}
++
++base::DictValue HiveyStudioHandler::BuildState() {
++#if BUILDFLAG(IS_WIN)
++  const char* platform = "win";
++#elif BUILDFLAG(IS_LINUX)
++  const char* platform = "linux";
++#else
++  const char* platform = "other";
++#endif
++  return base::DictValue()
++      .Set("language", g_browser_process->GetApplicationLocale())
++      .Set("platform", platform)
++      .Set("version", version_info::GetVersionNumber())
++      .Set("cpuLimiterSupported", hivey::IsCpuLimiterSupported())
++      .Set("theme", BuildThemeState())
++      .Set("prefs", BuildPrefsState())
++      .Set("flags", BuildFlagsState())
++      .Set("shield", BuildShieldState())
++      .Set("restartNeeded", about_flags::IsRestartNeededToCommitChanges());
++}
++
++void HiveyStudioHandler::FireStateChanged() {
++  if (IsJavascriptAllowed()) {
++    FireWebUIListener("hivey-state", BuildState());
++  }
++}
++
++void HiveyStudioHandler::HandleGetState(const base::ListValue& args) {
++  AllowJavascript();
++  ResolveJavascriptCallback(args[0], BuildState());
++}
++
++void HiveyStudioHandler::HandleSetThemeColor(const base::ListValue& args) {
++  const std::string* hex = args[0].GetIfString();
++  const std::string* variant_name = args[1].GetIfString();
++  const std::optional<SkColor> color = hex ? HexToColor(*hex) : std::nullopt;
++  if (!color || !variant_name) {
++    return;
++  }
++  auto variant = kVariants.find(*variant_name);
++  ThemeServiceFactory::GetForProfile(GetProfile())
++      ->SetUserColorAndBrowserColorVariant(
++          *color, variant != kVariants.end()
++                      ? variant->second
++                      : ui::mojom::BrowserColorVariant::kTonalSpot);
++  FireStateChanged();
++}
++
++void HiveyStudioHandler::HandleSetColorScheme(const base::ListValue& args) {
++  const std::string* name = args[0].GetIfString();
++  auto scheme = name ? kSchemes.find(*name) : kSchemes.end();
++  if (scheme == kSchemes.end()) {
++    return;
++  }
++  ThemeServiceFactory::GetForProfile(GetProfile())
++      ->SetBrowserColorScheme(scheme->second);
++  FireStateChanged();
++}
++
++void HiveyStudioHandler::HandleSetGrayscale(const base::ListValue& args) {
++  if (std::optional<bool> on = args[0].GetIfBool()) {
++    ThemeServiceFactory::GetForProfile(GetProfile())->SetIsGrayscale(*on);
++    FireStateChanged();
++  }
++}
++
++void HiveyStudioHandler::HandleResetTheme(const base::ListValue& args) {
++  ThemeService* theme = ThemeServiceFactory::GetForProfile(GetProfile());
++  theme->UseDefaultTheme();
++  theme->SetBrowserColorScheme(ThemeService::BrowserColorScheme::kSystem);
++  theme->SetIsGrayscale(false);
++  FireStateChanged();
++}
++
++void HiveyStudioHandler::HandleSetPref(const base::ListValue& args) {
++  const std::string* name = args[0].GetIfString();
++  const AllowedPref* allowed = name ? FindAllowedPref(*name) : nullptr;
++  if (!allowed) {
++    return;
++  }
++  PrefService* service = allowed->local_state
++                             ? g_browser_process->local_state()
++                             : GetProfile()->GetPrefs();
++  const PrefService::Preference* pref =
++      service ? service->FindPreference(*name) : nullptr;
++  if (!pref || !pref->IsUserModifiable()) {
++    return;
++  }
++  const base::Value& value = args[1];
++  if (pref->GetType() == base::Value::Type::BOOLEAN && value.is_bool()) {
++    service->SetBoolean(*name, value.GetBool());
++  } else if (pref->GetType() == base::Value::Type::INTEGER &&
++             (value.is_int() || value.is_double())) {
++    service->SetInteger(*name, static_cast<int>(value.GetDouble()));
++  } else {
++    return;
++  }
++  FireStateChanged();
++}
++
++void HiveyStudioHandler::HandleSetFlag(const base::ListValue& args) {
++  const std::string* name = args[0].GetIfString();
++  if (!name || !IsCuratedFlag(*name)) {
++    return;
++  }
++  flags_ui::PrefServiceFlagsStorage storage(g_browser_process->local_state());
++  if (args[1].is_bool()) {
++    about_flags::SetFeatureEntryEnabled(&storage, *name, args[1].GetBool());
++  } else if (args[1].is_int() || args[1].is_double()) {
++    const int option = static_cast<int>(args[1].GetDouble());
++    if (option < 0) {
++      return;
++    }
++    about_flags::SetFeatureEntryEnabled(
++        &storage, *name + "@" + base::NumberToString(option), true);
++  } else {
++    return;
++  }
++  FireStateChanged();
++}
++
++void HiveyStudioHandler::HandleRestart(const base::ListValue& args) {
++  chrome::AttemptRestart();
++}
++
++void HiveyStudioHandler::HandleStartUsage(const base::ListValue& args) {
++  AllowJavascript();
++  if (!usage_observer_) {
++    usage_observer_ = std::make_unique<UsageObserver>(base::BindRepeating(
++        &HiveyStudioHandler::OnUsageRefreshed, base::Unretained(this)));
++  }
++}
++
++void HiveyStudioHandler::HandleStopUsage(const base::ListValue& args) {
++  usage_observer_.reset();
++}
++
++void HiveyStudioHandler::OnUsageRefreshed(base::DictValue usage) {
++  if (IsJavascriptAllowed()) {
++    FireWebUIListener("hivey-usage", usage);
++  }
++}
++
++void HiveyStudioHandler::HandleTaskAction(const base::ListValue& args) {
++  const std::string* action = args[0].GetIfString();
++  if (!action || !args[1].is_double() || !usage_observer_) {
++    return;
++  }
++  task_manager::TaskManagerInterface* tm =
++      task_manager::TaskManagerInterface::GetTaskManager();
++  const auto id = static_cast<task_manager::TaskId>(args[1].GetDouble());
++  if (!tm->IsTaskValid(id)) {
++    return;
++  }
++  if (*action == "activate") {
++    tm->ActivateTask(id);
++  } else if (*action == "kill" && tm->IsTaskKillable(id)) {
++    tm->KillTask(id);
++  }
++}
++
++void HiveyStudioHandler::HandleOpenCustomizeToolbar(
++    const base::ListValue& args) {
++  if (BrowserWindowInterface* browser =
++          GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(
++              web_ui()->GetWebContents())) {
++    chrome::ExecuteCommand(browser, IDC_SHOW_CUSTOMIZE_CHROME_TOOLBAR);
++  }
++}
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
+@@ -0,0 +1,61 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_STUDIO_HANDLER_H_
++#define CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_STUDIO_HANDLER_H_
++
++#include <memory>
++
++#include "base/values.h"
++#include "chrome/browser/task_manager/task_manager_observer.h"
++#include "content/public/browser/web_ui_message_handler.h"
++
++class Profile;
++
++// Backend of chrome://hivey. Reads and writes a fixed allowlist of settings:
++// the browser theme, some profile and Local State prefs, a curated set of
++// chrome://flags entries, and streams live resource usage from the task
++// manager while the Resources section is open.
++class HiveyStudioHandler : public content::WebUIMessageHandler {
++ public:
++  HiveyStudioHandler();
++  HiveyStudioHandler(const HiveyStudioHandler&) = delete;
++  HiveyStudioHandler& operator=(const HiveyStudioHandler&) = delete;
++  ~HiveyStudioHandler() override;
++
++  // content::WebUIMessageHandler:
++  void RegisterMessages() override;
++  void OnJavascriptDisallowed() override;
++
++ private:
++  class UsageObserver;
++
++  Profile* GetProfile();
++  base::DictValue BuildState();
++  base::DictValue BuildThemeState();
++  base::DictValue BuildPrefsState();
++  base::ListValue BuildFlagsState();
++  base::DictValue BuildShieldState();
++
++  void HandleGetState(const base::ListValue& args);
++  void HandleSetThemeColor(const base::ListValue& args);
++  void HandleSetColorScheme(const base::ListValue& args);
++  void HandleSetGrayscale(const base::ListValue& args);
++  void HandleResetTheme(const base::ListValue& args);
++  void HandleSetPref(const base::ListValue& args);
++  void HandleSetFlag(const base::ListValue& args);
++  void HandleRestart(const base::ListValue& args);
++  void HandleStartUsage(const base::ListValue& args);
++  void HandleStopUsage(const base::ListValue& args);
++  void HandleTaskAction(const base::ListValue& args);
++  void HandleOpenCustomizeToolbar(const base::ListValue& args);
++
++  // Pushes the current state to the page ("hivey-state" event).
++  void FireStateChanged();
++  void OnUsageRefreshed(base::DictValue usage);
++
++  std::unique_ptr<UsageObserver> usage_observer_;
++};
++
++#endif  // CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_STUDIO_HANDLER_H_
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_ui.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_ui.cc
+@@ -0,0 +1,33 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/ui/webui/hivey/hivey_studio_ui.h"
++
++#include <memory>
++
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/ui/webui/hivey/hivey_studio_handler.h"
++#include "chrome/grit/browser_resources.h"
++#include "content/public/browser/web_ui.h"
++#include "content/public/browser/web_ui_data_source.h"
++#include "services/network/public/mojom/content_security_policy.mojom.h"
++
++HiveyStudioUI::HiveyStudioUI(content::WebUI* web_ui)
++    : content::WebUIController(web_ui) {
++  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
++      Profile::FromWebUI(web_ui), kChromeUIHiveyStudioHost);
++  source->AddResourcePath("studio.css", IDR_HIVEY_STUDIO_CSS);
++  source->AddResourcePath("studio.js", IDR_HIVEY_STUDIO_JS);
++  source->AddResourcePath("i18n.js", IDR_HIVEY_STUDIO_I18N_JS);
++  source->SetDefaultResource(IDR_HIVEY_STUDIO_HTML);
++  // The page builds its DOM with createElement/textContent only.
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::RequireTrustedTypesFor,
++      "require-trusted-types-for 'script';");
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::TrustedTypes, "trusted-types;");
++  web_ui->AddMessageHandler(std::make_unique<HiveyStudioHandler>());
++}
++
++HiveyStudioUI::~HiveyStudioUI() = default;
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_ui.h
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_ui.h
+@@ -0,0 +1,34 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_STUDIO_UI_H_
++#define CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_STUDIO_UI_H_
++
++#include "content/public/browser/web_ui_controller.h"
++#include "content/public/browser/webui_config.h"
++#include "content/public/common/url_constants.h"
++
++class HiveyStudioUI;
++
++// chrome://hivey: Hivey Studio, every customization in one place (colors,
++// layout, tab behaviour, resource limiters, privacy shields).
++inline constexpr char kChromeUIHiveyStudioHost[] = "hivey";
++inline constexpr char kChromeUIHiveyStudioURL[] = "chrome://hivey/";
++
++class HiveyStudioUIConfig : public content::DefaultWebUIConfig<HiveyStudioUI> {
++ public:
++  HiveyStudioUIConfig()
++      : DefaultWebUIConfig(content::kChromeUIScheme, kChromeUIHiveyStudioHost) {
++  }
++};
++
++class HiveyStudioUI : public content::WebUIController {
++ public:
++  explicit HiveyStudioUI(content::WebUI* web_ui);
++  HiveyStudioUI(const HiveyStudioUI&) = delete;
++  HiveyStudioUI& operator=(const HiveyStudioUI&) = delete;
++  ~HiveyStudioUI() override;
++};
++
++#endif  // CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_STUDIO_UI_H_

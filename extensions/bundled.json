@@ -1,0 +1,11 @@
+{
+  "hivey-shield": {
+    "name": "uBlock Origin Lite",
+    "version": "2026.1012.1545",
+    "url": "https://github.com/uBlockOrigin/uBOL-home/releases/download/2026.1012.1545/uBOLite_2026.1012.1545.chromium.zip",
+    "sha256": "73909c8f26d608b00a99f446192630868bea4f947ba293c29bbd18ae948d903b",
+    "license": "GPL-3.0-or-later",
+    "source": "https://github.com/uBlockOrigin/uBOL-home",
+    "enable_rulesets": ["adguard-spyware-url", "annoyances-cookies"]
+  }
+}

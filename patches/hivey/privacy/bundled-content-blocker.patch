@@ -1,0 +1,165 @@
+# Install the bundled content blocker (uBlock Origin Lite, extensions/hivey-shield.crx next to the browser) on Windows and Linux: only its compiled-in ID, signature-checked, no prompt, pinned to the toolbar.
+--- a/chrome/browser/extensions/BUILD.gn
++++ b/chrome/browser/extensions/BUILD.gn
+@@ -354,6 +354,8 @@
+     "external_provider_impl.h",
+     "external_provider_manager.cc",
+     "external_provider_manager.h",
++    "hivey_bundled_extension_loader.cc",
++    "hivey_bundled_extension_loader.h",
+     "external_provider_manager_factory.cc",
+     "external_provider_manager_factory.h",
+     "favicon/favicon_util.cc",
+--- a/chrome/browser/extensions/external_provider_impl.cc
++++ b/chrome/browser/extensions/external_provider_impl.cc
+@@ -37,6 +37,7 @@
+ #include "chrome/browser/extensions/external_component_loader.h"
+ #include "chrome/browser/extensions/external_policy_loader.h"
+ #include "chrome/browser/extensions/external_pref_loader.h"
++#include "chrome/browser/extensions/hivey_bundled_extension_loader.h"
+ #include "chrome/browser/extensions/forced_extensions/install_stage_tracker_factory.h"
+ #include "chrome/browser/extensions/initial_external_extension_loader.h"
+ #include "chrome/browser/policy/profile_policy_connector.h"
+@@ -915,6 +916,19 @@
+ #endif
+   }
+ 
++#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
++  // Hivey: extensions that ship with the browser (uBlock Origin Lite). They
++  // are part of the browser, so kBlockExternalExtensions does not apply, and
++  // they are acknowledged: no "extension added" prompt. The user can still
++  // disable or remove them.
++  auto hivey_bundled_provider = std::make_unique<ExternalProviderImpl>(
++      service, base::MakeRefCounted<HiveyBundledExtensionLoader>(), profile,
++      ManifestLocation::kExternalPref, ManifestLocation::kExternalPrefDownload,
++      Extension::WAS_INSTALLED_BY_DEFAULT);
++  hivey_bundled_provider->set_auto_acknowledge(true);
++  provider_list->push_back(std::move(hivey_bundled_provider));
++#endif
++
+ #if !BUILDFLAG(IS_CHROMEOS)
+   // The pre-installed apps and extensions are installed as
+   // `ManifestLocation::kInternal` but use the external extension installer
+--- a/chrome/browser/extensions/hivey_bundled_extension_loader.cc
++++ b/chrome/browser/extensions/hivey_bundled_extension_loader.cc
+@@ -0,0 +1,56 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/extensions/hivey_bundled_extension_loader.h"
++
++#include "base/files/file_path.h"
++#include "base/files/file_util.h"
++#include "base/functional/bind.h"
++#include "base/path_service.h"
++#include "base/task/thread_pool.h"
++#include "chrome/browser/extensions/external_provider_impl.h"
++#include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/common/chrome_paths.h"
++
++namespace extensions {
++
++namespace {
++
++// Runs on a blocking thread: looks for the bundled .crx next to the browser.
++base::DictValue BuildBundledExtensionPrefs() {
++  base::DictValue prefs;
++  base::FilePath dir;
++  if (!base::PathService::Get(chrome::DIR_EXTERNAL_EXTENSIONS, &dir)) {
++    return prefs;
++  }
++  const base::FilePath crx = dir.Append(HIVEY_BUNDLED_SHIELD_CRX);
++  if (!base::PathExists(crx)) {
++    return prefs;
++  }
++  prefs.Set(HIVEY_BUNDLED_SHIELD_ID,
++            base::DictValue()
++                .Set(ExternalProviderImpl::kExternalCrx, crx.AsUTF8Unsafe())
++                .Set(ExternalProviderImpl::kExternalVersion,
++                     HIVEY_BUNDLED_SHIELD_VERSION));
++  return prefs;
++}
++
++}  // namespace
++
++HiveyBundledExtensionLoader::HiveyBundledExtensionLoader() = default;
++
++HiveyBundledExtensionLoader::~HiveyBundledExtensionLoader() = default;
++
++void HiveyBundledExtensionLoader::StartLoading() {
++  base::ThreadPool::PostTaskAndReplyWithResult(
++      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++      base::BindOnce(&BuildBundledExtensionPrefs),
++      base::BindOnce(&HiveyBundledExtensionLoader::OnPrefsBuilt, this));
++}
++
++void HiveyBundledExtensionLoader::OnPrefsBuilt(base::DictValue prefs) {
++  LoadFinished(std::move(prefs));
++}
++
++}  // namespace extensions
+--- a/chrome/browser/extensions/hivey_bundled_extension_loader.h
++++ b/chrome/browser/extensions/hivey_bundled_extension_loader.h
+@@ -0,0 +1,36 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_EXTENSIONS_HIVEY_BUNDLED_EXTENSION_LOADER_H_
++#define CHROME_BROWSER_EXTENSIONS_HIVEY_BUNDLED_EXTENSION_LOADER_H_
++
++#include "base/values.h"
++#include "chrome/browser/extensions/external_loader.h"
++
++namespace extensions {
++
++// Hivey: installs the extensions that ship with the browser (uBlock Origin
++// Lite, as <module dir>/extensions/hivey-shield.crx). Only the extension ID
++// compiled into the browser is offered, and Chromium checks the .crx
++// signature against that ID, so files dropped into that folder cannot
++// install anything else. A user who removes the extension keeps it removed.
++class HiveyBundledExtensionLoader : public ExternalLoader {
++ public:
++  HiveyBundledExtensionLoader();
++  HiveyBundledExtensionLoader(const HiveyBundledExtensionLoader&) = delete;
++  HiveyBundledExtensionLoader& operator=(const HiveyBundledExtensionLoader&) =
++      delete;
++
++  // ExternalLoader:
++  void StartLoading() override;
++
++ private:
++  ~HiveyBundledExtensionLoader() override;
++
++  void OnPrefsBuilt(base::DictValue prefs);
++};
++
++}  // namespace extensions
++
++#endif  // CHROME_BROWSER_EXTENSIONS_HIVEY_BUNDLED_EXTENSION_LOADER_H_
+--- a/chrome/browser/ui/toolbar/toolbar_actions_model.cc
++++ b/chrome/browser/ui/toolbar/toolbar_actions_model.cc
+@@ -16,6 +16,7 @@
+ #include "base/metrics/histogram_functions.h"
+ #include "base/numerics/safe_conversions.h"
+ #include "base/observer_list.h"
++#include "chrome/browser/hivey/bundled_extensions.h"
+ #include "base/one_shot_event.h"
+ #include "base/strings/utf_string_conversions.h"
+ #include "base/task/single_thread_task_runner.h"
+@@ -156,9 +157,13 @@
+       !is_enterprise_extension && !is_installed_from_sync &&
+       is_feature_enabled && is_toggle_on;
+ 
++  // Hivey: the bundled content blocker shows its blocked-requests counter
++  // in the toolbar from the start.
++  const bool is_hivey_bundled = extension->id() == HIVEY_BUNDLED_SHIELD_ID;
++
+   // We can only pin extensions that have a toolbar action.
+   if (should_add_extension) {
+-    if (is_pinned_by_policy || is_pinned_by_feature) {
++    if (is_pinned_by_policy || is_pinned_by_feature || is_hivey_bundled) {
+       SetActionVisibility(extension->id(), true);
+     }
+   }

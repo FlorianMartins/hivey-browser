@@ -14,3 +14,7 @@ hivey/resources/ram-limiter-settings.patch
 hivey/build/installer-7zip-on-linux.patch
 hivey/privacy/referrer-cap-no-ad-apis.patch
 hivey/privacy/fingerprinting-audio-cpu.patch
+hivey/privacy/bundled-content-blocker.patch
+hivey/customization/compact-mode.patch
+hivey/resources/cpu-network-limiters.patch
+hivey/customization/hivey-studio.patch
