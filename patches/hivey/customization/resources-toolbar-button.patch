@@ -1,0 +1,579 @@
+# Add a pinned Resources toolbar button that opens Hivey Studio's Resources section in a dropdown bubble
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -1933,6 +1933,9 @@
+         <message name="IDS_HIVEY_STUDIO" desc="The text label of the Hivey Studio menu item (product name, not translated)" translateable="false">
+           Hivey &amp;Studio
+         </message>
++        <message name="IDS_HIVEY_RESOURCES" desc="Name and tooltip of the toolbar button that shows the browser's resource use (CPU, memory, network) and limiters">
++          Hivey Resources
++        </message>
+         <message name="IDS_OPTIONS" desc="The text label of the Options menu item">
+           &amp;Options
+         </message>
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10852,4 +10852,5 @@
+ <translation id="1820038538331701043">Limiteur de RAM</translation>
+ <translation id="621601378681755227">Quand le navigateur utilise plus de mémoire que cette limite, les onglets que vous n'utilisez plus depuis un moment deviennent inactifs</translation>
+ <translation id="3413832581901426260">Aucune limite</translation>
++<translation id="5513158291575788957">Ressources Hivey</translation>
+ </translationbundle>
+\ No newline at end of file
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -160,6 +160,7 @@
+     perTab: 'per tab',
+     hotTabs: 'Hot tabs',
+     hotTabsHint: 'What uses the most right now.',
++    openStudio: 'Open in Hivey Studio',
+     show: 'Show',
+     close: 'Close',
+     browserProcess: 'Browser',
+@@ -361,6 +362,7 @@
+     perTab: 'par onglet',
+     hotTabs: 'Onglets gourmands',
+     hotTabsHint: 'Ce qui consomme le plus en ce moment.',
++    openStudio: 'Ouvrir dans Hivey Studio',
+     show: 'Afficher',
+     close: 'Fermer',
+     browserProcess: 'Navigateur',
+--- a/chrome/browser/resources/hivey_studio/studio.css
++++ b/chrome/browser/resources/hivey_studio/studio.css
+@@ -965,3 +965,51 @@
+     transition: none !important;
+   }
+ }
++
++/* chrome://hivey-resources: the Resources section in the toolbar bubble. */
++body.in-bubble {
++  width: 460px;
++  min-height: 0;
++}
++
++body.in-bubble .aura,
++body.in-bubble .top,
++body.in-bubble .rail,
++body.in-bubble .section-header .muted,
++body.in-bubble .restart-bar {
++  display: none;
++}
++
++body.in-bubble .layout {
++  display: block;
++  padding: 14px 14px 10px;
++}
++
++body.in-bubble h2 {
++  font-size: 17px;
++}
++
++body.in-bubble .gauge {
++  padding: 12px 8px 10px;
++}
++
++body.in-bubble .gauge-ring {
++  width: 84px;
++  height: 84px;
++}
++
++body.in-bubble .gauge-value {
++  font-size: 15px;
++}
++
++body.in-bubble .select {
++  min-width: 150px;
++}
++
++body.in-bubble .task {
++  grid-template-columns: minmax(0, 1fr) 44px 64px auto;
++}
++
++body.in-bubble .task-metric:nth-of-type(4) {
++  display: none;
++}
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -61,6 +61,10 @@
+   sparkles: ['M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z', 'M19 3v4', 'M21 5h-4'],
+ };
+ 
++// chrome://hivey-resources: only the Resources section, in the toolbar
++// button's bubble.
++const IN_BUBBLE = location.host === 'hivey-resources';
++
+ let state = null;
+ let current = 'appearance';
+ let usageStarted = false;
+@@ -535,7 +539,10 @@
+                  linkRow({label: t('memorySaver'), onClick: () => openUrl('chrome://settings/performance')})),
+             card(t('hotTabs'),
+                  el('p', {class: 'muted small', text: t('hotTabsHint')}),
+-                 el('ol', {class: 'tasks', id: 'tasks'})));
++                 el('ol', {class: 'tasks', id: 'tasks'})),
++            IN_BUBBLE ? el('div', {class: 'actions'},
++                           el('button', {class: 'button ghost', text: t('openStudio'),
++                                         onclick: () => openUrl('chrome://hivey/#resources')})) : null);
+ }
+ 
+ function setGauge(id, fraction, value, sub) {
+@@ -686,6 +693,9 @@
+ 
+ function render() {
+   applyTheme();
++  if (IN_BUBBLE) {
++    current = 'resources';
++  }
+   buildNav();
+   const section = SECTIONS.find(s => s.id === current);
+   const main = document.getElementById('main');
+@@ -723,7 +733,13 @@
+     current = fromHash;
+   }
+   buildShell();
++  if (IN_BUBBLE) {
++    document.body.classList.add('in-bubble');
++  }
+   render();
++  if (IN_BUBBLE) {
++    chrome.send('showUI');
++  }
+   addWebUiListener('hivey-state', newState => {
+     state = newState;
+     // Re-render after the current event, keeping keyboard focus on the
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -2301,7 +2301,11 @@
+       "browser.cc",
+       "browser.h",
+       "browser_tabstrip.cc",
+-      # Hivey: Hivey Studio (chrome://hivey).
++      # Hivey: Hivey Studio (chrome://hivey) and the Resources button.
++      "views/toolbar/hivey_resources_coordinator.cc",
++      "views/toolbar/hivey_resources_coordinator.h",
++      "webui/hivey/hivey_resources_ui.cc",
++      "webui/hivey/hivey_resources_ui.h",
+       "webui/hivey/hivey_studio_handler.cc",
+       "webui/hivey/hivey_studio_handler.h",
+       "webui/hivey/hivey_studio_ui.cc",
+--- a/chrome/browser/ui/actions/chrome_action_id.h
++++ b/chrome/browser/ui/actions/chrome_action_id.h
+@@ -544,6 +544,7 @@
+   E(kActionTaskManagerMainMenu, IDC_TASK_MANAGER_MAIN_MENU) \
+   E(kActionDevTools, IDC_DEV_TOOLS) \
+   E(kActionShowChromeLabs, IDC_SHOW_CHROME_LABS) \
++  E(kActionShowHiveyResources) \
+   E(kActionSaveCreditCardForPage, IDC_SAVE_CREDIT_CARD_FOR_PAGE) \
+   E(kActionSaveIbanForPage, IDC_SAVE_IBAN_FOR_PAGE) \
+   E(kActionShowPaymentsBubbleOrPage) \
+--- a/chrome/browser/ui/browser_actions.cc
++++ b/chrome/browser/ui/browser_actions.cc
+@@ -179,6 +179,7 @@
+ #include "chrome/browser/ui/views/tabs/organizer/organizer_panel_utils.h"
+ #include "chrome/browser/ui/views/toolbar/ai_overlay_toolbar_button.h"
+ #include "chrome/browser/ui/views/toolbar/chrome_labs/chrome_labs_coordinator.h"
++#include "chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h"
+ #include "chrome/browser/ui/views/toolbar/pinned_action_toolbar_button.h"
+ #include "chrome/browser/ui/views/toolbar/pinned_action_toolbar_button_menu_model.h"
+ #include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions.h"
+@@ -1608,6 +1609,24 @@
+           .SetEnabled(!is_guest_session)
+           .Build());
+ 
++  // Hivey: the Resources button (live usage, hot tabs, limiters).
++  if (!web_app::AppBrowserController::IsWebApp(bwi)) {
++    root_action_item_->AddChild(
++        ChromeMenuAction(
++            base::BindRepeating(
++                [](BrowserWindowInterface* bwi, actions::ActionItem* item,
++                   actions::ActionInvocationContext context) {
++                  if (auto* coordinator =
++                          HiveyResourcesCoordinator::From(bwi)) {
++                    coordinator->ShowOrHide();
++                  }
++                },
++                bwi),
++            kActionShowHiveyResources, IDS_HIVEY_RESOURCES,
++            IDS_HIVEY_RESOURCES, kSpeedIcon)
++            .Build());
++  }
++
+   // TODO(crbug.com/435220196): Ideally this action would have
+   // ChromeLabsCoordinator passed in as a dependency directly.
+   if (IsChromeLabsEnabled() && !web_app::AppBrowserController::IsWebApp(bwi)) {
+--- a/chrome/browser/ui/browser_window/internal/browser_window_features.cc
++++ b/chrome/browser/ui/browser_window/internal/browser_window_features.cc
+@@ -157,6 +157,7 @@
+ #include "chrome/browser/ui/views/tabs/organizer/organizer_panel_utils.h"
+ #include "chrome/browser/ui/views/tabs/tab_strip_action_container.h"
+ #include "chrome/browser/ui/views/toolbar/chrome_labs/chrome_labs_coordinator.h"
++#include "chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h"
+ #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
+ #include "chrome/browser/ui/views/translate/translate_bubble_controller.h"
+ #include "chrome/browser/ui/views/upgrade_notification_controller.h"
+@@ -1012,6 +1013,11 @@
+                                                                      browser);
+     }
+ 
++    // Hivey: the Resources button's bubble.
++    hivey_resources_coordinator_ =
++        GetUserDataFactory().CreateInstance<HiveyResourcesCoordinator>(
++            *browser, browser);
++
+     if (MobilePromoOnDesktopEnabled()) {
+       ios_promo_controller_ =
+           GetUserDataFactory().CreateInstance<IOSPromoController>(*browser,
+--- a/chrome/browser/ui/browser_window/public/browser_window_features.h
++++ b/chrome/browser/ui/browser_window/public/browser_window_features.h
+@@ -63,6 +63,7 @@
+ class BrowserWindowZoomObserver;
+ class CallToActionLock;
+ class ChromeLabsCoordinator;
++class HiveyResourcesCoordinator;
+ class ColorProviderBrowserHelper;
+ class CommentsSidePanelCoordinator;
+ class ContentsBorderController;
+@@ -343,6 +344,7 @@
+   std::unique_ptr<BrowserWindowZoomObserver> browser_window_zoom_observer_;
+   std::unique_ptr<CallToActionLock> call_to_action_lock_;
+   std::unique_ptr<ChromeLabsCoordinator> chrome_labs_coordinator_;
++  std::unique_ptr<HiveyResourcesCoordinator> hivey_resources_coordinator_;
+   std::unique_ptr<CommentsSidePanelCoordinator>
+       comments_side_panel_coordinator_;
+ 
+--- a/chrome/browser/ui/toolbar/toolbar_pref_names.cc
++++ b/chrome/browser/ui/toolbar/toolbar_pref_names.cc
+@@ -23,6 +23,12 @@
+   if (chrome_labs_action.has_value()) {
+     default_pinned_actions.Append(chrome_labs_action.value());
+   }
++  // Hivey: the Resources button is in the toolbar by default.
++  if (const std::optional<std::string>& resources_action =
++          actions::ActionIdMap::ActionIdToString(kActionShowHiveyResources);
++      resources_action.has_value()) {
++    default_pinned_actions.Append(resources_action.value());
++  }
+ 
+   if (base::FeatureList::IsEnabled(
+           features::kTabsFromOtherDevicesSidePanelPinnedByDefault)) {
+--- a/chrome/browser/ui/views/toolbar/hivey_resources_coordinator.cc
++++ b/chrome/browser/ui/views/toolbar/hivey_resources_coordinator.cc
+@@ -0,0 +1,87 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h"
++
++#include "base/functional/bind.h"
++#include "chrome/browser/ui/actions/chrome_action_id.h"
++#include "chrome/browser/ui/browser_actions.h"
++#include "chrome/browser/ui/browser_window.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/views/bubble/webui_bubble_manager.h"
++#include "chrome/browser/ui/webui/hivey/hivey_resources_ui.h"
++#include "chrome/grit/generated_resources.h"
++#include "ui/actions/actions.h"
++#include "url/gurl.h"
++
++DEFINE_USER_DATA(HiveyResourcesCoordinator);
++
++// static
++HiveyResourcesCoordinator* HiveyResourcesCoordinator::From(
++    BrowserWindowInterface* browser) {
++  return browser ? HiveyResourcesCoordinator::Get(
++                       browser->GetUnownedUserDataHost())
++                 : nullptr;
++}
++
++HiveyResourcesCoordinator::HiveyResourcesCoordinator(
++    BrowserWindowInterface* browser)
++    : browser_(browser),
++      bubble_manager_(WebUIBubbleManager::Create<HiveyResourcesUI>(
++          browser,
++          GURL(kChromeUIHiveyResourcesURL),
++          IDS_HIVEY_RESOURCES)),
++      scoped_unowned_user_data_(browser->GetUnownedUserDataHost(), *this) {}
++
++HiveyResourcesCoordinator::~HiveyResourcesCoordinator() = default;
++
++void HiveyResourcesCoordinator::ShowOrHide() {
++  if (bubble_manager_->GetBubbleWidget()) {
++    bubble_manager_->CloseBubble();
++    return;
++  }
++  BrowserWindow* window = BrowserWindow::FromBrowser(browser_);
++  PinnedToolbarActions* pinned =
++      window ? window->GetPinnedToolbarActions() : nullptr;
++  if (!pinned) {
++    return;
++  }
++  // Anchored on the button (or the overflow menu when the button is hidden).
++  pinned->GetBubbleAnchorAsync(
++      kActionShowHiveyResources,
++      base::BindOnce(&HiveyResourcesCoordinator::ShowAt,
++                     weak_factory_.GetWeakPtr()));
++}
++
++void HiveyResourcesCoordinator::ShowAt(BubbleAnchorResult anchor) {
++  if (!anchor.has_value() || bubble_manager_->GetBubbleWidget()) {
++    return;
++  }
++  views::View* view = anchor->GetIfView();
++  const WebUIBubbleManager::Anchor bubble_anchor =
++      view ? WebUIBubbleManager::Anchor(view)
++           : WebUIBubbleManager::Anchor(anchor->GetAnchorRect());
++  bubble_manager_->ShowBubble(bubble_anchor, views::BubbleBorder::TOP_RIGHT);
++  if (views::Widget* widget = bubble_manager_->GetBubbleWidget()) {
++    widget_observation_.Observe(widget);
++    SetShowing(true);
++  }
++}
++
++void HiveyResourcesCoordinator::OnWidgetDestroying(views::Widget* widget) {
++  widget_observation_.Reset();
++  SetShowing(false);
++}
++
++void HiveyResourcesCoordinator::SetShowing(bool showing) {
++  // Highlights the button while its bubble is open.
++  if (!action_item_) {
++    action_item_ = actions::ActionManager::Get().FindAction(
++        kActionShowHiveyResources,
++        BrowserActions::From(browser_)->root_action_item());
++  }
++  if (action_item_) {
++    action_item_->SetIsShowingBubble(showing);
++  }
++}
+--- a/chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h
++++ b/chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h
+@@ -0,0 +1,60 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_VIEWS_TOOLBAR_HIVEY_RESOURCES_COORDINATOR_H_
++#define CHROME_BROWSER_UI_VIEWS_TOOLBAR_HIVEY_RESOURCES_COORDINATOR_H_
++
++#include <memory>
++
++#include "base/memory/raw_ptr.h"
++#include "base/memory/weak_ptr.h"
++#include "base/scoped_observation.h"
++#include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions.h"
++#include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
++#include "ui/views/widget/widget.h"
++#include "ui/views/widget/widget_observer.h"
++
++class BrowserWindowInterface;
++class WebUIBubbleManager;
++
++namespace actions {
++class ActionItem;
++}
++
++// The toolbar's Resources button (a pinnable action, pinned by default): opens
++// chrome://hivey-resources in a dropdown bubble anchored on the button, like
++// an extension's popup, with the live gauges, the hot tabs and the limiters.
++class HiveyResourcesCoordinator : public views::WidgetObserver {
++ public:
++  DECLARE_USER_DATA(HiveyResourcesCoordinator);
++
++  static HiveyResourcesCoordinator* From(BrowserWindowInterface* browser);
++
++  explicit HiveyResourcesCoordinator(BrowserWindowInterface* browser);
++  HiveyResourcesCoordinator(const HiveyResourcesCoordinator&) = delete;
++  HiveyResourcesCoordinator& operator=(const HiveyResourcesCoordinator&) =
++      delete;
++  ~HiveyResourcesCoordinator() override;
++
++  // Opens the bubble, or closes it when it is open.
++  void ShowOrHide();
++
++  // views::WidgetObserver:
++  void OnWidgetDestroying(views::Widget* widget) override;
++
++ private:
++  void ShowAt(BubbleAnchorResult anchor);
++  void SetShowing(bool showing);
++
++  raw_ptr<BrowserWindowInterface> browser_;
++  std::unique_ptr<WebUIBubbleManager> bubble_manager_;
++  raw_ptr<actions::ActionItem> action_item_ = nullptr;
++  base::ScopedObservation<views::Widget, views::WidgetObserver>
++      widget_observation_{this};
++  ui::ScopedUnownedUserData<HiveyResourcesCoordinator>
++      scoped_unowned_user_data_;
++  base::WeakPtrFactory<HiveyResourcesCoordinator> weak_factory_{this};
++};
++
++#endif  // CHROME_BROWSER_UI_VIEWS_TOOLBAR_HIVEY_RESOURCES_COORDINATOR_H_
+--- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
++++ b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
+@@ -59,6 +59,7 @@
+ #include "chrome/browser/ui/webui/translate_internals/translate_internals_ui.h"
+ #include "chrome/browser/ui/webui/ungoogled_first_run.h"
+ #if !BUILDFLAG(IS_ANDROID)
++#include "chrome/browser/ui/webui/hivey/hivey_resources_ui.h"
+ #include "chrome/browser/ui/webui/hivey/hivey_studio_ui.h"
+ #endif
+ #include "chrome/browser/ui/webui/usb_internals/usb_internals_ui.h"
+@@ -331,6 +332,7 @@
+   map.AddWebUIConfig(std::make_unique<UngoogledFirstRunUIConfig>());
+ #if !BUILDFLAG(IS_ANDROID)
+   map.AddWebUIConfig(std::make_unique<HiveyStudioUIConfig>());
++  map.AddWebUIConfig(std::make_unique<HiveyResourcesUIConfig>());
+ #endif
+   map.AddWebUIConfig(std::make_unique<UsbInternalsUIConfig>());
+   map.AddWebUIConfig(std::make_unique<user_actions_ui::UserActionsUIConfig>());
+--- a/chrome/browser/ui/webui/hivey/hivey_resources_ui.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_resources_ui.cc
+@@ -0,0 +1,37 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/ui/webui/hivey/hivey_resources_ui.h"
++
++#include <memory>
++
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/ui/webui/hivey/hivey_studio_handler.h"
++#include "chrome/grit/browser_resources.h"
++#include "content/public/browser/web_ui.h"
++#include "content/public/browser/web_ui_data_source.h"
++#include "services/network/public/mojom/content_security_policy.mojom.h"
++
++HiveyResourcesUI::HiveyResourcesUI(content::WebUI* web_ui)
++    : TopChromeWebUIController(web_ui, /*enable_chrome_send=*/true) {
++  // The same page as Hivey Studio; it shows only the Resources section when
++  // served from this host.
++  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
++      Profile::FromWebUI(web_ui), kChromeUIHiveyResourcesHost);
++  source->AddResourcePath("studio.css", IDR_HIVEY_STUDIO_CSS);
++  source->AddResourcePath("studio.js", IDR_HIVEY_STUDIO_JS);
++  source->AddResourcePath("i18n.js", IDR_HIVEY_STUDIO_I18N_JS);
++  source->AddResourcePath("logo.js", IDR_HIVEY_STUDIO_LOGO_JS);
++  source->SetDefaultResource(IDR_HIVEY_STUDIO_HTML);
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::RequireTrustedTypesFor,
++      "require-trusted-types-for 'script';");
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::TrustedTypes, "trusted-types;");
++  web_ui->AddMessageHandler(std::make_unique<HiveyStudioHandler>());
++}
++
++HiveyResourcesUI::~HiveyResourcesUI() = default;
++
++WEB_UI_CONTROLLER_TYPE_IMPL(HiveyResourcesUI)
+--- a/chrome/browser/ui/webui/hivey/hivey_resources_ui.h
++++ b/chrome/browser/ui/webui/hivey/hivey_resources_ui.h
+@@ -0,0 +1,46 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_RESOURCES_UI_H_
++#define CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_RESOURCES_UI_H_
++
++#include <string_view>
++
++#include "chrome/browser/ui/webui/top_chrome/top_chrome_web_ui_controller.h"
++#include "chrome/browser/ui/webui/top_chrome/top_chrome_webui_config.h"
++#include "content/public/browser/web_ui_controller.h"
++#include "content/public/common/url_constants.h"
++
++class HiveyResourcesUI;
++
++// chrome://hivey-resources: Hivey Studio's Resources section in the dropdown
++// of the toolbar's Resources button (like an extension's popup).
++inline constexpr char kChromeUIHiveyResourcesHost[] = "hivey-resources";
++inline constexpr char kChromeUIHiveyResourcesURL[] = "chrome://hivey-resources/";
++
++class HiveyResourcesUIConfig
++    : public DefaultTopChromeWebUIConfig<HiveyResourcesUI> {
++ public:
++  HiveyResourcesUIConfig()
++      : DefaultTopChromeWebUIConfig(content::kChromeUIScheme,
++                                    kChromeUIHiveyResourcesHost) {}
++
++  // TopChromeWebUIConfig: the bubble takes the page's size.
++  bool ShouldAutoResizeHost() override { return true; }
++};
++
++class HiveyResourcesUI : public TopChromeWebUIController {
++ public:
++  explicit HiveyResourcesUI(content::WebUI* web_ui);
++  HiveyResourcesUI(const HiveyResourcesUI&) = delete;
++  HiveyResourcesUI& operator=(const HiveyResourcesUI&) = delete;
++  ~HiveyResourcesUI() override;
++
++  static constexpr std::string_view GetWebUIName() { return "HiveyResources"; }
++
++ private:
++  WEB_UI_CONTROLLER_TYPE_DECL();
++};
++
++#endif  // CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_RESOURCES_UI_H_
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -30,6 +30,7 @@
+ #include "chrome/browser/task_manager/task_manager_interface.h"
+ #include "chrome/browser/themes/theme_service.h"
+ #include "chrome/browser/themes/theme_service_factory.h"
++#include "chrome/browser/ui/webui/hivey/hivey_resources_ui.h"
+ #include "chrome/browser/ui/browser_commands.h"
+ #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+ #include "components/prefs/pref_service.h"
+@@ -218,6 +219,7 @@
+   add("setAccent", &HiveyStudioHandler::HandleSetAccent);
+   add("applyPreset", &HiveyStudioHandler::HandleApplyPreset);
+   add("setSecurity", &HiveyStudioHandler::HandleSetSecurity);
++  add("showUI", &HiveyStudioHandler::HandleShowUI);
+ }
+ 
+ void HiveyStudioHandler::OnJavascriptAllowed() {
+@@ -704,3 +706,12 @@
+     }
+   }
+ }
++
++void HiveyStudioHandler::HandleShowUI(const base::ListValue& args) {
++  // In the Resources bubble: show it now that the page has rendered.
++  if (auto* bubble = web_ui()->GetController()->GetAs<HiveyResourcesUI>()) {
++    if (bubble->embedder()) {
++      bubble->embedder()->ShowUI();
++    }
++  }
++}
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
+@@ -76,6 +76,7 @@
+   void HandleSetAccent(const base::ListValue& args);
+   void HandleApplyPreset(const base::ListValue& args);
+   void HandleSetSecurity(const base::ListValue& args);
++  void HandleShowUI(const base::ListValue& args);
+ 
+   // Pushes the current state to the page ("hivey-state" event), once, after
+   // the current task: a change elsewhere (a context menu, Settings, another
+--- a/tools/metrics/histograms/metadata/page/histograms.xml
++++ b/tools/metrics/histograms/metadata/page/histograms.xml
+@@ -1086,6 +1086,7 @@
+   <variant name=".Feedback"/>
+   <variant name=".HistoryClustersSidePanel"/>
+   <variant name=".HistorySidePanel"/>
++  <variant name=".HiveyResources"/>
+   <variant name=".LensOverlayUntrusted"/>
+   <variant name=".LensSidePanelUntrusted"/>
+   <variant name=".MakoUntrusted"/>
+--- a/tools/metrics/histograms/metadata/ui/histograms.xml
++++ b/tools/metrics/histograms/metadata/ui/histograms.xml
+@@ -156,6 +156,7 @@
+   <variant name=".Feedback"/>
+   <variant name=".HistoryClustersSidePanel"/>
+   <variant name=".HistorySidePanel"/>
++  <variant name=".HiveyResources"/>
+   <variant name=".LensOverlayUntrusted"/>
+   <variant name=".LensSidePanelUntrusted"/>
+   <variant name=".MakoUntrusted"/>
