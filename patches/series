@@ -18,3 +18,4 @@ hivey/privacy/bundled-content-blocker.patch
 hivey/customization/compact-mode.patch
 hivey/resources/cpu-network-limiters.patch
 hivey/customization/hivey-studio.patch
+hivey/build/hivey-updater.patch

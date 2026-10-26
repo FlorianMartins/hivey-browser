@@ -2,3 +2,7 @@
 # clang/Rust (HB_TARGET=win, out/Default).
 target_os="win"
 target_cpu="x64"
+
+# The installed-version poller behind "Relaunch to update" (the Hivey updater
+# installs new versions; see chrome/browser/hivey/hivey_updater.h).
+enable_update_notifications=true

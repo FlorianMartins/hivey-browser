@@ -1,0 +1,727 @@
+# Hivey updater: signed manifest (Ed25519) from the latest GitHub release, installer checked by sha256 and installed silently on Windows (per-user), 'available' on Linux; no request at startup; web pages see the upstream Chromium version; outdated-build prompt off; status and 'Check now' in Hivey Studio.
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -843,6 +843,8 @@
+     "chrome_browser_main.cc",
+     "hivey/hivey_resource_limits.cc",
+     "hivey/hivey_resource_limits.h",
++    "hivey/hivey_updater.cc",
++    "hivey/hivey_updater.h",
+     "chrome_content_browser_client.cc",
+     "chrome_content_browser_client_binder_policies.cc",
+     "chrome_content_browser_client_binder_policies.h",
+--- a/chrome/browser/hivey/hivey_resource_limits.cc
++++ b/chrome/browser/hivey/hivey_resource_limits.cc
+@@ -11,6 +11,7 @@
+ #include "base/logging.h"
+ #include "base/time/time.h"
+ #include "chrome/browser/browser_process.h"
++#include "chrome/browser/hivey/hivey_updater.h"
+ #include "chrome/browser/net/system_network_context_manager.h"
+ #include "components/prefs/pref_registry_simple.h"
+ #include "components/prefs/pref_service.h"
+@@ -186,9 +187,11 @@
+ 
+ void ChromeBrowserMainExtraPartsHivey::PostBrowserStart() {
+   resource_limits_ = std::make_unique<ResourceLimits>();
++  updater_ = std::make_unique<Updater>();
+ }
+ 
+ void ChromeBrowserMainExtraPartsHivey::PostMainMessageLoopRun() {
++  updater_.reset();
+   resource_limits_.reset();
+ }
+ 
+--- a/chrome/browser/hivey/hivey_resource_limits.h
++++ b/chrome/browser/hivey/hivey_resource_limits.h
+@@ -24,6 +24,8 @@
+ 
+ namespace hivey {
+ 
++class Updater;
++
+ // Local State prefs of the resource limiters (Hivey Studio > Resources).
+ // CPU limit of each tab process, in percent of the whole machine (0 = off).
+ inline constexpr char kCpuLimitPercent[] = "hivey.cpu_limit_percent";
+@@ -77,7 +79,8 @@
+ #endif
+ };
+ 
+-// Owns ResourceLimits for the lifetime of the browser's main loop.
++// Owns ResourceLimits and the Updater for the lifetime of the browser's
++// main loop.
+ class ChromeBrowserMainExtraPartsHivey : public ChromeBrowserMainExtraParts {
+  public:
+   ChromeBrowserMainExtraPartsHivey();
+@@ -93,6 +96,7 @@
+ 
+  private:
+   std::unique_ptr<ResourceLimits> resource_limits_;
++  std::unique_ptr<Updater> updater_;
+ };
+ 
+ }  // namespace hivey
+--- a/chrome/browser/hivey/hivey_updater.cc
++++ b/chrome/browser/hivey/hivey_updater.cc
+@@ -0,0 +1,352 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/hivey/hivey_updater.h"
++
++#include <array>
++#include <utility>
++
++#include "base/command_line.h"
++#include "base/files/file.h"
++#include "base/files/file_util.h"
++#include "base/functional/bind.h"
++#include "base/json/json_reader.h"
++#include "base/logging.h"
++#include "base/process/launch.h"
++#include "base/strings/string_number_conversions.h"
++#include "base/strings/string_util.h"
++#include "base/task/thread_pool.h"
++#include "base/time/time.h"
++#include "base/version.h"
++#include "build/build_config.h"
++#include "chrome/browser/browser_process.h"
++#include "chrome/browser/hivey/update_public_key.h"
++#include "components/prefs/pref_registry_simple.h"
++#include "components/prefs/pref_service.h"
++#include "components/version_info/version_info.h"
++#include "crypto/hash.h"
++#include "crypto/keypair.h"
++#include "crypto/sign.h"
++#include "net/base/load_flags.h"
++#include "net/traffic_annotation/network_traffic_annotation.h"
++#include "services/network/public/cpp/resource_request.h"
++#include "services/network/public/cpp/shared_url_loader_factory.h"
++#include "services/network/public/cpp/simple_url_loader.h"
++#include "url/gurl.h"
++
++#if BUILDFLAG(IS_WIN)
++#include "chrome/installer/util/install_util.h"
++#endif
++
++namespace hivey {
++
++namespace {
++
++constexpr char kManifestUrl[] =
++    "https://github.com/FlorianMartins/hivey-browser/releases/latest/download/"
++    "hivey-update.json";
++constexpr char kSignatureUrl[] =
++    "https://github.com/FlorianMartins/hivey-browser/releases/latest/download/"
++    "hivey-update.json.sig";
++
++constexpr base::TimeDelta kFirstCheckDelay = base::Minutes(10);
++constexpr base::TimeDelta kCheckInterval = base::Hours(12);
++constexpr base::TimeDelta kRetryDelay = base::Hours(1);
++constexpr base::TimeDelta kInstallerCleanupDelay = base::Minutes(15);
++constexpr size_t kMaxManifestSize = 64 * 1024;
++
++#if BUILDFLAG(IS_WIN)
++// Every installer the updater runs must come from this repository's releases.
++constexpr char kReleasesUrl[] =
++    "https://github.com/FlorianMartins/hivey-browser/releases/";
++constexpr int64_t kMaxInstallerSize = 512LL * 1024 * 1024;
++
++bool IsReleaseUrl(const GURL& url) {
++  return url.is_valid() && url.SchemeIs(url::kHttpsScheme) &&
++         base::StartsWith(url.spec(), kReleasesUrl);
++}
++#endif
++
++Updater* g_updater = nullptr;
++
++constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
++    net::DefineNetworkTrafficAnnotation("hivey_updater", R"(
++      semantics {
++        sender: "Hivey Browser updater"
++        description:
++          "Checks the latest Hivey Browser release and downloads its "
++          "installer when it is newer, so security fixes are applied."
++        trigger:
++          "10 minutes after the browser starts, then every 12 hours, or "
++          "'Check now' in Hivey Studio."
++        data:
++          "None: plain GET requests for public release files, without "
++          "cookies."
++        destination: OTHER
++        destination_other: "github.com (Hivey Browser releases)."
++      }
++      policy {
++        cookies_allowed: NO
++        setting: "Hivey Studio > About > Automatic updates."
++        policy_exception_justification: "Not implemented."
++      })");
++
++const char* PlatformKey() {
++#if BUILDFLAG(IS_WIN)
++  return "windows-x64";
++#elif BUILDFLAG(IS_LINUX)
++  return "linux-x64";
++#else
++  return "";
++#endif
++}
++
++std::unique_ptr<network::SimpleURLLoader> MakeLoader(const GURL& url) {
++  auto request = std::make_unique<network::ResourceRequest>();
++  request->url = url;
++  request->credentials_mode = network::mojom::CredentialsMode::kOmit;
++  request->load_flags = net::LOAD_DISABLE_CACHE;
++  auto loader =
++      network::SimpleURLLoader::Create(std::move(request), kTrafficAnnotation);
++  loader->SetRetryOptions(
++      2, network::SimpleURLLoader::RETRY_ON_NETWORK_CHANGE |
++             network::SimpleURLLoader::RETRY_ON_5XX);
++  return loader;
++}
++
++bool VerifyManifestSignature(const std::string& manifest,
++                             const std::string& signature) {
++  if (signature.size() != 64) {
++    return false;
++  }
++  const crypto::keypair::PublicKey key =
++      crypto::keypair::PublicKey::FromEd25519PublicKey(kHiveyUpdatePublicKey);
++  return crypto::sign::Verify(crypto::sign::ED25519, key,
++                              base::as_byte_span(manifest),
++                              base::as_byte_span(signature));
++}
++
++// Blocking: the downloaded file has the size and sha256 of the manifest.
++bool CheckInstallerFile(const base::FilePath& path,
++                        const std::string& sha256_hex,
++                        int64_t size) {
++  base::File file(path, base::File::FLAG_OPEN | base::File::FLAG_READ);
++  if (!file.IsValid() || file.GetLength() != size) {
++    return false;
++  }
++  std::array<uint8_t, crypto::hash::kSha256Size> digest;
++  if (!crypto::hash::HashFile(crypto::hash::kSha256, &file, digest)) {
++    return false;
++  }
++  return base::EqualsCaseInsensitiveASCII(base::HexEncode(digest), sha256_hex);
++}
++
++void DeleteFileLater(const base::FilePath& path) {
++  base::ThreadPool::PostDelayedTask(
++      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
++      base::GetDeleteFileCallback(path), kInstallerCleanupDelay);
++}
++
++PrefService* LocalState() {
++  return g_browser_process ? g_browser_process->local_state() : nullptr;
++}
++
++}  // namespace
++
++void RegisterUpdaterPrefs(PrefRegistrySimple* registry) {
++  registry->RegisterBooleanPref(kAutoUpdateEnabled, true);
++  registry->RegisterTimePref(kUpdateLastCheck, base::Time());
++  registry->RegisterStringPref(kUpdateStatus, std::string());
++  registry->RegisterStringPref(kUpdateAvailableVersion, std::string());
++}
++
++Updater::Updater() {
++  DCHECK(!g_updater);
++  g_updater = this;
++  // Never a request at startup.
++  ScheduleNextCheck(kFirstCheckDelay);
++}
++
++Updater::~Updater() {
++  g_updater = nullptr;
++}
++
++// static
++Updater* Updater::Get() {
++  return g_updater;
++}
++
++void Updater::CheckNow() {
++  if (!checking_) {
++    StartCheck();
++  }
++}
++
++base::DictValue Updater::GetStatus() const {
++  PrefService* local_state = LocalState();
++  if (!local_state) {
++    return base::DictValue();
++  }
++  const base::Time last = local_state->GetTime(kUpdateLastCheck);
++  return base::DictValue()
++      .Set("enabled", local_state->GetBoolean(kAutoUpdateEnabled))
++      .Set("checking", checking_)
++      .Set("status", local_state->GetString(kUpdateStatus))
++      .Set("available", local_state->GetString(kUpdateAvailableVersion))
++      .Set("lastCheck", last.is_null() ? 0.0 : last.InMillisecondsFSinceUnixEpoch());
++}
++
++void Updater::ScheduleNextCheck(base::TimeDelta delay) {
++  timer_.Start(FROM_HERE, delay,
++               base::BindOnce(&Updater::OnTimer, base::Unretained(this)));
++}
++
++void Updater::OnTimer() {
++  PrefService* local_state = LocalState();
++  if (local_state && local_state->GetBoolean(kAutoUpdateEnabled)) {
++    StartCheck();
++  }
++  ScheduleNextCheck(kCheckInterval);
++}
++
++void Updater::StartCheck() {
++  checking_ = true;
++  loader_ = MakeLoader(GURL(kManifestUrl));
++  loader_->DownloadToString(
++      g_browser_process->shared_url_loader_factory().get(),
++      base::BindOnce(&Updater::OnManifestDownloaded,
++                     weak_factory_.GetWeakPtr()),
++      kMaxManifestSize);
++}
++
++void Updater::OnManifestDownloaded(std::optional<std::string> body) {
++  if (!body) {
++    Finish("error-network");
++    ScheduleNextCheck(kRetryDelay);
++    return;
++  }
++  loader_ = MakeLoader(GURL(kSignatureUrl));
++  loader_->DownloadToString(
++      g_browser_process->shared_url_loader_factory().get(),
++      base::BindOnce(&Updater::OnSignatureDownloaded,
++                     weak_factory_.GetWeakPtr(), std::move(*body)),
++      1024);
++}
++
++void Updater::OnSignatureDownloaded(std::string manifest,
++                                    std::optional<std::string> body) {
++  if (!body) {
++    Finish("error-network");
++    ScheduleNextCheck(kRetryDelay);
++    return;
++  }
++  if (!VerifyManifestSignature(manifest, *body)) {
++    LOG(ERROR) << "Hivey updater: the update manifest signature is invalid";
++    Finish("error-signature");
++    return;
++  }
++  std::optional<base::Value> parsed = base::JSONReader::Read(manifest);
++  if (!parsed || !parsed->is_dict()) {
++    Finish("error-manifest");
++    return;
++  }
++  OnManifestVerified(std::move(*parsed).TakeDict());
++}
++
++void Updater::OnManifestVerified(base::DictValue manifest) {
++  const std::string* version_string = manifest.FindString("version");
++  const base::DictValue* platform = manifest.FindDict(PlatformKey());
++  const base::Version latest(version_string ? *version_string : "");
++  if (!latest.IsValid() || !platform) {
++    Finish("error-manifest");
++    return;
++  }
++  if (latest.CompareTo(version_info::GetVersion()) <= 0) {
++    available_version_.clear();
++    Finish("up-to-date");
++    return;
++  }
++  available_version_ = *version_string;
++
++#if BUILDFLAG(IS_WIN)
++  const std::string* url = platform->FindString("url");
++  const std::string* sha256 = platform->FindString("sha256");
++  const std::optional<double> size = platform->FindDouble("size");
++  if (!url || !sha256 || !size || !IsReleaseUrl(GURL(*url)) ||
++      *size <= 0 || *size > kMaxInstallerSize) {
++    Finish("error-manifest");
++    return;
++  }
++  // A system-level install needs administrator rights: show the update in
++  // Hivey Studio instead.
++  if (!InstallUtil::IsPerUserInstall()) {
++    Finish("available");
++    return;
++  }
++  if (PrefService* local_state = LocalState()) {
++    local_state->SetString(kUpdateStatus, "downloading");
++  }
++  loader_ = MakeLoader(GURL(*url));
++  loader_->DownloadToTempFile(
++      g_browser_process->shared_url_loader_factory().get(),
++      base::BindOnce(&Updater::OnInstallerDownloaded,
++                     weak_factory_.GetWeakPtr(), *sha256,
++                     static_cast<int64_t>(*size)),
++      kMaxInstallerSize);
++#else
++  // Portable builds are replaced by the user from the release page.
++  Finish("available");
++#endif
++}
++
++void Updater::OnInstallerDownloaded(std::string expected_sha256,
++                                    int64_t expected_size,
++                                    base::FilePath path) {
++  if (path.empty()) {
++    Finish("error-download");
++    ScheduleNextCheck(kRetryDelay);
++    return;
++  }
++  base::ThreadPool::PostTaskAndReplyWithResult(
++      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++      base::BindOnce(&CheckInstallerFile, path, std::move(expected_sha256),
++                     expected_size),
++      base::BindOnce(&Updater::OnInstallerChecked, weak_factory_.GetWeakPtr(),
++                     path));
++}
++
++void Updater::OnInstallerChecked(base::FilePath path, bool ok) {
++  if (!ok) {
++    LOG(ERROR) << "Hivey updater: the installer does not match the manifest";
++    DeleteFileLater(path);
++    Finish("error-download");
++    return;
++  }
++#if BUILDFLAG(IS_WIN)
++  // The installer updates the per-user install in place (new_chrome.exe while
++  // the browser runs); UpgradeDetector then offers "Relaunch to update".
++  base::CommandLine command(path);
++  command.AppendSwitch("do-not-launch-chrome");
++  base::LaunchOptions options;
++  options.start_hidden = true;
++  const bool launched = base::LaunchProcess(command, options).IsValid();
++  DeleteFileLater(path);
++  Finish(launched ? "installing" : "error-install");
++#else
++  DeleteFileLater(path);
++  Finish("available");
++#endif
++}
++
++void Updater::Finish(const std::string& status) {
++  checking_ = false;
++  loader_.reset();
++  if (PrefService* local_state = LocalState()) {
++    local_state->SetTime(kUpdateLastCheck, base::Time::Now());
++    local_state->SetString(kUpdateStatus, status);
++    local_state->SetString(kUpdateAvailableVersion, available_version_);
++  }
++}
++
++}  // namespace hivey
+--- a/chrome/browser/hivey/hivey_updater.h
++++ b/chrome/browser/hivey/hivey_updater.h
+@@ -0,0 +1,84 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_HIVEY_UPDATER_H_
++#define CHROME_BROWSER_HIVEY_HIVEY_UPDATER_H_
++
++#include <memory>
++#include <optional>
++#include <string>
++
++#include "base/files/file_path.h"
++#include "base/memory/weak_ptr.h"
++#include "base/timer/timer.h"
++#include "base/values.h"
++
++class PrefRegistrySimple;
++
++namespace network {
++class SimpleURLLoader;
++}
++
++namespace hivey {
++
++// Local State prefs of the updater.
++inline constexpr char kAutoUpdateEnabled[] = "hivey.update.enabled";
++inline constexpr char kUpdateLastCheck[] = "hivey.update.last_check";
++inline constexpr char kUpdateStatus[] = "hivey.update.status";
++inline constexpr char kUpdateAvailableVersion[] = "hivey.update.available";
++
++void RegisterUpdaterPrefs(PrefRegistrySimple* registry);
++
++// Keeps Hivey Browser up to date without any Google service.
++//
++// No request at startup: the first check runs 10 minutes after launch, then
++// every 12 hours, and never when the user turned automatic updates off. A
++// check downloads hivey-update.json and its Ed25519 signature from the
++// latest GitHub release, verifies the signature with the public key compiled
++// into the browser, and compares versions. On Windows (per-user install) the
++// installer named in the signed manifest is downloaded, checked against its
++// size and sha256 from the manifest, and run silently; the browser then
++// offers "Relaunch to update" (UpgradeDetector). On Linux the new version is
++// shown in Hivey Studio with its download page.
++class Updater {
++ public:
++  Updater();
++  Updater(const Updater&) = delete;
++  Updater& operator=(const Updater&) = delete;
++  ~Updater();
++
++  // The browser's updater, or null before PostBrowserStart / in tests.
++  static Updater* Get();
++
++  // Starts a check now (Hivey Studio's "Check now"), even if automatic
++  // updates are off. Does nothing while a check is running.
++  void CheckNow();
++
++  // Status for Hivey Studio: enabled, status, last check, available version.
++  base::DictValue GetStatus() const;
++
++ private:
++  void ScheduleNextCheck(base::TimeDelta delay);
++  void OnTimer();
++  void StartCheck();
++  void OnManifestDownloaded(std::optional<std::string> body);
++  void OnSignatureDownloaded(std::string manifest,
++                             std::optional<std::string> body);
++  void OnManifestVerified(base::DictValue manifest);
++  void OnInstallerDownloaded(std::string expected_sha256,
++                             int64_t expected_size,
++                             base::FilePath path);
++  void OnInstallerChecked(base::FilePath path, bool ok);
++  void Finish(const std::string& status);
++
++  bool checking_ = false;
++  std::string available_version_;
++  std::unique_ptr<network::SimpleURLLoader> loader_;
++  base::OneShotTimer timer_;
++  base::WeakPtrFactory<Updater> weak_factory_{this};
++};
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_HIVEY_HIVEY_UPDATER_H_
+--- a/chrome/browser/prefs/browser_prefs.cc
++++ b/chrome/browser/prefs/browser_prefs.cc
+@@ -26,6 +26,7 @@
+ #include "chrome/browser/browser_process_impl.h"
+ #if !BUILDFLAG(IS_ANDROID)
+ #include "chrome/browser/hivey/hivey_resource_limits.h"
++#include "chrome/browser/hivey/hivey_updater.h"
+ #endif
+ #include "chrome/browser/chrome_content_browser_client.h"
+ #include "chrome/browser/component_updater/component_updater_prefs.h"
+@@ -1536,6 +1537,7 @@
+   ChromeContentBrowserClient::RegisterLocalStatePrefs(registry);
+ #if !BUILDFLAG(IS_ANDROID)
+   hivey::RegisterResourceLimitsPrefs(registry);
++  hivey::RegisterUpdaterPrefs(registry);
+ #endif
+ #if BUILDFLAG(CHROME_FOR_TESTING)
+   chrome_for_testing::RegisterPrefs(registry);
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -144,6 +144,18 @@
+     aboutText: 'Hivey Browser is built on ungoogled-chromium. Every change is a public patch.',
+     sourceCode: 'Source code',
+     flags: 'All flags (advanced)…',
++    autoUpdate: 'Automatic updates',
++    autoUpdateHint: 'Security fixes are installed automatically (checked 10 minutes after start, then twice a day; signed releases only).',
++    updateCheckNow: 'Check now',
++    updateDownload: 'Download',
++    updateChecking: 'Checking for updates…',
++    updateUpToDate: 'Hivey Browser is up to date',
++    updateDownloading: 'Downloading the update…',
++    updateInstalling: 'Installing the update: relaunch when the browser offers it',
++    updateAvailable: 'A new version is available',
++    updateError: 'The last check failed; it will be retried',
++    updateNever: 'Not checked yet',
++    updateLastCheck: 'last check',
+ 
+     restartNeeded: 'Some changes apply after a restart.',
+     restart: 'Restart now',
+@@ -288,6 +300,18 @@
+     aboutText: 'Hivey Browser est construit sur ungoogled-chromium. Chaque modification est un patch public.',
+     sourceCode: 'Code source',
+     flags: 'Tous les flags (avancé)…',
++    autoUpdate: 'Mises à jour automatiques',
++    autoUpdateHint: 'Les correctifs de sécurité s\u2019installent tout seuls (vérification 10 minutes après le lancement, puis deux fois par jour ; versions signées uniquement).',
++    updateCheckNow: 'Vérifier maintenant',
++    updateDownload: 'Télécharger',
++    updateChecking: 'Recherche de mises à jour…',
++    updateUpToDate: 'Hivey Browser est à jour',
++    updateDownloading: 'Téléchargement de la mise à jour…',
++    updateInstalling: 'Installation de la mise à jour : relancez quand le navigateur le propose',
++    updateAvailable: 'Une nouvelle version est disponible',
++    updateError: 'La dernière vérification a échoué ; elle sera relancée',
++    updateNever: 'Pas encore vérifié',
++    updateLastCheck: 'dernière vérification',
+ 
+     restartNeeded: 'Certains changements s’appliquent après un redémarrage.',
+     restart: 'Redémarrer',
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -493,13 +493,44 @@
+ 
+ // -------------------------------------------------------------------- about
+ 
++function updateStatusText(update) {
++  if (update.checking) {
++    return t('updateChecking');
++  }
++  const key = {
++    'up-to-date': 'updateUpToDate',
++    'downloading': 'updateDownloading',
++    'installing': 'updateInstalling',
++    'available': 'updateAvailable',
++  }[update.status] || (update.status ? 'updateError' : 'updateNever');
++  let text = t(key);
++  if (update.available && (key === 'updateAvailable' || key === 'updateInstalling')) {
++    text += ` (${update.available})`;
++  }
++  if (update.lastCheck) {
++    text += ` · ${t('updateLastCheck')} ${new Date(update.lastCheck).toLocaleString(document.documentElement.lang)}`;
++  }
++  return text;
++}
++
+ function buildAbout() {
++  const update = state.update || {};
+   return el('div', {},
+             sectionHeader('aboutTitle', 'aboutText'),
+             card(null,
+                  el('div', {class: 'row'},
+                     el('span', {class: 'row-label', text: t('version')}),
+                     el('span', {class: 'mono', text: state.version})),
++                 prefToggle('hivey.update.enabled', 'autoUpdate', 'autoUpdateHint'),
++                 el('div', {class: 'row'},
++                    el('span', {class: 'row-hint', text: updateStatusText(update)}),
++                    el('span', {class: 'task-actions'},
++                       update.status === 'available' ? el('button', {
++                         class: 'button ghost', text: t('updateDownload'),
++                         onclick: () => openUrl('https://github.com/FlorianMartins/hivey-browser/releases/latest'),
++                       }) : null,
++                       el('button', {class: 'button', text: t('updateCheckNow'), disabled: update.checking,
++                                     onclick: () => chrome.send('checkForUpdates')}))),
+                  linkRow({label: t('sourceCode'),
+                           onClick: () => openUrl('https://github.com/FlorianMartins/hivey-browser')}),
+                  linkRow({label: t('flags'), onClick: () => openUrl('chrome://flags')})));
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -21,6 +21,7 @@
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
+ #include "chrome/browser/hivey/hivey_resource_limits.h"
++#include "chrome/browser/hivey/hivey_updater.h"
+ #include "chrome/browser/lifetime/application_lifetime.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/task_manager/task_manager_interface.h"
+@@ -59,6 +60,7 @@
+     {"hivey.memory_limit_mb", true},
+     {hivey::kCpuLimitPercent, true},
+     {hivey::kNetworkLimitKbps, true},
++    {hivey::kAutoUpdateEnabled, true},
+ };
+ 
+ // chrome://flags entries shown in Hivey Studio (they need a restart).
+@@ -204,6 +206,7 @@
+   add("stopUsage", &HiveyStudioHandler::HandleStopUsage);
+   add("taskAction", &HiveyStudioHandler::HandleTaskAction);
+   add("openCustomizeToolbar", &HiveyStudioHandler::HandleOpenCustomizeToolbar);
++  add("checkForUpdates", &HiveyStudioHandler::HandleCheckForUpdates);
+ }
+ 
+ void HiveyStudioHandler::OnJavascriptDisallowed() {
+@@ -312,6 +315,8 @@
+       .Set("prefs", BuildPrefsState())
+       .Set("flags", BuildFlagsState())
+       .Set("shield", BuildShieldState())
++      .Set("update", hivey::Updater::Get() ? hivey::Updater::Get()->GetStatus()
++                                           : base::DictValue())
+       .Set("restartNeeded", about_flags::IsRestartNeededToCommitChanges());
+ }
+ 
+@@ -463,3 +468,10 @@
+     chrome::ExecuteCommand(browser, IDC_SHOW_CUSTOMIZE_CHROME_TOOLBAR);
+   }
+ }
++
++void HiveyStudioHandler::HandleCheckForUpdates(const base::ListValue& args) {
++  if (hivey::Updater* updater = hivey::Updater::Get()) {
++    updater->CheckNow();
++  }
++  FireStateChanged();
++}
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
+@@ -50,6 +50,7 @@
+   void HandleStopUsage(const base::ListValue& args);
+   void HandleTaskAction(const base::ListValue& args);
+   void HandleOpenCustomizeToolbar(const base::ListValue& args);
++  void HandleCheckForUpdates(const base::ListValue& args);
+ 
+   // Pushes the current state to the page ("hivey-state" event).
+   void FireStateChanged();
+--- a/chrome/browser/upgrade_detector/upgrade_detector_impl.cc
++++ b/chrome/browser/upgrade_detector/upgrade_detector_impl.cc
+@@ -222,7 +222,9 @@
+ 
+ void UpgradeDetectorImpl::StartOutdatedBuildDetector() {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+-  static BASE_FEATURE(kOutdatedBuildDetector, base::FEATURE_ENABLED_BY_DEFAULT);
++  // Hivey: its "reinstall" prompt points to Google's download page; Hivey
++  // Studio shows the updater's status instead.
++  static BASE_FEATURE(kOutdatedBuildDetector, base::FEATURE_DISABLED_BY_DEFAULT);
+ 
+   if (!base::FeatureList::IsEnabled(kOutdatedBuildDetector))
+     return;
+--- a/components/embedder_support/user_agent_utils.cc
++++ b/components/embedder_support/user_agent_utils.cc
+@@ -177,6 +177,18 @@
+                                   additional_brand_version);
+ }
+ 
++// Hivey: chrome/VERSION's PATCH holds the upstream patch number times 100 plus
++// the Hivey revision, so that Hivey-only releases install as updates. Web
++// pages get the upstream Chromium version, like every other Chromium user.
++std::string WebVisibleVersionNumber() {
++  const base::Version& version = version_info::GetVersion();
++  const std::vector<uint32_t>& c = version.components();
++  if (!version.IsValid() || c.size() != 4 || c[3] < 100) {
++    return std::string(version_info::GetVersionNumber());
++  }
++  return base::StringPrintf("%u.%u.%u.%u", c[0], c[1], c[2], c[3] / 100);
++}
++
+ // Return UserAgentBrandList with the major version populated in the brand
+ // `version` value.
+ // TODO(crbug.com/1291612): Consolidate *MajorVersionList() methods by using
+@@ -184,7 +196,7 @@
+ const blink::UserAgentBrandList GetUserAgentBrandMajorVersionListInternal(
+     std::optional<blink::UserAgentBrandVersion> additional_brand_version) {
+   return GetUserAgentBrandList(version_info::GetMajorVersionNumber(),
+-                               std::string(version_info::GetVersionNumber()),
++                               WebVisibleVersionNumber(),
+                                blink::UserAgentBrandVersionType::kMajorVersion,
+                                additional_brand_version);
+ }
+@@ -208,7 +220,7 @@
+ const blink::UserAgentBrandList GetUserAgentBrandFullVersionListInternal(
+     std::optional<blink::UserAgentBrandVersion> additional_brand_version) {
+   return GetUserAgentBrandList(version_info::GetMajorVersionNumber(),
+-                               std::string(version_info::GetVersionNumber()),
++                               WebVisibleVersionNumber(),
+                                blink::UserAgentBrandVersionType::kFullVersion,
+                                additional_brand_version);
+ }
+@@ -693,7 +705,7 @@
+   // High entropy client hints.
+   metadata.brand_full_version_list =
+       GetUserAgentBrandFullVersionListInternal(std::nullopt);
+-  metadata.full_version = std::string(version_info::GetVersionNumber());
++  metadata.full_version = WebVisibleVersionNumber();
+   metadata.architecture = GetCpuArchitecture();
+   metadata.model = BuildModelInfo();
+   metadata.form_factors = GetFormFactorsClientHint(metadata, metadata.mobile);
