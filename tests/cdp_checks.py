@@ -259,6 +259,23 @@ try:
     time.sleep(2)
     p.goto(f'http://localhost:{PORT}/page', settle=1)
     fast = timed_download()
+    # CPU limiter (Windows): a busy loop does much less work under a 10 % cap.
+    if p.eval("navigator.userAgentData.platform") == 'Windows':
+        busy = "(() => { const t = performance.now(); let n = 0; while (performance.now() - t < 3000) n++; return n; })()"
+        p.goto(f'http://localhost:{PORT}/page', settle=1)
+        free_run = p.eval(busy)
+        p.goto('chrome://hivey/', settle=2)
+        p.eval("chrome.send('setPref', ['hivey.cpu_limit_percent', 10])")
+        time.sleep(2)
+        p.goto(f'http://localhost:{PORT}/page?capped', settle=2)
+        capped = p.eval(busy)
+        p.goto('chrome://hivey/', settle=2)
+        p.eval("chrome.send('setPref', ['hivey.cpu_limit_percent', 0])")
+        time.sleep(1)
+        ratio = capped / free_run if isinstance(capped, int) and isinstance(free_run, int) and free_run else None
+        check('CPU limiter (10 % cap)', ratio is not None and ratio < 0.7,
+              f'busy loop: {free_run} iterations free, {capped} capped (ratio {ratio and round(ratio, 2)})')
+
     check('Network limiter', isinstance(slow, (int, float)) and isinstance(fast, (int, float)) and
           slow > 2.5 and fast < 1, f'400 KB in {slow:.1f} s at 1 Mb/s, {fast:.2f} s without limit'
           if isinstance(slow, (int, float)) and isinstance(fast, (int, float)) else f'{slow!r} {fast!r}')
