@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """Hivey Browser build orchestrator.
 
-Cross-compiles a Windows x64 build of Hivey Browser from a Linux host, on top
-of ungoogled-chromium. Every step is idempotent and records a stamp, so an
-interrupted run can be resumed with `hb.py all`.
+Builds Hivey Browser on top of ungoogled-chromium, from a Linux host:
+Windows x64 (cross-compiled, HB_TARGET=win, the default) or Linux x64
+(HB_TARGET=linux), both from the same patched tree. Every step is idempotent
+and records a stamp, so an interrupted run can be resumed with `hb.py all`.
 
     hb.py fetch       download + verify the Chromium source tarball
     hb.py unpack      extract it into $HB_BUILD_DIR/src
     hb.py prune       remove prebuilt binaries (ungoogled pruning list)
     hb.py toolchain   fetch build-only host tools + MSVC CRT/Windows SDK (xwin)
     hb.py patch       ungoogled + ungoogled-windows (selected) + Hivey patches
-    hb.py brand       apply brand/brand.json (names, paths, strings, icons)
+    hb.py brand       apply brand/brand.json, write the Hivey version
+    hb.py bundle      bundled extensions (signed .crx) + update public key
     hb.py domsub      ungoogled domain substitution
-    hb.py configure   write args.gn and run `gn gen`
-    hb.py build       ninja (low CPU/IO priority)
+    hb.py configure   write args.gn and run `gn gen` (per target)
+    hb.py build       ninja (low CPU/IO priority, per target)
+    hb.py package     installer or portable archive in $HB_BUILD_DIR/dist
     hb.py all         every step above, in order, skipping finished ones
     hb.py status      show which steps are done
 
