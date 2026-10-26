@@ -1,0 +1,158 @@
+# Hivey Studio: custom new tab page (any URL), fonts and default zoom shortcuts; the anti-fingerprinting card mentions the font protection.
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -65,6 +65,13 @@
+     compactModeHint: 'Shorter tabs, toolbar and address bar: more room for pages.',
+     customizeToolbar: 'Choose toolbar buttons…',
+     customizeToolbarHint: 'Pin or unpin buttons (downloads, history, print, task manager…).',
++    newTabPage: 'New tab page',
++    newTabPageHint: 'Any address, or empty for the built-in page.',
++    apply: 'Apply',
++    fonts: 'Fonts…',
++    fontsHint: 'Default fonts and minimum size for web pages.',
++    zoom: 'Default zoom and font size…',
++    zoomHint: 'How large pages are displayed.',
+ 
+     tabsTitle: 'Tabs & behaviour',
+     tabsHint: 'How tabs and windows behave.',
+@@ -129,7 +136,7 @@
+     shieldMissing: 'Not installed',
+     manage: 'Manage',
+     antiFingerprint: 'Anti-fingerprinting',
+-    antiFingerprintHint: 'Noise in Canvas, text metrics, element boxes and audio; processor count capped. Sites cannot recognise you from your hardware.',
++    antiFingerprintHint: 'Noise in Canvas, text metrics, element boxes and audio; processor count capped; only standard fonts visible. Sites cannot recognise you from your hardware.',
+     httpsOnly: 'Always use secure connections',
+     httpsOnlyHint: 'Warns before loading any page over plain HTTP.',
+     clearOnExit: 'Clear browsing data on exit',
+@@ -221,6 +228,13 @@
+     compactModeHint: 'Onglets, barre d’outils et barre d’adresse plus fins : plus de place pour les pages.',
+     customizeToolbar: 'Choisir les boutons de la barre d’outils…',
+     customizeToolbarHint: 'Épingler ou retirer des boutons (téléchargements, historique, impression, gestionnaire de tâches…).',
++    newTabPage: 'Page Nouvel onglet',
++    newTabPageHint: 'N\u2019importe quelle adresse, ou vide pour la page intégrée.',
++    apply: 'Appliquer',
++    fonts: 'Polices…',
++    fontsHint: 'Polices par défaut et taille minimale des pages web.',
++    zoom: 'Zoom et taille du texte par défaut…',
++    zoomHint: 'La taille d\u2019affichage des pages.',
+ 
+     tabsTitle: 'Onglets et comportement',
+     tabsHint: 'Comment se comportent les onglets et les fenêtres.',
+@@ -285,7 +299,7 @@
+     shieldMissing: 'Non installé',
+     manage: 'Gérer',
+     antiFingerprint: 'Anti-empreinte',
+-    antiFingerprintHint: 'Bruit dans Canvas, la mesure du texte, les boîtes des éléments et l’audio ; nombre de processeurs plafonné. Les sites ne peuvent pas vous reconnaître à votre matériel.',
++    antiFingerprintHint: 'Bruit dans Canvas, la mesure du texte, les boîtes des éléments et l’audio ; nombre de processeurs plafonné ; seules les polices standard sont visibles. Les sites ne peuvent pas vous reconnaître à votre matériel.',
+     httpsOnly: 'Toujours utiliser des connexions sécurisées',
+     httpsOnlyHint: 'Avertit avant de charger une page en HTTP non chiffré.',
+     clearOnExit: 'Effacer les données de navigation à la fermeture',
+--- a/chrome/browser/resources/hivey_studio/studio.css
++++ b/chrome/browser/resources/hivey_studio/studio.css
+@@ -408,6 +408,27 @@
+   outline-offset: 2px;
+ }
+ 
++.text-field {
++  display: flex;
++  gap: 8px;
++  flex: none;
++}
++
++.text-input {
++  width: 260px;
++  padding: 8px 12px;
++  border-radius: var(--radius-sm);
++  border: 1px solid var(--border-strong);
++  background: var(--panel-2);
++  color: var(--text);
++  font: inherit;
++}
++
++.text-input:focus-visible {
++  outline: 2px solid var(--accent);
++  outline-offset: 2px;
++}
++
+ .button {
+   padding: 8px 16px;
+   border-radius: 10px;
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -175,6 +175,24 @@
+   return el('div', {class: 'field'}, el('div', {class: 'field-label', text: label}), group);
+ }
+ 
++function textRow({label, hint, value, placeholder, onApply, restart}) {
++  const input = el('input', {type: 'url', class: 'text-input', placeholder, 'aria-label': label, 'data-key': label,
++                             spellcheck: 'false'});
++  input.value = value || '';
++  const apply = () => onApply(input.value.trim());
++  input.addEventListener('keydown', e => {
++    if (e.key === 'Enter') {
++      apply();
++    }
++  });
++  return el('div', {class: 'row'},
++            el('div', {class: 'row-text'},
++               el('span', {class: 'row-label'}, label, restart ? el('span', {class: 'pill', text: '↻'}) : null),
++               hint ? el('span', {class: 'row-hint', text: hint}) : null),
++            el('span', {class: 'text-field'}, input,
++               el('button', {class: 'button', text: t('apply'), onclick: apply})));
++}
++
+ function linkRow({label, hint, onClick}) {
+   return el('button', {class: 'row link-row', onclick: onClick},
+             el('span', {class: 'row-text'},
+@@ -349,7 +367,16 @@
+                  linkRow({
+                    label: t('customizeToolbar'), hint: t('customizeToolbarHint'),
+                    onClick: () => chrome.send('openCustomizeToolbar'),
+-                 })));
++                 })),
++            card(null,
++                 flag('custom-ntp') ? textRow({
++                   label: t('newTabPage'), hint: t('newTabPageHint'), restart: true,
++                   value: flag('custom-ntp').enabled ? flag('custom-ntp').value : '',
++                   placeholder: 'https://… / chrome://new-tab-page',
++                   onApply: v => setFlag('custom-ntp', v),
++                 }) : null,
++                 linkRow({label: t('fonts'), hint: t('fontsHint'), onClick: () => openUrl('chrome://settings/fonts')}),
++                 linkRow({label: t('zoom'), hint: t('zoomHint'), onClick: () => openUrl('chrome://settings/appearance')})));
+ }
+ 
+ // --------------------------------------------------------------------- tabs
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -70,7 +70,7 @@
+     "hide-extensions-menu", "remove-grab-handle",   "hide-fullscreen-exit-ui",
+     "popups-to-tabs",       "close-confirmation",   "bookmark-bar-ntp",
+     "disable-link-drag",    "clear-data-on-exit",   "enable-incognito-themes",
+-    "disable-fingerprinting-noise",
++    "disable-fingerprinting-noise", "custom-ntp",
+ };
+ 
+ constexpr auto kVariants =
+@@ -278,6 +278,10 @@
+       flag.Set("kind", "multi");
+       flag.Set("selected", selected);
+       flag.Set("options", static_cast<int>(options->size()));
++    } else if (const std::string* value = dict.FindString("origin_list_value")) {
++      flag.Set("kind", "text");
++      flag.Set("enabled", dict.FindBool("enabled").value_or(false));
++      flag.Set("value", *value);
+     } else {
+       flag.Set("kind", "single");
+       flag.Set("enabled", dict.FindBool("enabled").value_or(false));
+@@ -407,6 +411,11 @@
+   flags_ui::PrefServiceFlagsStorage storage(g_browser_process->local_state());
+   if (args[1].is_bool()) {
+     about_flags::SetFeatureEntryEnabled(&storage, *name, args[1].GetBool());
++  } else if (args[1].is_string()) {
++    // A URL flag (custom new tab page): empty turns it off.
++    const std::string& value = args[1].GetString();
++    about_flags::SetOriginListFlag(*name, value, &storage);
++    about_flags::SetFeatureEntryEnabled(&storage, *name, !value.empty());
+   } else if (args[1].is_int() || args[1].is_double()) {
+     const int option = static_cast<int>(args[1].GetDouble());
+     if (option < 0) {
