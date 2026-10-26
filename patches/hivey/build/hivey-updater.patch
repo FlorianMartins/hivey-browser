@@ -63,7 +63,7 @@
  }  // namespace hivey
 --- a/chrome/browser/hivey/hivey_updater.cc
 +++ b/chrome/browser/hivey/hivey_updater.cc
-@@ -0,0 +1,352 @@
+@@ -0,0 +1,353 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
@@ -312,12 +312,13 @@
 +    Finish("error-signature");
 +    return;
 +  }
-+  std::optional<base::Value> parsed = base::JSONReader::Read(manifest);
-+  if (!parsed || !parsed->is_dict()) {
++  std::optional<base::DictValue> parsed =
++      base::JSONReader::ReadDict(manifest, base::JSON_PARSE_RFC);
++  if (!parsed) {
 +    Finish("error-manifest");
 +    return;
 +  }
-+  OnManifestVerified(std::move(*parsed).TakeDict());
++  OnManifestVerified(std::move(*parsed));
 +}
 +
 +void Updater::OnManifestVerified(base::DictValue manifest) {
