@@ -49,7 +49,7 @@
          <include name="IDR_INTRO_SOUND_ALL_SET_FLAC" file="resources\intro\sounds\all_set.flac" type="BINDATA" />
 --- a/chrome/browser/chrome_browser_main.cc
 +++ b/chrome/browser/chrome_browser_main.cc
-@@ -1338,7 +1338,8 @@
+@@ -1331,7 +1331,8 @@
    if (first_run::IsChromeFirstRun()) {
      if (!base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kApp) &&
          !base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kAppId)) {
@@ -1819,20 +1819,18 @@
 +main();
 --- a/chrome/browser/ui/BUILD.gn
 +++ b/chrome/browser/ui/BUILD.gn
-@@ -2177,6 +2177,13 @@
-   ]
- 
-   if (!is_android) {
-+    # Hivey: Hivey Studio (chrome://hivey).
-+    sources += [
+@@ -2301,6 +2301,11 @@
+       "browser.cc",
+       "browser.h",
+       "browser_tabstrip.cc",
++      # Hivey: Hivey Studio (chrome://hivey).
 +      "webui/hivey/hivey_studio_handler.cc",
 +      "webui/hivey/hivey_studio_handler.h",
 +      "webui/hivey/hivey_studio_ui.cc",
 +      "webui/hivey/hivey_studio_ui.h",
-+    ]
-     deps += [
-       ":browser_content_setting_bubble_model_delegate",
-       ":browser_content_setting_bubble_model_delegate_impl",
+       "browser_tabstrip.h",
+     ]
+ 
 --- a/chrome/browser/ui/browser_command_controller.cc
 +++ b/chrome/browser/ui/browser_command_controller.cc
 @@ -1302,6 +1302,10 @@
