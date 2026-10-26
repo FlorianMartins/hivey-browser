@@ -40,8 +40,10 @@ Linux**, so anyone can reproduce both without a Windows machine.
 
 ## Download
 
-- **Latest release**: [releases/latest](https://github.com/FlorianMartins/hivey-browser/releases/latest)
-  (Windows installer, Linux archive). Installed browsers update themselves.
+- **Latest version** (permanent links, always the newest release):
+  [Windows installer](https://github.com/FlorianMartins/hivey-browser/releases/latest/download/hivey-browser-windows-x64-installer.exe),
+  [Linux archive](https://github.com/FlorianMartins/hivey-browser/releases/latest/download/hivey-browser-linux-x64.tar.xz).
+  Installed browsers update themselves.
 - **Dev build** of main, for testing:
   [Windows](https://github.com/FlorianMartins/hivey-browser/releases/download/dev/hivey-browser-dev-windows-x64-installer.exe),
   [Linux](https://github.com/FlorianMartins/hivey-browser/releases/download/dev/hivey-browser-dev-linux-x64.tar.xz).

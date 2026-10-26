@@ -5,6 +5,12 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
 
 ## 156.0.8078.4702 — 26 octobre 2026
 
+### Téléchargement
+- **Liens permanents** vers la dernière version, qui ne changent plus d'une
+  version à l'autre :
+  [Windows](https://github.com/FlorianMartins/hivey-browser/releases/latest/download/hivey-browser-windows-x64-installer.exe),
+  [Linux](https://github.com/FlorianMartins/hivey-browser/releases/latest/download/hivey-browser-linux-x64.tar.xz).
+
 ### Hivey AI intégré
 - La **sidebar Hivey AI** (version 2.201.298) est livrée avec le navigateur
   (son icône dans la barre d'outils) : votre clé API ou un modèle local,
