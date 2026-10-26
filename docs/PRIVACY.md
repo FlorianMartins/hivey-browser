@@ -63,6 +63,7 @@ still work: Chromium opens their login page without secure DNS.
 | Request | When | What it sends | Turn it off |
 | --- | --- | --- | --- |
 | Encrypted DNS probe to `dns.quad9.net` | at startup in secure DNS mode | a DNS query for a probe name, no browsing data | Settings > Security > secure DNS |
+| Proxy auto-discovery (`wpad`, Windows) | at startup, when Windows' *Automatically detect settings* is on | a DNS lookup on the local network only | Windows Settings > Network > Proxy |
 | Update check: `hivey-update.json` (+ signature) from GitHub releases | 10 minutes after start, then every 12 hours | a plain GET without cookies | Hivey Studio > About > Automatic updates |
 | Update download (installer) | only when a newer, correctly signed release exists | a plain GET without cookies | same |
 

@@ -6,8 +6,10 @@
 Starts the browser on a fresh profile (so the first-run tab opens too) with
 a NetLog capture, lets it idle, closes it, and lists every request and DNS
 lookup it made. Allowed: browser-internal URLs (chrome://, extensions,
-data:) and the encrypted DNS resolver's own probe (dns.quad9.net), which
-carries no user data. Anything else fails the check.
+data:), the encrypted DNS resolver's own probe (dns.quad9.net), and on
+Windows the proxy auto-discovery lookup (wpad, local network only, when the
+system's "Automatically detect settings" is on). None carries user data.
+Anything else fails the check.
 
 Linux CI runs it under xvfb-run; Windows CI runs it on the installed
 browser.
@@ -24,7 +26,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 INTERNAL_SCHEMES = {'chrome', 'chrome-extension', 'chrome-untrusted', 'data', 'blob', 'devtools', 'about'}
-ALLOWED_HOSTS = {'dns.quad9.net'}
+# The encrypted DNS probe, and Windows' proxy auto-discovery (WPAD), which
+# follows the system setting and only asks the local network.
+ALLOWED_HOSTS = {'dns.quad9.net', 'wpad'}
 
 
 def load_netlog(path):
