@@ -48,6 +48,39 @@ Hivey Browser build flags additionally keep crash/usage reporting
 | Encrypted DNS (DNS-over-HTTPS, secure mode) through Quad9, which also refuses known malicious domains | **On** | Settings > Privacy and security > Security | `privacy/secure-dns-quad9` |
 | DuckDuckGo as default search engine; its remote new tab page is removed | **On** | Settings > Search engine | `privacy/duckduckgo-default-search` |
 | Web pages see the upstream Chromium version, not Hivey's | **On** | — | `build/hivey-updater` |
+| USB, serial, HID and Bluetooth devices: sites cannot even ask for them (a common way to fingerprint and to attack hardware) | **Blocked** | Hivey Studio > Privacy, or per site in the address bar | `privacy/block-device-apis` |
+| Hardened mode: no JavaScript optimizer (JIT) on any site, which removes the code most browser exploits target, at some speed cost | Off | Hivey Studio > Privacy | `customization/hivey-studio-themes` |
+
+## The Hivey AI sidebar
+
+AI browsers that read every page by themselves can be steered by a page:
+hidden text tells the assistant to open another site, copy a form or send
+your data somewhere (prompt injection). The Hivey AI sidebar is built so a
+page cannot reach it on its own:
+
+- **No site access by default.** It reads a page only when you open it on
+  that tab (the extension's *on click* access), or on sites you allow in
+  `chrome://extensions`. Only the AI providers' API addresses it names in its
+  manifest stay allowed, so the chat works.
+- **Your key, your provider.** Nothing is sent anywhere until you add an API
+  key (Anthropic, OpenAI, OpenRouter, Mistral…) or point it at a local model;
+  requests go straight from the browser to that provider, with no Hivey
+  server in between.
+- **Open source** (MIT, [HiveyAI-Sidebar](https://github.com/FlorianMartins/HiveyAI-Sidebar)),
+  built from a pinned commit and signed into the browser like Hivey Shield.
+  Hivey Studio > Privacy shows its status and links to its site access;
+  `chrome://extensions` turns it off.
+
+## Hivey Cyber: security tools
+
+The shield-and-magnifier icon in the toolbar, and the right-click menu on a
+page, a link or selected text, check a site in public security services:
+WHOIS, IP geolocation, DNS records, certificates (crt.sh), VirusTotal,
+urlscan.io, Shodan, SSL Labs, security headers, Mozilla Observatory and the
+Wayback Machine, or search selected text in VirusTotal and Have I Been Pwned.
+Each tool opens the service in a new tab, only when you click it: the
+extension sends nothing by itself. Showing the site's IP address in the popup
+asks Quad9's encrypted DNS, the resolver the browser already uses.
 
 The noise is far too small to see or hear (audio: under 1e-6 of each sample,
 about -120 dB) but changes the fingerprint a tracker computes. If a site that
@@ -68,7 +101,8 @@ still work: Chromium opens their login page without secure DNS.
 | Update download (installer) | only when a newer, correctly signed release exists | a plain GET without cookies | same |
 
 Nothing else: no extension, component or field-trial update service is
-contacted (uBlock Origin Lite updates with the browser).
+contacted (the bundled extensions update with the browser). The AI sidebar
+talks only to the AI provider you set up, and only when you use it.
 
 ## Build-time downloads are not runtime requests
 

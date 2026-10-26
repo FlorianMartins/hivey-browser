@@ -3,6 +3,48 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4702 — 26 octobre 2026
+
+### Hivey AI intégré
+- La **sidebar Hivey AI** est livrée avec le navigateur (son icône dans la barre
+  d'outils) : votre clé API ou un modèle local, aucun serveur Hivey entre
+  vous et le fournisseur.
+- **Pas une passoire** : elle ne lit une page que si vous l'ouvrez sur cet
+  onglet. Une page piégée ne peut pas la piloter (injection de prompt).
+
+### Outils de cybersécurité
+- Nouvelle extension intégrée **Hivey Cyber** (icône bouclier-loupe, et clic
+  droit sur une page, un lien ou un texte) :
+  - WHOIS, géolocalisation IP, DNS et certificats ;
+  - VirusTotal, urlscan.io, Shodan ;
+  - SSL Labs, en-têtes de sécurité, Observatory, Wayback Machine ;
+  - recherche dans Have I Been Pwned.
+
+### Sécurité
+- **USB, série, HID et Bluetooth bloqués** : les sites ne peuvent même plus
+  les demander. Autorisable site par site.
+- **Mode durci** en option (Hivey Studio > Confidentialité) : plus
+  d'optimiseur JavaScript (JIT), la cible de la plupart des failles des
+  navigateurs.
+
+### Apparence
+- **Thèmes Aura, Ambre nuit et Jour**, appliqués à tout le navigateur : barre
+  d'onglets, barre d'outils, menus clic droit, panneaux, Paramètres et Hivey
+  Studio. L'aperçu correspond exactement au résultat.
+- **Une couleur pour chaque partie du navigateur**, avec une **pipette** qui
+  prend une couleur n'importe où sur l'écran, même hors du navigateur.
+- L'**icône de la fenêtre** (barre des tâches) prend la couleur du thème. Le
+  logo est le même partout.
+- **Onglets verticaux** de la couleur de la barre d'outils. Ils ne se
+  déploient plus au survol par défaut (option dans Hivey Studio).
+- Le **mode compact** réduit aussi la barre de navigation.
+
+### Hivey Studio
+- Bouton **Ressources** dans la barre d'outils : jauges en direct, onglets
+  gourmands et limiteurs dans une fenêtre déroulante.
+- Hivey Studio **se met à jour en direct** : une option changée ailleurs
+  (clic droit sur les onglets, Paramètres) y apparaît aussitôt.
+
 ## 156.0.8078.4701 — 26 octobre 2026
 
 Première version publique, pour **Windows** (installeur) et **Linux** (archive

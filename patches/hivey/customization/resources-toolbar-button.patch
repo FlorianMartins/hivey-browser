@@ -45,7 +45,7 @@
    }
  }
 +
-+/* chrome://hivey-resources: the Resources section in the toolbar bubble. */
++/* chrome://hivey-resources.top-chrome: the Resources section in the toolbar bubble. */
 +body.in-bubble {
 +  width: 460px;
 +  min-height: 0;
@@ -98,9 +98,9 @@
    sparkles: ['M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z', 'M19 3v4', 'M21 5h-4'],
  };
  
-+// chrome://hivey-resources: only the Resources section, in the toolbar
-+// button's bubble.
-+const IN_BUBBLE = location.host === 'hivey-resources';
++// chrome://hivey-resources.top-chrome: only the Resources section, in the
++// toolbar button's bubble.
++const IN_BUBBLE = location.host === 'hivey-resources.top-chrome';
 +
  let state = null;
  let current = 'appearance';
@@ -469,7 +469,7 @@
 +WEB_UI_CONTROLLER_TYPE_IMPL(HiveyResourcesUI)
 --- a/chrome/browser/ui/webui/hivey/hivey_resources_ui.h
 +++ b/chrome/browser/ui/webui/hivey/hivey_resources_ui.h
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,49 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
@@ -486,10 +486,13 @@
 +
 +class HiveyResourcesUI;
 +
-+// chrome://hivey-resources: Hivey Studio's Resources section in the dropdown
-+// of the toolbar's Resources button (like an extension's popup).
-+inline constexpr char kChromeUIHiveyResourcesHost[] = "hivey-resources";
-+inline constexpr char kChromeUIHiveyResourcesURL[] = "chrome://hivey-resources/";
++// chrome://hivey-resources.top-chrome: Hivey Studio's Resources section in
++// the dropdown of the toolbar's Resources button (like an extension's popup).
++// The .top-chrome domain makes it a browser-UI page, like Tab Search.
++inline constexpr char kChromeUIHiveyResourcesHost[] =
++    "hivey-resources.top-chrome";
++inline constexpr char kChromeUIHiveyResourcesURL[] =
++    "chrome://hivey-resources.top-chrome/";
 +
 +class HiveyResourcesUIConfig
 +    : public DefaultTopChromeWebUIConfig<HiveyResourcesUI> {

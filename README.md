@@ -10,13 +10,21 @@ Linux, built on [ungoogled-chromium](https://github.com/ungoogled-software/ungoo
 - **Blocks more than ads.** uBlock Origin Lite is built in: ads, trackers,
   cookie banners, tracking parameters in links, malware sites, with cosmetic
   filtering and a blocked-requests counter.
+- **Locked down.** Sites cannot ask for USB, serial, HID or Bluetooth
+  devices; an optional hardened mode turns the JavaScript JIT off.
 - **Hard to fingerprint.** Noise in canvas, text metrics, element boxes and
   audio; GPU model hidden; processor count capped; only standard fonts
   visible; cross-site referrers cut to the origin; no Topics or Attribution
   Reporting.
 - **Yours to shape.** Hivey Studio (`chrome://hivey`) puts everything in one
-  place: any color for the whole browser, vertical tabs, compact mode, side
+  place: themes and a color for every part of the browser (with an eyedropper
+  that works anywhere on the screen), vertical tabs, compact mode, side
   panel position, toolbar buttons, a custom new tab page, tab behaviour.
+- **AI that is not a security hole.** The Hivey AI sidebar is built in, with
+  your own key or a local model; it reads a page only when you invoke it
+  there, so pages cannot steer it (prompt injection).
+- **Security tools at hand.** WHOIS, geolocation, DNS, certificates,
+  VirusTotal, urlscan, Shodan and more from the toolbar or a right-click.
 - **Light on your machine.** Like a gaming browser: RAM, CPU and network
   limiters, live usage gauges and a list of the hungriest tabs.
 - **Always patched.** New Chromium releases are picked up, built, tested and
