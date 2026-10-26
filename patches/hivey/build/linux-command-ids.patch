@@ -1,0 +1,15 @@
+# Linux build of the shared tree: bring back IDC_USE_SYSTEM_TITLE_BAR, which ungoogled-chromium-windows' command-ids patch removes.
+--- a/chrome/app/chrome_command_ids.h
++++ b/chrome/app/chrome_command_ids.h
+@@ -83,7 +83,10 @@
+ #define IDC_TOGGLE_MULTITASK_MENU       34050
+ #endif
+ 
+-#if (0)
++// Hivey: ungoogled-chromium-windows turns this condition into a constant so
++// that the Windows resource compiler can read the file; the Linux build of
++// the same tree needs the command back. __linux__ is undefined for rc.
++#if defined(__linux__)
+ #define IDC_USE_SYSTEM_TITLE_BAR        34051
+ #endif
+ 

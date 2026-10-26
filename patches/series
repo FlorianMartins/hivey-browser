@@ -12,6 +12,7 @@ hivey/customization/fluent-overlay-scrollbars.patch
 hivey/privacy/duckduckgo-default-search.patch
 hivey/resources/ram-limiter-settings.patch
 hivey/build/installer-7zip-on-linux.patch
+hivey/build/linux-command-ids.patch
 hivey/privacy/referrer-cap-no-ad-apis.patch
 hivey/privacy/fingerprinting-audio-cpu.patch
 hivey/privacy/bundled-content-blocker.patch
