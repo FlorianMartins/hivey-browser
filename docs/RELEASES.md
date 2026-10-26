@@ -35,13 +35,16 @@ build tree, at the lowest CPU and I/O priority.
 5. **Ship.** Only if every check passes: the branch is merged through a pull
    request (its checks include the Windows smoke test of the draft) and the
    release is published.
-
 6. **Dev channel.** The `dev` pre-release is then replaced with this build
    of main. When only main changed (no new version), the nightly run still
    rebuilds it, checks it on Linux and replaces `dev`.
 
 Any failure opens (or comments on) a GitHub issue labelled `autoupdate`, with
 the end of the log.
+
+Every pull request that touches patches or submodules also runs
+`patchcheck.py` in CI (`.github/workflows/patch-stack.yml`, about two
+minutes, no build).
 
 ## Dev builds
 
@@ -57,10 +60,6 @@ Every change users notice gets a French, user-facing entry in
 [CHANGELOG.md](../CHANGELOG.md) in the same pull request, under the version
 it ships in; `release.py` puts that section at the top of the release notes
 and of the dev pre-release.
-
-Every pull request that touches patches or submodules also runs
-`patchcheck.py` in CI (`.github/workflows/patch-stack.yml`, about two
-minutes, no build).
 
 ## How browsers update
 
