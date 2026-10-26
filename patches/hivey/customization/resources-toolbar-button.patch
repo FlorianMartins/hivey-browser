@@ -40,7 +40,7 @@
      browserProcess: 'Navigateur',
 --- a/chrome/browser/resources/hivey_studio/studio.css
 +++ b/chrome/browser/resources/hivey_studio/studio.css
-@@ -965,3 +965,60 @@
+@@ -965,3 +965,65 @@
      transition: none !important;
    }
  }
@@ -96,6 +96,11 @@
 +
 +body.in-bubble .task {
 +  grid-template-columns: minmax(0, 1fr) 44px 64px auto;
++}
++
++/* CPU and memory; the narrow layout would hide them all. */
++body.in-bubble .task-metric {
++  display: block;
 +}
 +
 +body.in-bubble .task-metric:nth-of-type(4) {

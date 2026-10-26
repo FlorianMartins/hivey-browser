@@ -81,11 +81,13 @@ right-click on the tab strip, Settings) as they happen.
 The **Resources** button (gauge icon) in the toolbar opens the live gauges,
 the hot tabs and the limiters in a dropdown, like an extension's popup.
 
-![First start: Hivey Studio, with the Hivey Shield icon in the toolbar](images/hivey-studio-first-run.png)
+![First start: Hivey Studio in the Aura theme; in the toolbar, Hivey Cyber, Hivey AI, Hivey Shield and the Resources button](images/hivey-studio-first-run.png)
 
-![Compact mode, Aura color, dark mode](images/compact-mode.png)
+![Compact mode: a lower tab strip and toolbar](images/compact-mode.png)
 
-![Resources: live gauges, limiters and hot tabs](images/hivey-studio-resources.png)
+![Right-click menus take the theme, with the Hivey AI and Hivey Cyber entries](images/context-menu.png)
+
+![The Resources button: live gauges, limiters and hot tabs in a dropdown](images/hivey-studio-resources.png)
 
 ## Memory and performance
 

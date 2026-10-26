@@ -31,7 +31,7 @@ Linux, built on [ungoogled-chromium](https://github.com/ungoogled-software/ungoo
   published automatically; installed browsers update themselves from signed
   releases.
 
-![Vertical tabs, the Aura color and dark mode, set in Hivey Studio](docs/images/vertical-tabs-aura-dark.png)
+![Vertical tabs in the Aura theme: the tab strip takes the toolbar color](docs/images/vertical-tabs-aura-dark.png)
 
 ## Platforms
 
