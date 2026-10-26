@@ -30,6 +30,18 @@ Linux, built on [ungoogled-chromium](https://github.com/ungoogled-software/ungoo
 Windows x64 and Linux x64. The Windows build is **cross-compiled from
 Linux**, so anyone can reproduce both without a Windows machine.
 
+## Download
+
+- **Latest release**: [releases/latest](https://github.com/FlorianMartins/hivey-browser/releases/latest)
+  (Windows installer, Linux archive). Installed browsers update themselves.
+- **Dev build** of main, for testing:
+  [Windows](https://github.com/FlorianMartins/hivey-browser/releases/download/dev/hivey-browser-dev-windows-x64-installer.exe),
+  [Linux](https://github.com/FlorianMartins/hivey-browser/releases/download/dev/hivey-browser-dev-linux-x64.tar.xz).
+- What changed: [CHANGELOG.md](CHANGELOG.md).
+
+The Windows installer is not code-signed yet: SmartScreen asks for
+confirmation (*More info > Run anyway*).
+
 ## Building
 
 ```bash

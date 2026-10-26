@@ -3,6 +3,7 @@
 
     release.py draft      write + sign hivey-update.json, create a draft release
     release.py publish    publish the draft (installed browsers then update)
+    release.py dev        replace the `dev` pre-release (permanent test links)
 
 Both read the version from the build tree ($HB_BUILD_DIR/src/chrome/VERSION)
 and the artifacts from $HB_BUILD_DIR/dist (hb.py package). The release tag is
@@ -14,11 +15,19 @@ Ed25519 update key (hb.py ensure_update_key); browsers only accept a
 manifest signed with the key whose public half they were built with. A
 draft release is invisible to them: the updater reads releases/latest,
 which only points to published releases.
+
+The `dev` pre-release is a testing channel with permanent links, replaced
+with every build of main (scripts/autoupdate.py), like the other Hivey
+projects:
+  https://github.com/FlorianMartins/hivey-browser/releases/download/dev/hivey-browser-dev-windows-x64-installer.exe
+  https://github.com/FlorianMartins/hivey-browser/releases/download/dev/hivey-browser-dev-linux-x64.tar.xz
+Installed browsers never take it (pre-releases are not "latest").
 """
 
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -75,9 +84,21 @@ def write_manifest(ver, tag, found):
     return path, sig
 
 
+def changelog_section(ver):
+    """The CHANGELOG.md section of a version (French, user-facing)."""
+    text = (hb.ROOT / 'CHANGELOG.md').read_text()
+    start = text.find(f'## {ver}')
+    if start < 0:
+        return ''
+    end = text.find('\n## ', start + 1)
+    return text[start:end if end > 0 else len(text)].strip()
+
+
 def release_notes(ver):
     ug = (hb.UG / 'revision.txt').read_text().strip() if (hb.UG / 'revision.txt').exists() else '?'
-    return f"""Hivey Browser {ver}, based on Chromium {hb.chromium_version()} (ungoogled-chromium revision {ug}).
+    changes = changelog_section(ver)
+    changes = f'{changes}\n\n---\n\n' if changes else ''
+    return changes + f"""Hivey Browser {ver}, based on Chromium {hb.chromium_version()} (ungoogled-chromium revision {ug}).
 
 Installed browsers update by themselves (Hivey Studio > About). To install:
 
@@ -104,9 +125,49 @@ def cmd_draft(args):
     print(tag)
 
 
+DEV_NAMES = {'windows-x64': 'hivey-browser-dev-windows-x64-installer.exe',
+             'linux-x64': 'hivey-browser-dev-linux-x64.tar.xz'}
+
+
+def cmd_dev(args):
+    ver = version()
+    found = artifacts(ver)
+    sha = args.commit
+    stage = hb.DIST / 'dev'
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(parents=True)
+    files = []
+    for platform, path in found.items():
+        dest = stage / DEV_NAMES[platform]
+        shutil.copy2(path, dest)
+        files.append(dest)
+    (stage / 'SHA256SUMS').write_text(''.join(f'{hb.sha256_file(f)}  {f.name}\n' for f in files))
+    files.append(stage / 'SHA256SUMS')
+    notes = (f'Build de dev {ver} (commit {sha[:12]}). Canal de test, remplacé à chaque build de main ; '
+             'ce n\'est pas une version publiée : les navigateurs installés ne le prennent jamais.\n\n'
+             + changelog_section(ver))
+    if subprocess.run(['gh', 'api', f'repos/{REPO}/git/refs/tags/dev'], capture_output=True).returncode == 0:
+        subprocess.run(['gh', 'api', '-X', 'PATCH', f'repos/{REPO}/git/refs/tags/dev', '-f', f'sha={sha}',
+                        '-F', 'force=true'], check=True, capture_output=True)
+    else:
+        subprocess.run(['gh', 'api', '-X', 'POST', f'repos/{REPO}/git/refs', '-f', 'ref=refs/tags/dev',
+                        '-f', f'sha={sha}'], check=True, capture_output=True)
+    title = f'Dev build {ver} ({sha[:7]})'
+    if subprocess.run(['gh', 'release', 'view', 'dev', '--repo', REPO], capture_output=True).returncode == 0:
+        gh('release', 'edit', 'dev', '--prerelease', '--latest=false', '--title', title, '--notes', notes)
+    else:
+        gh('release', 'create', 'dev', '--prerelease', '--latest=false', '--verify-tag', '--title', title,
+           '--notes', notes)
+    gh('release', 'upload', 'dev', '--clobber', *[str(f) for f in files])
+    hb.log(f'dev pre-release: {title}')
+    for name in DEV_NAMES.values():
+        print(f'https://github.com/{REPO}/releases/download/dev/{name}')
+
+
 def cmd_publish(args):
     tag = args.tag or f'v{version()}'
-    gh('release', 'edit', tag, '--draft=false', '--latest')
+    target = ['--target', args.target] if args.target else []
+    gh('release', 'edit', tag, '--draft=false', '--latest', *target)
     hb.log(f'published {tag}')
 
 
@@ -117,8 +178,11 @@ def main():
     d.add_argument('--target', default='main', help='branch or commit the tag points to')
     p = sub.add_parser('publish')
     p.add_argument('--tag')
+    p.add_argument('--target', help='commit the tag points to (after a squash merge, main)')
+    v = sub.add_parser('dev')
+    v.add_argument('--commit', required=True, help='commit the build comes from')
     args = ap.parse_args()
-    {'draft': cmd_draft, 'publish': cmd_publish}[args.cmd](args)
+    {'draft': cmd_draft, 'publish': cmd_publish, 'dev': cmd_dev}[args.cmd](args)
 
 
 if __name__ == '__main__':

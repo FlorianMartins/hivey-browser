@@ -21,6 +21,8 @@ developer's checkout. Each run:
    (.github/workflows/windows-smoke.yml, run by the pull request's checks).
 3. Only if every check passes: merges the branch (pull request) and
    publishes the release. Installed browsers then update themselves.
+4. Replaces the `dev` pre-release (permanent test links) with the build of
+   main, after a release or whenever main changed since the last dev build.
 
 Any failure opens (or comments on) a GitHub issue labelled "autoupdate" with
 the end of the log. --dry-run only reports what would happen.
@@ -30,6 +32,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -159,6 +162,14 @@ def bump(ug, ugw):
     return branch
 
 
+def dev_build_commit():
+    """Short commit of the current dev pre-release ('Dev build <version> (<sha>)')."""
+    r = subprocess.run(['gh', 'release', 'view', 'dev', '--repo', REPO, '--json', 'name'],
+                       capture_output=True, text=True)
+    m = re.search(r'\(([0-9a-f]{7})\)', r.stdout) if r.returncode == 0 else None
+    return m.group(1) if m else None
+
+
 def release_exists(tag):
     return subprocess.run(['gh', 'release', 'view', tag, '--repo', REPO], capture_output=True).returncode == 0
 
@@ -260,28 +271,40 @@ def main():
         if args.dry_run:
             log('dry run: ' + (f'would update to {ug}' if newer else 'no new Chromium'))
             return 0
+        main_head = git('rev-parse', 'HEAD').strip()
         branch = bump(ug, ugw) if newer else None
         version = computed_version()
         tag = f'v{version}'
-        if release_exists(tag) and not args.force_release:
-            log(f'{tag} is already released: nothing to do')
+        release = args.force_release or not release_exists(tag)
+        dev = branch is None and dev_build_commit() != main_head[:7]
+        if not release and not dev:
+            log(f'{tag} is released and the dev build is main ({main_head[:7]}): nothing to do')
             return 0
-        log(f'releasing {tag}')
         build_all()
-        draft_target = branch or 'main'
-        if branch:
-            git('push', '-u', 'origin', branch, '--force-with-lease', capture=False)
-        run([sys.executable, AUTO_DIR / 'scripts/release.py', 'draft', '--target', draft_target],
-            env=hb_env())
-        linux_smoke(version)
-        if branch:
-            # The pull request's checks include the Windows smoke test of
-            # this draft release; merge() waits for all of them.
-            merge(branch)
+        if release:
+            log(f'releasing {tag}')
+            draft_target = branch or 'main'
+            if branch:
+                git('push', '-u', 'origin', branch, '--force-with-lease', capture=False)
+            run([sys.executable, AUTO_DIR / 'scripts/release.py', 'draft', '--target', draft_target],
+                env=hb_env())
+            linux_smoke(version)
+            if branch:
+                # The pull request's checks include the Windows smoke test of
+                # this draft release; merge() waits for all of them.
+                merge(branch)
+            else:
+                windows_smoke(tag, 'main')
+            git('fetch', 'origin', 'main')
+            main_head = git('rev-parse', 'origin/main').strip()
+            run([sys.executable, AUTO_DIR / 'scripts/release.py', 'publish', '--tag', tag,
+                 '--target', main_head], env=hb_env())
+            log(f'{tag} published')
         else:
-            windows_smoke(tag, 'main')
-        run([sys.executable, AUTO_DIR / 'scripts/release.py', 'publish', '--tag', tag], env=hb_env())
-        log(f'{tag} published')
+            log(f'dev build of main {main_head[:7]} ({tag} is already released)')
+            linux_smoke(version)
+        # The dev channel (permanent test links) follows main.
+        run([sys.executable, AUTO_DIR / 'scripts/release.py', 'dev', '--commit', main_head], env=hb_env())
         return 0
     except Failure as e:
         log(f'FAILED: {e}')
