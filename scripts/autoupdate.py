@@ -18,7 +18,7 @@ developer's checkout. Each run:
    Chromium, or a HIVEY_REVISION bump on main): fresh build of Windows and
    Linux, packages, signed draft release (scripts/release.py), checks on Linux
    here (no request at startup, privacy checks) and on a Windows runner
-   (.github/workflows/windows-smoke.yml).
+   (.github/workflows/windows-smoke.yml, run by the pull request's checks).
 3. Only if every check passes: merges the branch (pull request) and
    publishes the release. Installed browsers then update themselves.
 
@@ -274,9 +274,12 @@ def main():
         run([sys.executable, AUTO_DIR / 'scripts/release.py', 'draft', '--target', draft_target],
             env=hb_env())
         linux_smoke(version)
-        windows_smoke(tag, draft_target)
         if branch:
+            # The pull request's checks include the Windows smoke test of
+            # this draft release; merge() waits for all of them.
             merge(branch)
+        else:
+            windows_smoke(tag, 'main')
         run([sys.executable, AUTO_DIR / 'scripts/release.py', 'publish', '--tag', tag], env=hb_env())
         log(f'{tag} published')
         return 0
