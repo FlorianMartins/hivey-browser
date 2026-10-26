@@ -772,17 +772,18 @@
  }
 --- a/chrome/browser/ui/extensions/extension_side_panel_coordinator.cc
 +++ b/chrome/browser/ui/extensions/extension_side_panel_coordinator.cc
-@@ -4,7 +4,9 @@
+@@ -4,7 +4,10 @@
  
  #include "chrome/browser/ui/extensions/extension_side_panel_coordinator.h"
  
 +#include "base/strings/strcat.h"
++#include "base/strings/string_number_conversions.h"
  #include "base/strings/utf_string_conversions.h"
 +#include "chrome/browser/hivey/bundled_extensions.h"
  #include "chrome/browser/extensions/extension_tab_util.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
  #include "chrome/browser/ui/side_panel/side_panel_entry.h"
-@@ -44,7 +46,15 @@
+@@ -44,7 +47,15 @@
    if (absolute_url.SchemeIsHTTPOrHTTPS()) {
      return absolute_url;
    }
@@ -799,7 +800,7 @@
  }
  
  }  // namespace
-@@ -388,6 +398,21 @@
+@@ -388,6 +399,25 @@
    }
  }
  
@@ -808,8 +809,12 @@
 +    return;
 +  }
 +  // Only the fragment changes: a same-document navigation, the sidebar keeps
-+  // its state and switches workspace on "hashchange".
-+  const std::string ref = base::StrCat({"mode=", mode});
++  // its state and switches workspace on "hashchange". The counter makes the
++  // fragment new each time, also when the user moved to another workspace
++  // inside the sidebar since.
++  static int count = 0;
++  const std::string ref =
++      base::StrCat({"mode=", mode, "&n=", base::NumberToString(++count)});
 +  GURL::Replacements fragment;
 +  fragment.SetRefStr(ref);
 +  side_panel_url_ = side_panel_url_.ReplaceComponents(fragment);
