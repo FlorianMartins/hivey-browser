@@ -88,8 +88,9 @@ WINDOWS_HOST_ONLY_PATCHES = {
     'ungoogled-chromium/windows/windows-no-unknown-warnings.patch',
 }
 
-# GN args from ungoogled-chromium-windows that assume upstream LLVM/Rust.
-WINDOWS_HOST_ONLY_FLAGS = {'use_sysroot'}
+# GN args from ungoogled-chromium-windows that assume upstream LLVM/Rust
+# (clang_version: upstream's major version, not the pinned clang's).
+WINDOWS_HOST_ONLY_FLAGS = {'use_sysroot', 'clang_version'}
 
 
 def log(msg):

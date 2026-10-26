@@ -37,6 +37,9 @@ class LocalSite(http.server.BaseHTTPRequestHandler):
         if self.path.startswith('/echo'):
             body = json.dumps({'referer': self.headers.get('Referer')}).encode()
             ctype = 'application/json'
+        elif self.path.startswith('/blob'):
+            body = b'0' * 400_000
+            ctype = 'application/octet-stream'
         else:
             body = b"""<!doctype html><meta name="referrer" content="unsafe-url">
 <title>Hivey test page</title><p>Test page</p>
@@ -226,6 +229,39 @@ try:
     gauge = p.eval("document.querySelector('#gauge-ram .gauge-value')?.textContent")
     check('Hivey Studio live usage', bool(gauge) and gauge != '–', f'memory gauge shows {gauge!r}')
     p.shot('hivey-studio-resources')
+
+    # Hivey Studio, end to end: a preset changes the browser color (handler
+    # and ThemeService), and the network limiter slows a download down.
+    p.goto('about:blank', settle=0.5)
+    p.goto('chrome://hivey/#appearance', settle=3)
+    before = p.eval("getComputedStyle(document.documentElement).getPropertyValue('--user').trim()")
+    p.eval("document.querySelectorAll('.swatch')[1].click()")
+    time.sleep(2)
+    p.goto('about:blank', settle=0.5)
+    p.goto('chrome://hivey/#appearance', settle=3)
+    after = p.eval("getComputedStyle(document.documentElement).getPropertyValue('--user').trim()")
+    check('Hivey Studio color preset', after.lower() == '#6366f1' and before != after,
+          f'browser color {before} -> {after} (Aura preset)')
+    p.shot('hivey-studio-aura')
+    p.eval("document.querySelectorAll('.swatch')[0].click()")  # back to Hivey amber
+    time.sleep(1)
+
+    def timed_download():
+        return p.eval(f"""(async () => {{ const t = performance.now();
+          const r = await fetch('http://127.0.0.1:{PORT}/blob?' + Math.random(), {{cache: 'no-store'}});
+          await r.arrayBuffer(); return (performance.now() - t) / 1000; }})()""")
+    p.eval("chrome.send('setPref', ['hivey.network_limit_kbps', 1000])")
+    time.sleep(2)
+    p.goto(f'http://localhost:{PORT}/page', settle=1)
+    slow = timed_download()
+    p.goto('chrome://hivey/', settle=2)
+    p.eval("chrome.send('setPref', ['hivey.network_limit_kbps', 0])")
+    time.sleep(2)
+    p.goto(f'http://localhost:{PORT}/page', settle=1)
+    fast = timed_download()
+    check('Network limiter', isinstance(slow, (int, float)) and isinstance(fast, (int, float)) and
+          slow > 2.5 and fast < 1, f'400 KB in {slow:.1f} s at 1 Mb/s, {fast:.2f} s without limit'
+          if isinstance(slow, (int, float)) and isinstance(fast, (int, float)) else f'{slow!r} {fast!r}')
 
     if OFFLINE:
         raise SystemExit

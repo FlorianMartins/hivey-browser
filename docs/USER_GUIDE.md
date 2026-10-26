@@ -8,9 +8,8 @@
   in `%LOCALAPPDATA%\Hivey\Browser\User Data`, separate from Chrome or
   Chromium.
 - **Linux x64**: extract `hivey-browser-<version>-linux-x64.tar.xz` anywhere
-  and run `hivey-browser`. Data goes to `~/.config/hivey-browser` (or the
-  folder chosen by the build's branding). `hivey-browser.desktop` and
-  `hivey-browser.png` are there for your menu.
+  and run `hivey-browser`. `hivey-browser.desktop` and `hivey-browser.png`
+  are there for your menu.
 
 The first window opens **Hivey Studio**, where everything below can be
 changed. Open it later from the menu (⋮ > *Hivey Studio*) or at
@@ -57,6 +56,12 @@ status, checks on demand, and turns automatic updates off.
 
 Options marked ↻ apply after a restart; Hivey Studio offers a *Restart*
 button when one is pending.
+
+![First start: Hivey Studio, with the Hivey Shield icon in the toolbar](images/hivey-studio-first-run.png)
+
+![Compact mode, Aura color, dark mode](images/compact-mode.png)
+
+![Resources: live gauges, limiters and hot tabs](images/hivey-studio-resources.png)
 
 ## Memory and performance
 

@@ -23,6 +23,8 @@ Linux, built on [ungoogled-chromium](https://github.com/ungoogled-software/ungoo
   published automatically; installed browsers update themselves from signed
   releases.
 
+![Vertical tabs, the Aura color and dark mode, set in Hivey Studio](docs/images/vertical-tabs-aura-dark.png)
+
 ## Platforms
 
 Windows x64 and Linux x64. The Windows build is **cross-compiled from

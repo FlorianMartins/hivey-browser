@@ -1,0 +1,15 @@
+# Windows installer (cross-build): depend on the V8 snapshot action whose output the archive packs.
+--- a/chrome/installer/mini_installer/BUILD.gn
++++ b/chrome/installer/mini_installer/BUILD.gn
+@@ -239,6 +239,11 @@
+     if (!use_v8_context_snapshot || include_both_v8_snapshots) {
+       inputs += [ "$root_out_dir/snapshot_blob.bin" ]
+       args += [ "--include_snapshotblob=1" ]
++
++      # Hivey: a cross-build has no context snapshot (it would have to run
++      # a Windows binary on the build host), so the archive packs
++      # snapshot_blob.bin; depend on the action that writes it.
++      deps += [ "//v8:run_mksnapshot_default" ]
+     }
+   }
+ 
