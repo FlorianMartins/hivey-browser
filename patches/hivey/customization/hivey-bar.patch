@@ -1,0 +1,1980 @@
+# The Hivey bar (Hivey Tools' workspaces, Hivey Cyber, Hivey Shield, Resources, Hivey Studio) at the left or right edge, from its right-click menu, Hivey Studio or the tab strip menu; vertical tabs on the left or right; Hivey Tools runs embedded in the side panel; the taskbar and dock icon follow the theme's accent (Windows shortcuts and relaunch icon, Linux user icon theme).
+--- a/chrome/app/chrome_command_ids.h
++++ b/chrome/app/chrome_command_ids.h
+@@ -280,6 +280,9 @@
+ #define IDC_SHOW_CUSTOMIZE_CHROME_SIDE_PANEL 40283
+ #define IDC_SHOW_CUSTOMIZE_CHROME_TOOLBAR 40284
+ #define IDC_HIVEY_STUDIO                40960
++#define IDC_HIVEY_BAR_TOGGLE            40961
++#define IDC_HIVEY_TABS_LEFT             40962
++#define IDC_HIVEY_TABS_RIGHT            40963
+ #define IDC_TASK_MANAGER_APP_MENU       40285
+ #define IDC_TASK_MANAGER_SHORTCUT       40286
+ #define IDC_TASK_MANAGER_CONTEXT_MENU   40287
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -1936,6 +1936,24 @@
+         <message name="IDS_HIVEY_RESOURCES" desc="Name and tooltip of the toolbar button that shows the browser's resource use (CPU, memory, network) and limiters">
+           Hivey Resources
+         </message>
++        <message name="IDS_HIVEY_BAR_LEFT" desc="Context menu item of the Hivey bar (a column of tool buttons at the edge of the window): put it at the left edge">
++          Hivey bar on the left
++        </message>
++        <message name="IDS_HIVEY_BAR_RIGHT" desc="Context menu item of the Hivey bar: put it at the right edge of the window">
++          Hivey bar on the right
++        </message>
++        <message name="IDS_HIVEY_BAR_HIDE" desc="Context menu item of the Hivey bar: hide it (it can be shown again from the tab strip menu or Hivey Studio)">
++          Hide the Hivey bar
++        </message>
++        <message name="IDS_HIVEY_BAR_SHOW" desc="Checkbox item of the tab strip context menu: show or hide the Hivey bar">
++          Show the Hivey bar
++        </message>
++        <message name="IDS_HIVEY_TABS_LEFT" desc="Radio item of the tab strip context menu with vertical tabs: put the vertical tabs at the left edge">
++          Tabs on the left
++        </message>
++        <message name="IDS_HIVEY_TABS_RIGHT" desc="Radio item of the tab strip context menu with vertical tabs: put the vertical tabs at the right edge">
++          Tabs on the right
++        </message>
+         <message name="IDS_OPTIONS" desc="The text label of the Options menu item">
+           &amp;Options
+         </message>
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10853,4 +10853,10 @@
+ <translation id="621601378681755227">Quand le navigateur utilise plus de mémoire que cette limite, les onglets que vous n'utilisez plus depuis un moment deviennent inactifs</translation>
+ <translation id="3413832581901426260">Aucune limite</translation>
+ <translation id="5513158291575788957">Ressources Hivey</translation>
++<translation id="3848411427005625672">Barre Hivey à gauche</translation>
++<translation id="580084749815693328">Barre Hivey à droite</translation>
++<translation id="3984522169890105733">Masquer la barre Hivey</translation>
++<translation id="8776060692590616279">Afficher la barre Hivey</translation>
++<translation id="6713024601744425595">Onglets à gauche</translation>
++<translation id="8964168382003186981">Onglets à droite</translation>
+ </translationbundle>
+\ No newline at end of file
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -847,8 +847,12 @@
+     "hivey/hivey_updater.h",
+     "hivey/hivey_app_icon.cc",
+     "hivey/hivey_app_icon.h",
++    "hivey/hivey_bar_prefs.cc",
++    "hivey/hivey_bar_prefs.h",
+     "hivey/hivey_colors.cc",
+     "hivey/hivey_colors.h",
++    "hivey/hivey_taskbar_icon.cc",
++    "hivey/hivey_taskbar_icon.h",
+     "chrome_content_browser_client.cc",
+     "chrome_content_browser_client_binder_policies.cc",
+     "chrome_content_browser_client_binder_policies.h",
+@@ -1441,6 +1445,7 @@
+     sources += [
+       "chrome_browser_main_win.cc",
+       "chrome_browser_main_win.h",
++      "hivey/hivey_taskbar_icon_win.cc",
+       "font_prewarmer_tab_helper.cc",
+       "fullscreen_win.cc",
+       "icon_loader_win.cc",
+@@ -1627,9 +1632,11 @@
+   }
+ 
+   if (is_linux) {
++    deps += [ "//ui/gfx/codec" ]
+     sources += [
+       "chrome_browser_main_extra_parts_linux.cc",
+       "chrome_browser_main_extra_parts_linux.h",
++      "hivey/hivey_taskbar_icon_linux.cc",
+       "chrome_browser_main_linux.h",
+       "fullscreen_linux.cc",
+       "icon_loader_auralinux.cc",
+--- a/chrome/browser/hivey/hivey_bar_prefs.cc
++++ b/chrome/browser/hivey/hivey_bar_prefs.cc
+@@ -0,0 +1,32 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
++
++#include "chrome/common/pref_names.h"
++#include "components/pref_registry/pref_registry_syncable.h"
++#include "components/prefs/pref_service.h"
++
++namespace hivey {
++
++void RegisterHiveyBarProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
++  registry->RegisterBooleanPref(kHiveyBarVisible, true);
++  registry->RegisterIntegerPref(kHiveyBarSide,
++                                static_cast<int>(HiveyBarSide::kAuto));
++  registry->RegisterBooleanPref(kHiveyVerticalTabsRight, false);
++}
++
++bool IsHiveyBarOnLeft(const PrefService& prefs) {
++  switch (static_cast<HiveyBarSide>(prefs.GetInteger(kHiveyBarSide))) {
++    case HiveyBarSide::kLeft:
++      return true;
++    case HiveyBarSide::kRight:
++      return false;
++    case HiveyBarSide::kAuto:
++      break;
++  }
++  return prefs.GetBoolean(prefs::kVerticalTabsEnabled);
++}
++
++}  // namespace hivey
+--- a/chrome/browser/hivey/hivey_bar_prefs.h
++++ b/chrome/browser/hivey/hivey_bar_prefs.h
+@@ -0,0 +1,39 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_HIVEY_BAR_PREFS_H_
++#define CHROME_BROWSER_HIVEY_HIVEY_BAR_PREFS_H_
++
++class PrefService;
++
++namespace user_prefs {
++class PrefRegistrySyncable;
++}
++
++namespace hivey {
++
++// The Hivey bar: a column of buttons at the left or right edge of the window
++// for Hivey's tools (the Hivey AI sidebar's workspaces, Hivey Cyber, Hivey
++// Shield, Resources, Hivey Studio). Profile prefs.
++inline constexpr char kHiveyBarVisible[] = "hivey.bar.visible";
++// HiveyBarSide.
++inline constexpr char kHiveyBarSide[] = "hivey.bar.side";
++// Vertical tabs at the right edge of the window instead of the left.
++inline constexpr char kHiveyVerticalTabsRight[] = "hivey.vertical_tabs.right";
++
++enum class HiveyBarSide {
++  // On the left with vertical tabs, on the right without.
++  kAuto = 0,
++  kLeft = 1,
++  kRight = 2,
++};
++
++void RegisterHiveyBarProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
++
++// Whether the Hivey bar is at the left edge of the window.
++bool IsHiveyBarOnLeft(const PrefService& prefs);
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_HIVEY_HIVEY_BAR_PREFS_H_
+--- a/chrome/browser/hivey/hivey_taskbar_icon.cc
++++ b/chrome/browser/hivey/hivey_taskbar_icon.cc
+@@ -0,0 +1,79 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/hivey/hivey_taskbar_icon.h"
++
++#include <optional>
++#include <utility>
++#include <vector>
++
++#include "base/functional/bind.h"
++#include "base/no_destructor.h"
++#include "base/time/time.h"
++#include "base/timer/timer.h"
++#include "build/build_config.h"
++#include "chrome/browser/hivey/hivey_app_icon.h"
++#include "content/public/browser/browser_thread.h"
++#include "ui/gfx/image/image_skia.h"
++
++namespace hivey {
++
++#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
++namespace {
++
++// Live theme edits (e.g. dragging a color picker) fire many theme changes:
++// only the color the user settles on gets written to disk.
++constexpr base::TimeDelta kDebounceDelay = base::Seconds(1);
++
++struct TaskbarIconState {
++  // The accent of the last icon handed to the platform, if any.
++  std::optional<SkColor> applied_accent;
++  // The accent of the last UpdateTaskbarIcon() call, if any.
++  std::optional<SkColor> requested_accent;
++  base::OneShotTimer debounce_timer;
++};
++
++TaskbarIconState& GetState() {
++  static base::NoDestructor<TaskbarIconState> state;
++  return *state;
++}
++
++void ApplyRequestedAccent() {
++  TaskbarIconState& state = GetState();
++  const SkColor accent = *state.requested_accent;
++  if (state.applied_accent == accent) {
++    return;
++  }
++
++  // Rendering stays on the UI thread; only the bitmaps (whose pixels are
++  // thread-safe ref-counted) go to the background sequence.
++  std::vector<SkBitmap> bitmaps;
++  for (int size : internal::GetTaskbarIconSizes()) {
++    const SkBitmap bitmap = *HiveyThemedAppIcon(accent, size).bitmap();
++    if (bitmap.isNull() || bitmap.width() != size) {
++      return;
++    }
++    bitmaps.push_back(bitmap);
++  }
++  state.applied_accent = accent;
++  internal::WriteTaskbarIcon(accent, std::move(bitmaps));
++}
++
++}  // namespace
++#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
++
++void UpdateTaskbarIcon(SkColor accent) {
++  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
++#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
++  TaskbarIconState& state = GetState();
++  if (state.requested_accent == accent) {
++    return;
++  }
++  state.requested_accent = accent;
++  state.debounce_timer.Start(FROM_HERE, kDebounceDelay,
++                             base::BindOnce(&ApplyRequestedAccent));
++#endif
++}
++
++}  // namespace hivey
+--- a/chrome/browser/hivey/hivey_taskbar_icon.h
++++ b/chrome/browser/hivey/hivey_taskbar_icon.h
+@@ -0,0 +1,66 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_HIVEY_HIVEY_TASKBAR_ICON_H_
++#define CHROME_BROWSER_HIVEY_HIVEY_TASKBAR_ICON_H_
++
++#include <string>
++#include <vector>
++
++#include "base/callback_list.h"
++#include "base/functional/callback_forward.h"
++#include "build/build_config.h"
++#include "third_party/skia/include/core/SkBitmap.h"
++#include "third_party/skia/include/core/SkColor.h"
++
++namespace base {
++class FilePath;
++}  // namespace base
++
++namespace hivey {
++
++// Makes the app icon the OS shows outside of the browser windows (Windows
++// taskbar and shortcuts, Linux dock and application menu) follow `accent`,
++// the theme's accent color, like the window icon does.
++//
++// Cheap to call often (e.g. from BrowserView::OnThemeChanged): calls are
++// debounced, ignored while the accent does not change, and all file I/O runs
++// on a background sequence. Must be called on the UI thread. No-op on other
++// platforms than Windows and Linux.
++void UpdateTaskbarIcon(SkColor accent);
++
++#if BUILDFLAG(IS_WIN)
++// Runs `callback` on the UI thread each time a new themed icon file has been
++// written, so that windows can refresh their relaunch details.
++[[nodiscard]] base::CallbackListSubscription
++RegisterTaskbarIconChangedCallback(base::RepeatingClosure callback);
++
++// For a normal browser window: sets `icon_path` to the themed .ico and, when
++// they are empty, `command_line` and `display_name` to launch the browser
++// (Windows only honors a relaunch icon along with a relaunch command and
++// name). Returns false, leaving the arguments untouched, while no themed icon
++// has been written in this session. UI thread only, no file I/O.
++bool GetThemedRelaunchDetails(base::FilePath* icon_path,
++                              std::wstring* command_line,
++                              std::wstring* display_name);
++#endif
++
++namespace internal {
++
++#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
++// Implemented per platform (hivey_taskbar_icon_{win,linux}.cc).
++
++// The icon sizes, in pixels, the platform wants.
++std::vector<int> GetTaskbarIconSizes();
++
++// Writes the icon (one bitmap per size of GetTaskbarIconSizes(), drawn in
++// `accent`) where the OS looks for it, on a background sequence.
++void WriteTaskbarIcon(SkColor accent, std::vector<SkBitmap> bitmaps);
++#endif
++
++}  // namespace internal
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_HIVEY_HIVEY_TASKBAR_ICON_H_
+--- a/chrome/browser/hivey/hivey_taskbar_icon_linux.cc
++++ b/chrome/browser/hivey/hivey_taskbar_icon_linux.cc
+@@ -0,0 +1,112 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include <stdint.h>
++
++#include <memory>
++#include <optional>
++#include <string>
++#include <utility>
++#include <vector>
++
++#include "base/environment.h"
++#include "base/files/file_path.h"
++#include "base/files/file_util.h"
++#include "base/files/important_file_writer.h"
++#include "base/functional/bind.h"
++#include "base/no_destructor.h"
++#include "base/nix/xdg_util.h"
++#include "base/strings/string_number_conversions.h"
++#include "base/strings/string_view_util.h"
++#include "base/task/sequenced_task_runner.h"
++#include "base/task/thread_pool.h"
++#include "base/threading/scoped_blocking_call.h"
++#include "base/time/time.h"
++#include "chrome/browser/hivey/hivey_taskbar_icon.h"
++#include "ui/gfx/codec/png_codec.h"
++
++namespace hivey {
++
++namespace {
++
++// The desktop entry and icon names the Linux package installs (Icon= and the
++// .desktop file name, see LINUX_DESKTOP_ENTRY in scripts/hb.py).
++constexpr char kDesktopFileName[] = "hivey-browser.desktop";
++constexpr char kIconFileName[] = "hivey-browser.png";
++
++scoped_refptr<base::SequencedTaskRunner> GetIconTaskRunner() {
++  static base::NoDestructor<scoped_refptr<base::SequencedTaskRunner>> runner(
++      base::ThreadPool::CreateSequencedTaskRunner(
++          {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
++           base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN}));
++  return *runner;
++}
++
++// Whether the desktop entry is installed, for the user or system-wide: the
++// dock and application menu only show the themed icon through it.
++bool IsDesktopEntryInstalled(base::Environment* env) {
++  for (const base::FilePath& dir : base::nix::GetXDGDataSearchLocations(env)) {
++    if (base::PathExists(dir.Append("applications").Append(kDesktopFileName))) {
++      return true;
++    }
++  }
++  return false;
++}
++
++// Runs on the background sequence. Writes
++// $XDG_DATA_HOME/icons/hicolor/<s>x<s>/apps/hivey-browser.png, which the icon
++// theme lookup finds before the system-wide icons.
++void WriteIcons(std::vector<SkBitmap> bitmaps) {
++  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
++                                                base::BlockingType::MAY_BLOCK);
++  std::unique_ptr<base::Environment> env = base::Environment::Create();
++  if (!IsDesktopEntryInstalled(env.get())) {
++    return;
++  }
++  const base::FilePath hicolor_dir =
++      base::nix::GetXDGDataWriteLocation(env.get()).Append("icons/hicolor");
++  bool wrote_any = false;
++  for (const SkBitmap& bitmap : bitmaps) {
++    const std::string size = base::NumberToString(bitmap.width());
++    const base::FilePath apps_dir =
++        hicolor_dir.Append(size + "x" + size).Append("apps");
++    if (!base::CreateDirectory(apps_dir)) {
++      continue;
++    }
++    std::optional<std::vector<uint8_t>> png =
++        gfx::PNGCodec::EncodeBGRASkBitmap(bitmap,
++                                          /*discard_transparency=*/false);
++    if (!png) {
++      continue;
++    }
++    // Written to a temporary file in `apps_dir`, then renamed over the icon.
++    if (base::ImportantFileWriter::WriteFileAtomically(
++            apps_dir.Append(kIconFileName), base::as_string_view(*png))) {
++      wrote_any = true;
++    }
++  }
++  if (wrote_any) {
++    // GTK (and so GNOME Shell) rescans an icon theme when the mtime of its
++    // base directory changes.
++    const base::Time now = base::Time::Now();
++    base::TouchFile(hicolor_dir, now, now);
++  }
++}
++
++}  // namespace
++
++namespace internal {
++
++std::vector<int> GetTaskbarIconSizes() {
++  return {16, 22, 24, 32, 48, 64, 128, 256};
++}
++
++void WriteTaskbarIcon(SkColor accent, std::vector<SkBitmap> bitmaps) {
++  GetIconTaskRunner()->PostTask(
++      FROM_HERE, base::BindOnce(&WriteIcons, std::move(bitmaps)));
++}
++
++}  // namespace internal
++
++}  // namespace hivey
+--- a/chrome/browser/hivey/hivey_taskbar_icon_win.cc
++++ b/chrome/browser/hivey/hivey_taskbar_icon_win.cc
+@@ -0,0 +1,270 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include <windows.h>
++
++#include <shlobj.h>  // For SHChangeNotify().
++
++#include <initializer_list>
++#include <string>
++#include <utility>
++#include <vector>
++
++#include "base/base_paths.h"
++#include "base/command_line.h"
++#include "base/files/file_enumerator.h"
++#include "base/files/file_path.h"
++#include "base/files/file_util.h"
++#include "base/functional/bind.h"
++#include "base/no_destructor.h"
++#include "base/path_service.h"
++#include "base/strings/strcat_win.h"
++#include "base/strings/stringprintf.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/task/single_thread_task_runner.h"
++#include "base/task/thread_pool.h"
++#include "base/threading/scoped_blocking_call.h"
++#include "base/win/shortcut.h"
++#include "chrome/browser/hivey/hivey_taskbar_icon.h"
++#include "chrome/common/chrome_paths.h"
++#include "chrome/common/chrome_switches.h"
++#include "chrome/installer/util/install_util.h"
++#include "chrome/installer/util/shell_util.h"
++#include "content/public/browser/browser_thread.h"
++#include "ui/gfx/image/image.h"
++#include "ui/gfx/image/image_family.h"
++#include "ui/gfx/win/icon_util.h"
++
++namespace hivey {
++
++namespace {
++
++constexpr wchar_t kIconFilePattern[] = L"Hivey Icon *.ico";
++
++// The UI-thread side: the themed icon written in this session, if any, and
++// the windows waiting for it.
++struct WinIconState {
++  base::FilePath icon_path;
++  base::RepeatingClosureList callbacks;
++};
++
++WinIconState& GetWinState() {
++  static base::NoDestructor<WinIconState> state;
++  return *state;
++}
++
++// Shortcuts are COM objects: one COM STA sequence does all the work, in
++// order, so that two theme changes never race on the same files.
++scoped_refptr<base::SingleThreadTaskRunner> GetIconTaskRunner() {
++  static base::NoDestructor<scoped_refptr<base::SingleThreadTaskRunner>>
++      runner(base::ThreadPool::CreateCOMSTATaskRunner(
++          {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
++           base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN}));
++  return *runner;
++}
++
++// One file name per accent: Explorer caches icons by path, a new path makes
++// it read the new one.
++std::wstring GetIconFileName(SkColor accent) {
++  return base::StrCat(
++      {L"Hivey Icon ",
++       base::ASCIIToWide(base::StringPrintf("%06X", accent & 0xFFFFFF)),
++       L".ico"});
++}
++
++// The folders that may hold shortcuts launching the browser: Desktop, Start
++// Menu, taskbar pins (as profile_shortcut_manager_win.cc looks for them).
++// System-level folders are left alone: their shortcuts are shared with other
++// users and can't point to this user's data dir.
++std::vector<base::FilePath> GetShortcutDirectories() {
++  std::vector<base::FilePath> dirs;
++  for (ShellUtil::ShortcutLocation location :
++       {ShellUtil::SHORTCUT_LOCATION_DESKTOP,
++        ShellUtil::SHORTCUT_LOCATION_START_MENU_ROOT,
++        ShellUtil::SHORTCUT_LOCATION_TASKBAR_PINS}) {
++    base::FilePath dir;
++    if (ShellUtil::GetShortcutPath(location, ShellUtil::CURRENT_USER, &dir)) {
++      dirs.push_back(dir);
++    }
++  }
++  base::FilePath implicit_app_shortcuts_dir;
++  if (base::PathService::Get(base::DIR_IMPLICIT_APP_SHORTCUTS,
++                             &implicit_app_shortcuts_dir)) {
++    base::FileEnumerator subdirs(implicit_app_shortcuts_dir, false,
++                                 base::FileEnumerator::DIRECTORIES);
++    for (base::FilePath dir = subdirs.Next(); !dir.empty();
++         dir = subdirs.Next()) {
++      dirs.push_back(dir);
++    }
++  }
++  return dirs;
++}
++
++// Whether `shortcut` launches this browser's default profile. Profile and web
++// app shortcuts keep their own icons (badged avatar / app icon), managed by
++// ProfileShortcutManager and the web app code.
++bool IsBrowserShortcut(const base::FilePath& shortcut,
++                       const base::FilePath& exe,
++                       base::win::ShortcutProperties* properties) {
++  if (!base::win::ResolveShortcutProperties(
++          shortcut,
++          base::win::ShortcutProperties::PROPERTIES_TARGET |
++              base::win::ShortcutProperties::PROPERTIES_ARGUMENTS |
++              base::win::ShortcutProperties::PROPERTIES_ICON,
++          properties)) {
++    return false;
++  }
++  // One of the paths may be in short (elided) form.
++  if (!base::FilePath::CompareEqualIgnoreCase(
++          base::MakeLongFilePath(properties->target).value(),
++          base::MakeLongFilePath(exe).value())) {
++    return false;
++  }
++  const base::CommandLine command_line =
++      base::CommandLine::FromString(L"x " + properties->arguments);
++  return !command_line.HasSwitch(switches::kProfileDirectory) &&
++         !command_line.HasSwitch(switches::kAppId);
++}
++
++// Points the browser's shortcuts at `icon_path`. Returns false if one of them
++// could not be updated (it may still use an older themed icon).
++bool UpdateShortcutIcons(const base::FilePath& icon_path) {
++  base::FilePath exe;
++  if (!base::PathService::Get(base::FILE_EXE, &exe)) {
++    return false;
++  }
++  bool all_updated = true;
++  for (const base::FilePath& dir : GetShortcutDirectories()) {
++    base::FileEnumerator shortcuts(dir, false, base::FileEnumerator::FILES,
++                                   L"*.lnk");
++    for (base::FilePath shortcut = shortcuts.Next(); !shortcut.empty();
++         shortcut = shortcuts.Next()) {
++      base::win::ShortcutProperties current;
++      if (!IsBrowserShortcut(shortcut, exe, &current)) {
++        continue;
++      }
++      if (current.icon_index == 0 &&
++          base::FilePath::CompareEqualIgnoreCase(current.icon.value(),
++                                                 icon_path.value())) {
++        continue;
++      }
++      base::win::ShortcutProperties update;
++      update.set_icon(icon_path, 0);
++      if (!base::win::CreateOrUpdateShortcutLink(
++              shortcut, update,
++              base::win::ShortcutOperation::kUpdateExisting)) {
++        all_updated = false;
++        continue;
++      }
++      // Win 11 does not refresh taskbar pins on SHCNE_ASSOCCHANGED alone.
++      SHChangeNotify(SHCNE_UPDATEITEM, SHCNF_PATH, shortcut.value().c_str(),
++                     nullptr);
++    }
++  }
++  return all_updated;
++}
++
++void DeleteOtherIcons(const base::FilePath& dir,
++                      const base::FilePath& icon_path) {
++  base::FileEnumerator icons(dir, false, base::FileEnumerator::FILES,
++                             kIconFilePattern);
++  for (base::FilePath icon = icons.Next(); !icon.empty(); icon = icons.Next()) {
++    if (!base::FilePath::CompareEqualIgnoreCase(icon.value(),
++                                                icon_path.value())) {
++      base::DeleteFile(icon);
++    }
++  }
++}
++
++// Runs on the COM STA sequence. Returns the themed .ico, or an empty path on
++// failure.
++base::FilePath WriteIconAndUpdateShortcuts(SkColor accent,
++                                           std::vector<SkBitmap> bitmaps) {
++  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
++                                                base::BlockingType::MAY_BLOCK);
++  base::FilePath user_data_dir;
++  if (!base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir)) {
++    return base::FilePath();
++  }
++  const base::FilePath icon_path =
++      user_data_dir.Append(GetIconFileName(accent));
++  if (!base::PathExists(icon_path)) {
++    gfx::ImageFamily family;
++    for (const SkBitmap& bitmap : bitmaps) {
++      family.Add(gfx::Image::CreateFrom1xBitmap(bitmap));
++    }
++    // Written to a temporary file, then moved in place (ATOMIC_WRITE).
++    if (!IconUtil::CreateIconFileFromImageFamily(family, icon_path,
++                                                 IconUtil::ATOMIC_WRITE)) {
++      return base::FilePath();
++    }
++    SHChangeNotify(SHCNE_CREATE, SHCNF_PATH, icon_path.value().c_str(),
++                   nullptr);
++  }
++
++  if (UpdateShortcutIcons(icon_path)) {
++    // Nothing points to the older icons anymore (open windows switch to the
++    // new one when the reply runs).
++    DeleteOtherIcons(user_data_dir, icon_path);
++  }
++  // Invalidates the shell's icon cache (taskbar, Start Menu, Desktop).
++  SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
++  return icon_path;
++}
++
++void OnIconWritten(const base::FilePath& icon_path) {
++  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
++  if (icon_path.empty()) {
++    return;
++  }
++  WinIconState& state = GetWinState();
++  state.icon_path = icon_path;
++  state.callbacks.Notify();
++}
++
++}  // namespace
++
++base::CallbackListSubscription RegisterTaskbarIconChangedCallback(
++    base::RepeatingClosure callback) {
++  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
++  return GetWinState().callbacks.Add(std::move(callback));
++}
++
++bool GetThemedRelaunchDetails(base::FilePath* icon_path,
++                              std::wstring* command_line,
++                              std::wstring* display_name) {
++  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
++  const base::FilePath& themed_icon = GetWinState().icon_path;
++  if (themed_icon.empty()) {
++    return false;
++  }
++  *icon_path = themed_icon;
++  if (command_line->empty()) {
++    base::FilePath exe;
++    if (base::PathService::Get(base::FILE_EXE, &exe)) {
++      *command_line = base::CommandLine(exe).GetCommandLineString();
++    }
++  }
++  if (display_name->empty()) {
++    *display_name = InstallUtil::GetShortcutName();
++  }
++  return true;
++}
++
++namespace internal {
++
++std::vector<int> GetTaskbarIconSizes() {
++  return {16, 24, 32, 48, 64, 256};
++}
++
++void WriteTaskbarIcon(SkColor accent, std::vector<SkBitmap> bitmaps) {
++  GetIconTaskRunner()->PostTaskAndReplyWithResult(
++      FROM_HERE,
++      base::BindOnce(&WriteIconAndUpdateShortcuts, accent, std::move(bitmaps)),
++      base::BindOnce(&OnIconWritten));
++}
++
++}  // namespace internal
++
++}  // namespace hivey
+--- a/chrome/browser/prefs/browser_prefs.cc
++++ b/chrome/browser/prefs/browser_prefs.cc
+@@ -25,6 +25,7 @@
+ #include "chrome/browser/accessibility/prefers_default_scrollbar_styles_prefs.h"
+ #include "chrome/browser/browser_process_impl.h"
+ #if !BUILDFLAG(IS_ANDROID)
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "chrome/browser/hivey/hivey_colors.h"
+ #include "chrome/browser/hivey/hivey_resource_limits.h"
+ #include "chrome/browser/hivey/hivey_updater.h"
+@@ -2310,6 +2311,7 @@
+       webauthn::pref_names::kEnclaveFailedPINAttemptsCount, 0);
+ 
+   side_panel_prefs::RegisterProfilePrefs(registry);
++  hivey::RegisterHiveyBarProfilePrefs(registry);
+ 
+   tabs::RegisterProfilePrefs(registry);
+ 
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -2302,6 +2302,8 @@
+       "browser.h",
+       "browser_tabstrip.cc",
+       # Hivey: Hivey Studio (chrome://hivey) and the Resources button.
++      "views/frame/hivey_bar_view.cc",
++      "views/frame/hivey_bar_view.h",
+       "views/toolbar/hivey_resources_coordinator.cc",
+       "views/toolbar/hivey_resources_coordinator.h",
+       "webui/hivey/hivey_resources_ui.cc",
+--- a/chrome/browser/ui/browser_command_controller.cc
++++ b/chrome/browser/ui/browser_command_controller.cc
+@@ -109,6 +109,7 @@
+ #include "chrome/common/channel_info.h"
+ #include "chrome/common/chrome_features.h"
+ #include "chrome/common/content_restriction.h"
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "chrome/common/pref_names.h"
+ #include "chrome/common/url_constants.h"
+ #include "chrome/common/webui_url_constants.h"
+@@ -1306,6 +1307,17 @@
+       ShowSingletonTab(webui::GetBrowserForOpeningWebUi(browser_),
+                        GURL("chrome://hivey/"));
+       break;
++    case IDC_HIVEY_BAR_TOGGLE: {
++      PrefService* prefs = profile()->GetPrefs();
++      prefs->SetBoolean(hivey::kHiveyBarVisible,
++                        !prefs->GetBoolean(hivey::kHiveyBarVisible));
++      break;
++    }
++    case IDC_HIVEY_TABS_LEFT:
++    case IDC_HIVEY_TABS_RIGHT:
++      profile()->GetPrefs()->SetBoolean(hivey::kHiveyVerticalTabsRight,
++                                        id == IDC_HIVEY_TABS_RIGHT);
++      break;
+     case IDC_EDIT_SEARCH_ENGINES:
+       ShowSearchEngineSettings(webui::GetBrowserForOpeningWebUi(browser_));
+       break;
+@@ -2104,6 +2116,9 @@
+                                         !forced_incognito || is_guest);
+   command_updater->UpdateCommandEnabled(IDC_HIVEY_STUDIO,
+                                         !forced_incognito || is_guest);
++  command_updater->UpdateCommandEnabled(IDC_HIVEY_BAR_TOGGLE, true);
++  command_updater->UpdateCommandEnabled(IDC_HIVEY_TABS_LEFT, true);
++  command_updater->UpdateCommandEnabled(IDC_HIVEY_TABS_RIGHT, true);
+   command_updater->UpdateCommandEnabled(IDC_PERFORMANCE,
+                                         !forced_incognito && !is_guest);
+ }
+--- a/chrome/browser/ui/extensions/extension_side_panel_coordinator.cc
++++ b/chrome/browser/ui/extensions/extension_side_panel_coordinator.cc
+@@ -4,7 +4,10 @@
+ 
+ #include "chrome/browser/ui/extensions/extension_side_panel_coordinator.h"
+ 
++#include "base/strings/strcat.h"
++#include "base/strings/string_number_conversions.h"
+ #include "base/strings/utf_string_conversions.h"
++#include "chrome/browser/hivey/bundled_extensions.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/side_panel/side_panel_entry.h"
+@@ -44,7 +47,15 @@
+   if (absolute_url.SchemeIsHTTPOrHTTPS()) {
+     return absolute_url;
+   }
+-  return extension.ResolveExtensionURL(*options.path);
++  GURL url = extension.ResolveExtensionURL(*options.path);
++  // Hivey: Hivey Tools (the Hivey AI sidebar) runs embedded: its workspaces
++  // are buttons of the browser's Hivey bar, not its own rail.
++  if (extension.id() == HIVEY_BUNDLED_AI_ID && !url.has_query()) {
++    GURL::Replacements embed;
++    embed.SetQueryStr("embed=hivey");
++    url = url.ReplaceComponents(embed);
++  }
++  return url;
+ }
+ 
+ }  // namespace
+@@ -388,6 +399,25 @@
+   }
+ }
+ 
++void ExtensionSidePanelCoordinator::ShowHiveyMode(std::string_view mode) {
++  if (side_panel_url_.is_empty()) {
++    return;
++  }
++  // Only the fragment changes: a same-document navigation, the sidebar keeps
++  // its state and switches workspace on "hashchange". The counter makes the
++  // fragment new each time, also when the user moved to another workspace
++  // inside the sidebar since.
++  static int count = 0;
++  const std::string ref =
++      base::StrCat({"mode=", mode, "&n=", base::NumberToString(++count)});
++  GURL::Replacements fragment;
++  fragment.SetRefStr(ref);
++  side_panel_url_ = side_panel_url_.ReplaceComponents(fragment);
++  if (host_) {
++    NavigateIfNecessary();
++  }
++}
++
+ void ExtensionSidePanelCoordinator::NavigateIfNecessary() {
+   // Sanity check that this is called when the view exists for this extension's
+   // SidePanelEntry.
+--- a/chrome/browser/ui/extensions/extension_side_panel_coordinator.h
++++ b/chrome/browser/ui/extensions/extension_side_panel_coordinator.h
+@@ -6,6 +6,7 @@
+ #define CHROME_BROWSER_UI_EXTENSIONS_EXTENSION_SIDE_PANEL_COORDINATOR_H_
+ 
+ #include <memory>
++#include <string_view>
+ #include <optional>
+ #include <vector>
+ 
+@@ -109,6 +110,10 @@
+   IconImage* extension_icon() const { return extension_icon_.get(); }
+ 
+   SidePanelEntryKey GetEntryKey() const;
++
++  // Hivey: shows the Hivey AI sidebar's workspace `mode` (its URL fragment
++  // "mode=<mode>"), without reloading the page.
++  void ShowHiveyMode(std::string_view mode);
+   SidePanelEntry* GetEntry() const;
+   BrowserWindowInterface* GetBrowser();
+ 
+--- a/chrome/browser/ui/extensions/extension_side_panel_manager.h
++++ b/chrome/browser/ui/extensions/extension_side_panel_manager.h
+@@ -59,6 +59,13 @@
+   ExtensionSidePanelCoordinator* GetExtensionCoordinatorForTesting(
+       const ExtensionId& extension_id);
+ 
++  // Hivey: the coordinator of `extension_id`'s window-wide side panel, if any
++  // (the Hivey bar drives Hivey Tools through it).
++  ExtensionSidePanelCoordinator* GetCoordinator(
++      const ExtensionId& extension_id) {
++    return GetExtensionCoordinatorForTesting(extension_id);
++  }
++
+   // Called when the BrowserView for `browser_` is being created. Creates
+   // ExtensionSidePanelCoordinators (which in turn, registers extension
+   // SidePanelEntries) for all enabled extensions that are capable of hosting
+--- a/chrome/browser/ui/toolbar/toolbar_pref_names.cc
++++ b/chrome/browser/ui/toolbar/toolbar_pref_names.cc
+@@ -23,12 +23,6 @@
+   if (chrome_labs_action.has_value()) {
+     default_pinned_actions.Append(chrome_labs_action.value());
+   }
+-  // Hivey: the Resources button is in the toolbar by default.
+-  if (const std::optional<std::string>& resources_action =
+-          actions::ActionIdMap::ActionIdToString(kActionShowHiveyResources);
+-      resources_action.has_value()) {
+-    default_pinned_actions.Append(resources_action.value());
+-  }
+ 
+   if (base::FeatureList::IsEnabled(
+           features::kTabsFromOtherDevicesSidePanelPinnedByDefault)) {
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -5,6 +5,8 @@
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ 
+ #include "chrome/browser/hivey/hivey_app_icon.h"
++#include "chrome/browser/hivey/hivey_taskbar_icon.h"
++#include "chrome/browser/ui/views/frame/hivey_bar_view.h"
+ 
+ #include <stdint.h>
+ 
+@@ -980,6 +982,11 @@
+ 
+   side_panel_ = AddChildView(std::make_unique<SidePanel>(this));
+ 
++  // Hivey: the Hivey bar (normal browser windows only).
++  if (browser_->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
++    hivey_bar_ = AddChildView(std::make_unique<HiveyBarView>(this));
++  }
++
+   // Tabstrip comes basically last because it should be before toolbar in the
+   // focus order but also needs to paint on top of everything.
+   horizontal_tab_strip_region_view_ =
+@@ -5130,6 +5137,7 @@
+   layout_views.infobar_container = infobar_container_;
+   layout_views.multi_contents_view = multi_contents_view_;
+   layout_views.side_panel = side_panel_;
++  layout_views.hivey_bar = hivey_bar_;
+   layout_views.top_container_separator = top_container_separator_;
+   // LINT.ThenChange(//chrome/browser/ui/views/frame/layout/browser_view_layout.h:BrowserViewLayoutViews)
+ 
+@@ -5230,6 +5238,15 @@
+   if (browser_widget_ && CanChangeWindowIcon()) {
+     browser_widget_->UpdateWindowIcon();
+   }
++#if !BUILDFLAG(IS_CHROMEOS)
++  // Hivey: the taskbar / dock icon follows the theme's accent color too.
++  if (browser_->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL &&
++      !browser_->GetProfile()->IsOffTheRecord()) {
++    if (const ui::ColorProvider* colors = GetColorProvider()) {
++      hivey::UpdateTaskbarIcon(colors->GetColor(ui::kColorSysPrimary));
++    }
++  }
++#endif
+ }
+ 
+ bool BrowserView::GetDropFormats(
+--- a/chrome/browser/ui/views/frame/browser_view.h
++++ b/chrome/browser/ui/views/frame/browser_view.h
+@@ -90,6 +90,7 @@
+ class MultiContentsView;
+ class OrganizerTrayView;
+ class ScrimView;
++class HiveyBarView;
+ class SidePanel;
+ class SidePanelAnimationContentView;
+ class TabDragTarget;
+@@ -1243,6 +1244,9 @@
+   // should exist if and only if the side_panel_coordinator is created.
+   raw_ptr<SidePanel> side_panel_ = nullptr;
+ 
++  // Hivey: the Hivey bar, at the left or right edge.
++  raw_ptr<HiveyBarView> hivey_bar_ = nullptr;
++
+   // The handler responsible for showing autofill bubbles.
+   std::unique_ptr<autofill::AutofillBubbleHandler> autofill_bubble_handler_;
+ 
+--- a/chrome/browser/ui/views/frame/browser_window_property_manager_win.cc
++++ b/chrome/browser/ui/views/frame/browser_window_property_manager_win.cc
+@@ -9,7 +9,9 @@
+ #include "base/strings/utf_string_conversions.h"
+ #include "base/win/windows_version.h"
+ #include "chrome/browser/browser_process.h"
++#include "chrome/browser/hivey/hivey_taskbar_icon.h"
+ #include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/profiles/profile_attributes_storage.h"
+ #include "chrome/browser/profiles/profile_manager.h"
+ #include "chrome/browser/profiles/profile_shortcut_manager_win.h"
+ #include "chrome/browser/shell_integration_win.h"
+@@ -42,6 +44,12 @@
+       base::BindRepeating(
+           &BrowserWindowPropertyManager::OnProfileIconVersionChange,
+           base::Unretained(this)));
++
++  // Hivey: browser windows relaunch with the themed app icon, refreshed when
++  // a new one is written.
++  hivey_taskbar_icon_subscription_ = hivey::RegisterTaskbarIconChangedCallback(
++      base::BindRepeating(&BrowserWindowPropertyManager::UpdateWindowProperties,
++                          base::Unretained(this)));
+ }
+ 
+ BrowserWindowPropertyManager::~BrowserWindowPropertyManager() {
+@@ -104,6 +112,16 @@
+                                             &pinned_name, &icon_path);
+     command_line_string = command_line.GetCommandLineString();
+   }
++  // Hivey: with a single profile the profile icon is the plain app icon, so
++  // use the theme-colored one instead (badged multi-profile icons are kept).
++  if ((browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL ||
++       browser->GetType() == BrowserWindowInterface::Type::TYPE_POPUP) &&
++      (!profile_manager ||
++       profile_manager->GetProfileAttributesStorage().GetNumberOfProfiles() <=
++           1u)) {
++    hivey::GetThemedRelaunchDetails(&icon_path, &command_line_string,
++                                    &pinned_name);
++  }
+   ui::win::SetAppDetailsForWindow(app_id, icon_path, 0, command_line_string,
+                                   pinned_name, hwnd_);
+ }
+--- a/chrome/browser/ui/views/frame/browser_window_property_manager_win.h
++++ b/chrome/browser/ui/views/frame/browser_window_property_manager_win.h
+@@ -7,6 +7,7 @@
+ 
+ #include <memory>
+ 
++#include "base/callback_list.h"
+ #include "base/memory/raw_ptr.h"
+ #include "components/prefs/pref_change_registrar.h"
+ 
+@@ -33,6 +34,8 @@
+   PrefChangeRegistrar profile_pref_registrar_;
+   raw_ptr<const BrowserView> view_;
+   const HWND hwnd_;
++  // Hivey: refreshes the relaunch icon when the themed app icon changes.
++  base::CallbackListSubscription hivey_taskbar_icon_subscription_;
+ };
+ 
+ #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_WINDOW_PROPERTY_MANAGER_WIN_H_
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
+@@ -0,0 +1,462 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/ui/views/frame/hivey_bar_view.h"
++
++#include <utility>
++
++#include "base/files/file_util.h"
++#include "base/functional/bind.h"
++#include "base/functional/callback_helpers.h"
++#include "base/json/json_reader.h"
++#include "base/strings/string_util.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/task/thread_pool.h"
++#include "chrome/app/chrome_command_ids.h"
++#include "chrome/app/vector_icons/vector_icons.h"
++#include "chrome/browser/browser_process.h"
++#include "chrome/browser/extensions/extension_tab_util.h"
++#include "chrome/browser/extensions/extension_view_host.h"
++#include "chrome/browser/extensions/extension_view_host_factory.h"
++#include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/ui/browser.h"
++#include "chrome/browser/ui/browser_commands.h"
++#include "chrome/browser/ui/color/chrome_color_id.h"
++#include "chrome/browser/ui/extensions/extension_popup_types.h"
++#include "chrome/browser/ui/extensions/extension_side_panel_coordinator.h"
++#include "chrome/browser/ui/extensions/extension_side_panel_manager.h"
++#include "chrome/browser/ui/extensions/extensions_container.h"
++#include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
++#include "chrome/browser/ui/side_panel/side_panel_entry_key.h"
++#include "chrome/browser/ui/side_panel/side_panel_enums.h"
++#include "chrome/browser/ui/side_panel/side_panel_ui.h"
++#include "chrome/browser/ui/toolbar/toolbar_action_view_model.h"
++#include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
++#include "chrome/browser/ui/views/extensions/extension_popup.h"
++#include "chrome/browser/ui/views/frame/browser_view.h"
++#include "chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h"
++#include "chrome/browser/ui/views/toolbar/toolbar_button.h"
++#include "chrome/common/pref_names.h"
++#include "chrome/grit/generated_resources.h"
++#include "components/prefs/pref_service.h"
++#include "extensions/browser/extension_action.h"
++#include "extensions/browser/extension_action_manager.h"
++#include "extensions/browser/image_loader.h"
++#include "extensions/browser/permissions/active_tab_permission_granter.h"
++#include "extensions/common/extension.h"
++#include "extensions/common/extension_resource.h"
++#include "ui/base/l10n/l10n_util.h"
++#include "ui/base/metadata/metadata_impl_macros.h"
++#include "ui/color/color_provider.h"
++#include "ui/gfx/color_utils.h"
++#include "ui/gfx/image/image.h"
++#include "ui/gfx/image/image_skia.h"
++#include "ui/gfx/image/image_skia_operations.h"
++#include "ui/gfx/image/image_skia_rep.h"
++#include "ui/views/background.h"
++#include "ui/views/bubble/bubble_anchor.h"
++#include "ui/views/controls/menu/menu_runner.h"
++#include "ui/views/controls/separator.h"
++#include "ui/views/layout/box_layout.h"
++
++namespace {
++
++// The column's width, and the size of the workspace icons (DIP).
++constexpr int kBarWidth = 44;
++constexpr int kIconSize = 20;
++
++enum Command {
++  kCommandLeft = 1,
++  kCommandRight,
++  kCommandHide,
++};
++
++SidePanelEntryKey HiveyToolsKey() {
++  return SidePanelEntryKey(SidePanelEntryId::kExtension, HIVEY_BUNDLED_AI_ID);
++}
++
++std::optional<base::ListValue> ReadWorkspaces(const base::FilePath& file) {
++  std::string json;
++  if (!base::ReadFileToString(file, &json)) {
++    return std::nullopt;
++  }
++  return base::JSONReader::ReadList(json, base::JSON_PARSE_RFC);
++}
++
++}  // namespace
++
++HiveyBarView::HiveyBarView(BrowserView* browser_view)
++    : browser_view_(browser_view) {
++  auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
++      views::BoxLayout::Orientation::kVertical, gfx::Insets::VH(8, 0), 4));
++  layout->set_cross_axis_alignment(
++      views::BoxLayout::CrossAxisAlignment::kCenter);
++  set_context_menu_controller(this);
++  SetBackground(views::CreateSolidBackground(kColorToolbar));
++
++  Profile* profile = browser_view_->GetProfile();
++  prefs_.Init(profile->GetPrefs());
++  const auto changed = base::BindRepeating(&HiveyBarView::OnPrefsChanged,
++                                           base::Unretained(this));
++  prefs_.Add(hivey::kHiveyBarVisible,
++             base::BindRepeating(&HiveyBarView::OnVisibilityChanged,
++                                 base::Unretained(this)));
++  prefs_.Add(hivey::kHiveyBarSide, changed);
++  prefs_.Add(prefs::kVerticalTabsEnabled, changed);
++  prefs_.Add(hivey::kHiveyVerticalTabsRight, changed);
++  registry_observation_.Observe(extensions::ExtensionRegistry::Get(profile));
++  Rebuild();
++}
++
++HiveyBarView::~HiveyBarView() = default;
++
++bool HiveyBarView::ShouldShow() const {
++  return prefs_.prefs()->GetBoolean(hivey::kHiveyBarVisible);
++}
++
++bool HiveyBarView::IsOnLeft() const {
++  return hivey::IsHiveyBarOnLeft(*prefs_.prefs());
++}
++
++bool HiveyBarView::TabsOnRight() const {
++  return prefs_.prefs()->GetBoolean(hivey::kHiveyVerticalTabsRight);
++}
++
++gfx::Size HiveyBarView::CalculatePreferredSize(
++    const views::SizeBounds& available_size) const {
++  return gfx::Size(kBarWidth,
++                   views::View::CalculatePreferredSize(available_size).height());
++}
++
++void HiveyBarView::OnThemeChanged() {
++  views::View::OnThemeChanged();
++  UpdateColors();
++}
++
++void HiveyBarView::OnVisibilityChanged() {
++  // Without the bar, Hivey Tools and Hivey Cyber go back to the toolbar with
++  // the other extensions; with it, they live in the bar.
++  if (ToolbarActionsModel* model =
++          ToolbarActionsModel::Get(browser_view_->GetProfile())) {
++    for (const char* id : {HIVEY_BUNDLED_AI_ID, HIVEY_BUNDLED_CYBER_ID}) {
++      if (model->IsActionPinned(id) == ShouldShow()) {
++        model->SetActionVisibility(id, !ShouldShow());
++      }
++    }
++  }
++  OnPrefsChanged();
++}
++
++void HiveyBarView::OnPrefsChanged() {
++  // The layout reads ShouldShow() and IsOnLeft().
++  browser_view_->InvalidateLayout();
++  UpdateActive();
++}
++
++void HiveyBarView::OnExtensionReady(content::BrowserContext* browser_context,
++                                    const extensions::Extension* extension) {
++  if (extension->id() == HIVEY_BUNDLED_AI_ID ||
++      extension->id() == HIVEY_BUNDLED_CYBER_ID ||
++      extension->id() == HIVEY_BUNDLED_SHIELD_ID) {
++    Rebuild();
++  }
++}
++
++void HiveyBarView::OnExtensionUnloaded(
++    content::BrowserContext* browser_context,
++    const extensions::Extension* extension,
++    extensions::UnloadedExtensionReason reason) {
++  OnExtensionReady(browser_context, extension);
++}
++
++void HiveyBarView::Rebuild() {
++  weak_factory_.InvalidateWeakPtrs();
++  RemoveAllChildViews();
++  workspaces_.clear();
++  cyber_button_ = shield_button_ = resources_button_ = studio_button_ = nullptr;
++
++  Profile* profile = browser_view_->GetProfile();
++  const extensions::ExtensionSet& enabled =
++      extensions::ExtensionRegistry::Get(profile)->enabled_extensions();
++
++  // Hivey Tools' workspaces, read from its package.
++  if (const extensions::Extension* tools =
++          enabled.GetByID(HIVEY_BUNDLED_AI_ID)) {
++    base::ThreadPool::PostTaskAndReplyWithResult(
++        FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++        base::BindOnce(&ReadWorkspaces,
++                       tools->path().AppendASCII("hivey-bar/tabs.json")),
++        base::BindOnce(&HiveyBarView::OnWorkspacesRead,
++                       weak_factory_.GetWeakPtr()));
++  }
++  separator_ = AddChildView(std::make_unique<views::Separator>());
++  separator_->SetPreferredSize(gfx::Size(24, views::Separator::kThickness));
++  separator_->SetVisible(false);  // shown with the workspaces
++
++  if (enabled.Contains(HIVEY_BUNDLED_CYBER_ID)) {
++    cyber_button_ = AddButton(
++        u"Hivey Cyber",
++        base::BindRepeating(
++            [](HiveyBarView* bar) {
++              bar->ShowExtensionPopup(HIVEY_BUNDLED_CYBER_ID,
++                                      bar->cyber_button_);
++            },
++            base::Unretained(this)));
++  }
++  if (enabled.Contains(HIVEY_BUNDLED_SHIELD_ID)) {
++    shield_button_ = AddButton(
++        u"Hivey Shield",
++        base::BindRepeating(
++            [](HiveyBarView* bar) {
++              bar->ShowExtensionPopup(HIVEY_BUNDLED_SHIELD_ID,
++                                      bar->shield_button_);
++            },
++            base::Unretained(this)));
++  }
++  resources_button_ = AddButton(
++      l10n_util::GetStringUTF16(IDS_HIVEY_RESOURCES),
++      base::BindRepeating(&HiveyBarView::OnResourcesPressed,
++                          base::Unretained(this)));
++  resources_button_->SetVectorIcon(kSpeedIcon);
++  std::u16string studio = l10n_util::GetStringUTF16(IDS_HIVEY_STUDIO);
++  base::RemoveChars(studio, u"&", &studio);
++  studio_button_ = AddButton(std::move(studio),
++                             base::BindRepeating(&HiveyBarView::OnStudioPressed,
++                                                 base::Unretained(this)));
++  studio_button_->SetVectorIcon(kBrushFilledIcon);
++  UpdateColors();
++}
++
++ToolbarButton* HiveyBarView::AddButton(std::u16string tooltip,
++                                       base::RepeatingClosure callback) {
++  auto button = std::make_unique<ToolbarButton>(base::BindRepeating(
++      [](base::RepeatingClosure callback, const ui::Event&) { callback.Run(); },
++      std::move(callback)));
++  button->SetTooltipText(tooltip);
++  button->GetViewAccessibility().SetName(tooltip);
++  button->set_context_menu_controller(this);
++  return AddChildView(std::move(button));
++}
++
++void HiveyBarView::OnWorkspacesRead(std::optional<base::ListValue> tabs) {
++  if (!tabs) {
++    return;
++  }
++  Profile* profile = browser_view_->GetProfile();
++  const extensions::Extension* tools =
++      extensions::ExtensionRegistry::Get(profile)->enabled_extensions().GetByID(
++          HIVEY_BUNDLED_AI_ID);
++  if (!tools) {
++    return;
++  }
++  const bool french =
++      base::StartsWith(g_browser_process->GetApplicationLocale(), "fr");
++  for (const base::Value& tab : *tabs) {
++    const base::DictValue* dict = tab.GetIfDict();
++    const std::string* mode = dict ? dict->FindString("mode") : nullptr;
++    const std::string* icon = dict ? dict->FindString("icon") : nullptr;
++    if (!mode || !icon) {
++      continue;
++    }
++    const base::DictValue* titles = dict->FindDict("title");
++    const std::string* title =
++        titles ? titles->FindString(french ? "fr" : "en") : nullptr;
++    const size_t index = workspaces_.size();
++    ToolbarButton* button =
++        AddButton(base::UTF8ToUTF16(title ? *title : *mode),
++                  base::BindRepeating(&HiveyBarView::OnWorkspacePressed,
++                                      base::Unretained(this), *mode));
++    // Workspaces come first, before the separator and the tools.
++    ReorderChildView(button, index);
++    workspaces_.push_back({*mode, button, gfx::ImageSkia()});
++    extensions::ImageLoader::Get(profile)->LoadImageAsync(
++        tools, tools->GetResource(*icon), gfx::Size(40, 40),
++        base::BindOnce(&HiveyBarView::OnWorkspaceIcon,
++                       weak_factory_.GetWeakPtr(), index));
++  }
++  separator_->SetVisible(!workspaces_.empty());
++  UpdateActive();
++}
++
++void HiveyBarView::OnWorkspaceIcon(size_t index, const gfx::Image& image) {
++  if (index >= workspaces_.size() || image.IsEmpty()) {
++    return;
++  }
++  // 40 px drawn for 20 DIP: crisp at 2x, scaled down at 1x.
++  workspaces_[index].icon =
++      gfx::ImageSkia::CreateFromBitmap(image.AsBitmap(), 2.0f);
++  UpdateColors();
++}
++
++void HiveyBarView::UpdateColors() {
++  const ui::ColorProvider* colors = GetColorProvider();
++  if (!colors) {
++    return;
++  }
++  const SkColor icon_color = colors->GetColor(kColorToolbarButtonIcon);
++  for (const Workspace& workspace : workspaces_) {
++    if (!workspace.icon.isNull()) {
++      workspace.button->SetImageModel(
++          views::Button::STATE_NORMAL,
++          ui::ImageModel::FromImageSkia(
++              gfx::ImageSkiaOperations::CreateColorMask(workspace.icon,
++                                                        icon_color)));
++    }
++  }
++  // The extensions' own icons.
++  ExtensionsContainer* container =
++      ExtensionsContainer::From(*browser_view_->browser());
++  content::WebContents* contents = browser_view_->GetActiveWebContents();
++  for (auto [button, id] :
++       {std::pair(cyber_button_.get(), HIVEY_BUNDLED_CYBER_ID),
++        std::pair(shield_button_.get(), HIVEY_BUNDLED_SHIELD_ID)}) {
++    ToolbarActionViewModel* action =
++        container && button ? container->GetActionForId(id) : nullptr;
++    if (action && contents) {
++      button->SetImageModel(
++          views::Button::STATE_NORMAL,
++          action->GetIcon(contents, gfx::Size(kIconSize, kIconSize)));
++      button->SetTooltipText(action->GetActionName());
++    }
++  }
++  UpdateActive();
++}
++
++void HiveyBarView::UpdateActive() {
++  const ui::ColorProvider* colors = GetColorProvider();
++  SidePanelUI* side_panel = SidePanelUI::From(browser_view_->browser());
++  const bool tools_showing =
++      side_panel && side_panel->IsSidePanelEntryShowing(HiveyToolsKey());
++  if (side_panel && !side_panel_shown_subscription_) {
++    side_panel_shown_subscription_ =
++        side_panel->RegisterSidePanelShown(base::BindRepeating(
++            &HiveyBarView::UpdateActive, base::Unretained(this)));
++  }
++  for (const Workspace& workspace : workspaces_) {
++    const bool active = tools_showing && workspace.mode == active_mode_;
++    workspace.button->SetBackground(
++        active && colors
++            ? views::CreateRoundedRectBackground(
++                  color_utils::AlphaBlend(colors->GetColor(ui::kColorSysPrimary),
++                                          colors->GetColor(kColorToolbar),
++                                          0.24f),
++                  8)
++            : nullptr);
++  }
++}
++
++views::BubbleBorder::Arrow HiveyBarView::PopupArrow() const {
++  return IsOnLeft() ? views::BubbleBorder::LEFT_TOP
++                    : views::BubbleBorder::RIGHT_TOP;
++}
++
++void HiveyBarView::OnWorkspacePressed(std::string mode) {
++  BrowserWindowInterface* browser = browser_view_->browser();
++  SidePanelUI* side_panel = SidePanelUI::From(browser);
++  extensions::ExtensionSidePanelManager* manager =
++      extensions::ExtensionSidePanelManager::From(browser);
++  extensions::ExtensionSidePanelCoordinator* coordinator =
++      manager ? manager->GetCoordinator(HIVEY_BUNDLED_AI_ID) : nullptr;
++  if (!side_panel || !coordinator) {
++    return;
++  }
++  if (side_panel->IsSidePanelEntryShowing(HiveyToolsKey()) &&
++      mode == active_mode_) {
++    // A second click on the open workspace closes the panel.
++    side_panel->Close();
++    active_mode_.clear();
++  } else {
++    coordinator->ShowHiveyMode(mode);
++    side_panel->Show(HiveyToolsKey(), SidePanelOpenTrigger::kExtension);
++    active_mode_ = std::move(mode);
++  }
++  UpdateActive();
++}
++
++void HiveyBarView::ShowExtensionPopup(const char* extension_id,
++                                      views::View* anchor) {
++  BrowserWindowInterface* browser = browser_view_->browser();
++  Profile* profile = browser_view_->GetProfile();
++  const extensions::Extension* extension =
++      extensions::ExtensionRegistry::Get(profile)->enabled_extensions().GetByID(
++          extension_id);
++  content::WebContents* contents = browser_view_->GetActiveWebContents();
++  if (!extension || !contents || !anchor) {
++    return;
++  }
++  extensions::ExtensionAction* action =
++      extensions::ExtensionActionManager::Get(profile)->GetExtensionAction(
++          *extension);
++  const int tab_id = extensions::ExtensionTabUtil::GetTabId(contents);
++  if (!action || !action->HasPopup(tab_id)) {
++    return;
++  }
++  // Like a click on its toolbar icon: the extension may read this tab.
++  if (auto* granter =
++          extensions::ActiveTabPermissionGranter::FromWebContents(contents)) {
++    granter->GrantIfRequested(extension);
++  }
++  ExtensionPopup::ShowPopup(
++      browser,
++      extensions::ExtensionViewHostFactory::CreatePopupHost(
++          *extension, action->GetPopupUrl(tab_id), browser),
++      views::BubbleAnchor(anchor), PopupArrow(), PopupShowAction::kShow,
++      base::DoNothing());
++}
++
++void HiveyBarView::OnResourcesPressed() {
++  if (auto* coordinator =
++          HiveyResourcesCoordinator::From(browser_view_->browser())) {
++    coordinator->ShowAnchoredTo(resources_button_, PopupArrow());
++  }
++}
++
++void HiveyBarView::OnStudioPressed() {
++  chrome::ExecuteCommand(browser_view_->browser(), IDC_HIVEY_STUDIO);
++}
++
++void HiveyBarView::ShowContextMenuForViewImpl(
++    views::View* source,
++    const gfx::Point& point,
++    ui::mojom::MenuSourceType source_type) {
++  menu_model_ = std::make_unique<ui::SimpleMenuModel>(this);
++  menu_model_->AddRadioItemWithStringId(kCommandLeft, IDS_HIVEY_BAR_LEFT, 0);
++  menu_model_->AddRadioItemWithStringId(kCommandRight, IDS_HIVEY_BAR_RIGHT, 0);
++  menu_model_->AddSeparator(ui::NORMAL_SEPARATOR);
++  menu_model_->AddItemWithStringId(kCommandHide, IDS_HIVEY_BAR_HIDE);
++  menu_runner_ = std::make_unique<views::MenuRunner>(
++      menu_model_.get(), views::MenuRunner::CONTEXT_MENU);
++  menu_runner_->RunMenuAt(GetWidget(), nullptr, gfx::Rect(point, gfx::Size()),
++                          views::MenuAnchorPosition::kTopLeft, source_type);
++}
++
++bool HiveyBarView::IsCommandIdChecked(int command_id) const {
++  return command_id == kCommandLeft    ? IsOnLeft()
++         : command_id == kCommandRight ? !IsOnLeft()
++                                       : false;
++}
++
++void HiveyBarView::ExecuteCommand(int command_id, int event_flags) {
++  PrefService* prefs = browser_view_->GetProfile()->GetPrefs();
++  switch (command_id) {
++    case kCommandLeft:
++    case kCommandRight: {
++      const bool left = command_id == kCommandLeft;
++      prefs->SetInteger(hivey::kHiveyBarSide,
++                        static_cast<int>(left ? hivey::HiveyBarSide::kLeft
++                                              : hivey::HiveyBarSide::kRight));
++      // The side panel opens next to the bar.
++      prefs->SetBoolean(prefs::kSidePanelHorizontalAlignment, !left);
++      break;
++    }
++    case kCommandHide:
++      prefs->SetBoolean(hivey::kHiveyBarVisible, false);
++      break;
++  }
++}
++
++BEGIN_METADATA(HiveyBarView)
++END_METADATA
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.h
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.h
+@@ -0,0 +1,132 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_VIEWS_FRAME_HIVEY_BAR_VIEW_H_
++#define CHROME_BROWSER_UI_VIEWS_FRAME_HIVEY_BAR_VIEW_H_
++
++#include <memory>
++#include <optional>
++#include <string>
++#include <vector>
++
++#include "base/callback_list.h"
++#include "base/memory/raw_ptr.h"
++#include "base/memory/weak_ptr.h"
++#include "base/scoped_observation.h"
++#include "base/values.h"
++#include "ui/gfx/image/image_skia.h"
++#include "components/prefs/pref_change_registrar.h"
++#include "extensions/browser/extension_registry.h"
++#include "extensions/browser/extension_registry_observer.h"
++#include "ui/menus/simple_menu_model.h"
++#include "ui/base/metadata/metadata_header_macros.h"
++#include "ui/views/bubble/bubble_border.h"
++#include "ui/views/context_menu_controller.h"
++#include "ui/views/view.h"
++
++class BrowserView;
++class ToolbarButton;
++
++namespace gfx {
++class Image;
++}
++
++namespace views {
++class MenuRunner;
++}
++
++// The Hivey bar: a column at the left or right edge of the window (Hivey
++// Studio, or its own right-click menu) with Hivey's tools. On top, the
++// workspaces of Hivey Tools (the Hivey AI sidebar: chat, translation...),
++// which open the side panel on that workspace; then Hivey Cyber and Hivey
++// Shield (their popup), Resources (its dropdown) and Hivey Studio. The
++// workspaces come from the sidebar itself (hivey-bar/tabs.json in its
++// package, written at build time), so new ones show up with its updates.
++class HiveyBarView : public views::View,
++                     public views::ContextMenuController,
++                     public ui::SimpleMenuModel::Delegate,
++                     public extensions::ExtensionRegistryObserver {
++  METADATA_HEADER(HiveyBarView, views::View)
++
++ public:
++  explicit HiveyBarView(BrowserView* browser_view);
++  HiveyBarView(const HiveyBarView&) = delete;
++  HiveyBarView& operator=(const HiveyBarView&) = delete;
++  ~HiveyBarView() override;
++
++  // Read by the browser layout.
++  bool ShouldShow() const;
++  bool IsOnLeft() const;
++  // Vertical tabs at the right edge ("Tabs on the right").
++  bool TabsOnRight() const;
++
++  // views::View:
++  gfx::Size CalculatePreferredSize(
++      const views::SizeBounds& available_size) const override;
++  void OnThemeChanged() override;
++
++  // views::ContextMenuController:
++  void ShowContextMenuForViewImpl(
++      views::View* source,
++      const gfx::Point& point,
++      ui::mojom::MenuSourceType source_type) override;
++
++  // ui::SimpleMenuModel::Delegate:
++  bool IsCommandIdChecked(int command_id) const override;
++  void ExecuteCommand(int command_id, int event_flags) override;
++
++  // extensions::ExtensionRegistryObserver:
++  void OnExtensionReady(content::BrowserContext* browser_context,
++                        const extensions::Extension* extension) override;
++  void OnExtensionUnloaded(content::BrowserContext* browser_context,
++                           const extensions::Extension* extension,
++                           extensions::UnloadedExtensionReason reason) override;
++
++ private:
++  struct Workspace {
++    std::string mode;
++    raw_ptr<ToolbarButton> button = nullptr;
++    gfx::ImageSkia icon;  // white: tinted with the theme
++  };
++
++  void OnPrefsChanged();
++  void OnVisibilityChanged();
++  void Rebuild();
++  void OnWorkspacesRead(std::optional<base::ListValue> tabs);
++  void OnWorkspaceIcon(size_t index, const gfx::Image& image);
++  void UpdateColors();
++  void UpdateActive();
++  ToolbarButton* AddButton(std::u16string tooltip,
++                           base::RepeatingClosure callback);
++  views::BubbleBorder::Arrow PopupArrow() const;
++
++  void OnWorkspacePressed(std::string mode);
++  void ShowExtensionPopup(const char* extension_id, views::View* anchor);
++  void OnResourcesPressed();
++  void OnStudioPressed();
++
++  raw_ptr<BrowserView> browser_view_;
++  PrefChangeRegistrar prefs_;
++
++  std::vector<Workspace> workspaces_;
++  // The workspace last opened from the bar, highlighted while Hivey Tools is
++  // showing.
++  std::string active_mode_;
++  raw_ptr<ToolbarButton> cyber_button_ = nullptr;
++  raw_ptr<ToolbarButton> shield_button_ = nullptr;
++  raw_ptr<ToolbarButton> resources_button_ = nullptr;
++  raw_ptr<ToolbarButton> studio_button_ = nullptr;
++  raw_ptr<views::View> separator_ = nullptr;
++
++  std::unique_ptr<ui::SimpleMenuModel> menu_model_;
++  std::unique_ptr<views::MenuRunner> menu_runner_;
++
++  base::ScopedObservation<extensions::ExtensionRegistry,
++                          extensions::ExtensionRegistryObserver>
++      registry_observation_{this};
++  base::CallbackListSubscription side_panel_shown_subscription_;
++  base::WeakPtrFactory<HiveyBarView> weak_factory_{this};
++};
++
++#endif  // CHROME_BROWSER_UI_VIEWS_FRAME_HIVEY_BAR_VIEW_H_
+--- a/chrome/browser/ui/views/frame/layout/browser_view_layout.h
++++ b/chrome/browser/ui/views/frame/layout/browser_view_layout.h
+@@ -21,6 +21,7 @@
+ class InfoBarContainerView;
+ class MultiContentsView;
+ class OrganizerTrayView;
++class HiveyBarView;
+ class SidePanel;
+ class SidePanelAnimationContentView;
+ class TabStrip;
+@@ -78,6 +79,8 @@
+   raw_ptr<InfoBarContainerView> infobar_container = nullptr;
+   raw_ptr<MultiContentsView> multi_contents_view = nullptr;
+   raw_ptr<SidePanel> side_panel = nullptr;
++  // Hivey: the Hivey bar (normal browser windows only).
++  raw_ptr<HiveyBarView> hivey_bar = nullptr;
+   raw_ptr<SidePanelAnimationContentView> side_panel_animation_content = nullptr;
+ 
+   // The contents separator used for when the top container is overlaid.
+--- a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
++++ b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
+@@ -57,6 +57,7 @@
+ #include "ui/views/view.h"
+ #include "ui/views/view_class_properties.h"
+ #include "ui/views/view_utils.h"
++#include "chrome/browser/ui/views/frame/hivey_bar_view.h"
+ 
+ #if BUILDFLAG(IS_MAC)
+ #include "chrome/browser/ui/fullscreen_util_mac.h"
+@@ -64,6 +65,12 @@
+ 
+ namespace {
+ 
++// Hivey: whether the vertical tab strip is on the leading side (the usual
++// place) rather than the trailing one (Hivey's "Tabs on the right").
++bool VerticalTabsLeading(const BrowserViewLayoutViews& views) {
++  return !views.hivey_bar || !views.hivey_bar->TabsOnRight();
++}
++
+ // Minimum area next to caption buttons to use as a grab handle.
+ constexpr int kVerticalTabsGrabHandleSize = 40;
+ 
+@@ -817,7 +824,30 @@
+   bool clip_content_for_animation = false;
+   gfx::Rect unclipped_contents_region = params.visual_client_area;
+ 
++  // Hivey: the Hivey bar takes the left or right edge of the window, below
++  // the horizontal tab strip (or full height with vertical tabs, which it
++  // sits next to), beside the toolbar and the side panel.
++  if (views().hivey_bar &&
++      IsParentedTo(views().hivey_bar, views().browser_view)) {
++    const bool show = views().hivey_bar->ShouldShow() &&
++                      !is_fullscreen(layout_data_->window_state);
++    const int width =
++        show ? views().hivey_bar->GetPreferredSize().width() : 0;
++    const bool leading = views().hivey_bar->IsOnLeft() != base::i18n::IsRTL();
++    const gfx::Rect bar_bounds(
++        leading ? params.visual_client_area.x()
++                : params.visual_client_area.right() - width,
++        params.visual_client_area.y(), width,
++        params.visual_client_area.height());
++    layout.AddChild(views().hivey_bar, bar_bounds, show);
++    if (show) {
++      params.InsetHorizontal(width, leading);
++      InsetHorizontal(unclipped_contents_region, width, leading);
++    }
++  }
++
+   // Lay out vertical tab strip if visible.
++  const bool tabs_leading = VerticalTabsLeading(views());
+   int collapsed_vertical_tab_strip_adjustment = 0;
+   const VerticalTabStripAnimation& vertical_tab_strip_animation =
+       layout_data_->vertical_tab_strip_animation;
+@@ -825,7 +855,8 @@
+   if (IsParentedTo(views().vertical_tab_strip_region_view,
+                    views().browser_view)) {
+     if (layout_data_->tab_strip_type == TabStripType::kVertical) {
+-      if (vertical_tab_strip_animation.top_offset > 0) {
++      // (The adjustment covers caption buttons on the leading side.)
++      if (vertical_tab_strip_animation.top_offset > 0 && tabs_leading) {
+         collapsed_vertical_tab_strip_adjustment =
+             horizontal_layout.vertical_tab_strip_width;
+       }
+@@ -858,7 +889,9 @@
+       }
+ 
+       vertical_tab_strip_bounds =
+-          gfx::Rect(params.visual_client_area.x(),
++          gfx::Rect(tabs_leading ? params.visual_client_area.x()
++                                 : params.visual_client_area.right() -
++                                       vertical_tab_strip_width,
+                     params.visual_client_area.y() +
+                         vertical_tab_strip_animation.top_offset,
+                     vertical_tab_strip_width,
+@@ -879,7 +912,9 @@
+ 
+       const int inset_amount = horizontal_layout.vertical_tab_strip_width -
+                                GetVerticalTabStripContentOverlap();
+-      params.InsetHorizontal(inset_amount, /*leading=*/true);
++      params.InsetHorizontal(inset_amount, /*leading=*/tabs_leading);
++      views().vertical_tab_strip_region_view->SetHiveyOnTrailingSide(
++          !tabs_leading);
+ 
+       // Let the vertical tab strip animate out over the content.
+       if (vertical_tab_strip_animation.current_motion) {
+@@ -888,11 +923,13 @@
+                 TabStripAnimations::kExpand ||
+             vertical_tab_strip_animation.current_motion ==
+                 TabStripAnimations::kCollapse;
+-        unclipped_contents_region.Inset(gfx::Insets::TLBR(
+-            0, VerticalTabStripRegionView::kCollapsedWidth, 0, 0));
++        InsetHorizontal(unclipped_contents_region,
++                        VerticalTabStripRegionView::kCollapsedWidth,
++                        tabs_leading);
+       } else {
+-        unclipped_contents_region.Inset(gfx::Insets::TLBR(
+-            0, horizontal_layout.vertical_tab_strip_width, 0, 0));
++        InsetHorizontal(unclipped_contents_region,
++                        horizontal_layout.vertical_tab_strip_width,
++                        tabs_leading);
+       }
+     }
+     layout.AddChild(views().vertical_tab_strip_region_view,
+@@ -1001,7 +1038,10 @@
+     } else {
+       main_background_bounds = params.visual_client_area;
+     }
+-    const bool main_background_visibility = horizontal_layout.has_side_panel();
++    // Hivey: also behind the page's rounded corner with vertical tabs.
++    const bool main_background_visibility =
++        horizontal_layout.has_side_panel() ||
++        layout_data_->tab_strip_type == TabStripType::kVertical;
+     main_background_layout =
+         &layout.AddChild(views().main_background_region, main_background_bounds,
+                          main_background_visibility);
+@@ -1249,7 +1289,8 @@
+         !is_fullscreen(layout_data_->window_state)) {
+       const int radius =
+           views().vertical_tab_strip_top_corner->GetCornerRadius();
+-      if (base::i18n::IsRTL()) {
++      // The corner next to the strip.
++      if (base::i18n::IsRTL() == VerticalTabsLeading(views())) {
+         content_corners.set_upper_right(radius);
+       } else {
+         content_corners.set_upper_left(radius);
+@@ -1559,25 +1600,39 @@
+                                               1.0f));
+     }
+ 
+-    // Ensure that corners of the window remain rounded.
++    // Ensure that corners of the window remain rounded (Hivey: on the side
++    // of the window the strip is on).
++    const bool strip_leading = VerticalTabsLeading(views());
++    const CornerOrientation outer_top = strip_leading
++                                            ? CornerOrientation::kTopLeading
++                                            : CornerOrientation::kTopTrailing;
++    const CornerOrientation outer_bottom =
++        strip_leading ? CornerOrientation::kBottomLeading
++                      : CornerOrientation::kBottomTrailing;
++    const CornerOrientation inner_top = strip_leading
++                                            ? CornerOrientation::kTopTrailing
++                                            : CornerOrientation::kTopLeading;
++    const CornerOrientation inner_bottom =
++        strip_leading ? CornerOrientation::kBottomTrailing
++                      : CornerOrientation::kBottomLeading;
+     CustomCornersBackground::Corners vertical_tabs_corners;
+     if (layout_data_->window_state == WindowState::kNormal) {
+       if (animation.top_offset == 0) {
+-        vertical_tabs_corners[CornerOrientation::kTopLeading] =
++        vertical_tabs_corners[outer_top] =
+             vertical_tabs_background->GetWindowCorner(/*upper=*/true);
+       }
+-      vertical_tabs_corners[CornerOrientation::kBottomLeading] =
++      vertical_tabs_corners[outer_bottom] =
+           vertical_tabs_background->GetWindowCorner(/*upper=*/false);
+     }
+ 
+     // When the vertical tabs are below the toolbar but next to the bookmarks
+     // bar, draw a curved corner.
+     if (animation.top_corner < 0.0) {
+-      vertical_tabs_corners[CornerOrientation::kTopTrailing].type =
++      vertical_tabs_corners[inner_top].type =
+           views().vertical_tab_strip_region_view->is_expanded_on_hover()
+               ? CustomCornersBackground::CornerType::kRounded
+               : CustomCornersBackground::CornerType::kRoundedWithBackground;
+-      vertical_tabs_corners[CornerOrientation::kTopTrailing].radius =
++      vertical_tabs_corners[inner_top].radius =
+           base::ClampRound(vertical_tabs_background->default_radius() *
+                            -animation.top_corner);
+     }
+@@ -1588,12 +1643,12 @@
+     int vertical_tabs_bottom_corner_size = 0;
+     if (animation.bottom_corner < 0.0) {
+       vertical_tabs_bottom_corner_amount = -animation.bottom_corner;
+-      vertical_tabs_corners[CornerOrientation::kBottomTrailing].type =
++      vertical_tabs_corners[inner_bottom].type =
+           CustomCornersBackground::CornerType::kRounded;
+       vertical_tabs_bottom_corner_size =
+           base::ClampRound(vertical_tabs_background->default_radius() *
+                            vertical_tabs_bottom_corner_amount);
+-      vertical_tabs_corners[CornerOrientation::kBottomTrailing].radius =
++      vertical_tabs_corners[inner_bottom].radius =
+           vertical_tabs_bottom_corner_size;
+     }
+ 
+@@ -1621,8 +1676,9 @@
+                                           vertical_tabs_bottom_corner_amount) *
+             frame_color.opacity,
+     };
+-    // Vertical tab strip always draws trailing edge.
+-    vertical_tabs_outline.trailing = true;
++    // Vertical tab strip always draws its inner edge.
++    vertical_tabs_outline.trailing = strip_leading;
++    vertical_tabs_outline.leading = !strip_leading;
+     // Top edge is drawn when the tabstrip is not flush with the edge of the
+     // screen, or with a visual element that provides a natural border.
+     if (animation.expand_on_hover_width > 0.0 || animation.top_corner < 0.0 ||
+--- a/chrome/browser/ui/views/frame/system_menu_model_builder.cc
++++ b/chrome/browser/ui/views/frame/system_menu_model_builder.cc
+@@ -224,6 +224,12 @@
+       model->SetElementIdentifierAt(
+           model->GetIndexOfCommandId(IDC_TOGGLE_VERTICAL_TABS_COLLAPSE).value(),
+           kToggleVerticalTabsCollapseElementId);
++      // Hivey: which edge of the window the vertical tabs are on.
++      constexpr int kHiveyTabsSideGroup = 4096;
++      model->AddRadioItemWithStringId(IDC_HIVEY_TABS_LEFT, IDS_HIVEY_TABS_LEFT,
++                                      kHiveyTabsSideGroup);
++      model->AddRadioItemWithStringId(IDC_HIVEY_TABS_RIGHT,
++                                      IDS_HIVEY_TABS_RIGHT, kHiveyTabsSideGroup);
+     } else {
+       model->AddItemWithStringId(IDC_TOGGLE_VERTICAL_TABS,
+                                  switch_to_vertical_id);
+@@ -257,6 +263,12 @@
+                                IDS_VERTICAL_TABS_SEND_FEEDBACK);
+   }
+ 
++  // Hivey: the Hivey bar can be hidden from its own menu; it comes back from
++  // here.
++  if (browser()->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
++    model->AddCheckItemWithStringId(IDC_HIVEY_BAR_TOGGLE, IDS_HIVEY_BAR_SHOW);
++  }
++
+   if (chrome::CanOpenTaskManager()) {
+     model->AddSeparator(ui::NORMAL_SEPARATOR);
+     const int task_manager_string_id =
+--- a/chrome/browser/ui/views/frame/system_menu_model_delegate.cc
++++ b/chrome/browser/ui/views/frame/system_menu_model_delegate.cc
+@@ -8,6 +8,7 @@
+ #include "build/build_config.h"
+ #include "chrome/app/chrome_command_ids.h"
+ #include "chrome/browser/glic/glic_pref_names.h"
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "chrome/browser/glic/public/glic_enabling.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/sessions/tab_restore_service_factory.h"
+@@ -52,6 +53,17 @@
+ SystemMenuModelDelegate::~SystemMenuModelDelegate() = default;
+ 
+ bool SystemMenuModelDelegate::IsCommandIdChecked(int command_id) const {
++  // Hivey: the Hivey bar and the side of the vertical tabs.
++  switch (command_id) {
++    case IDC_HIVEY_BAR_TOGGLE:
++      return browser_->GetProfile()->GetPrefs()->GetBoolean(
++          hivey::kHiveyBarVisible);
++    case IDC_HIVEY_TABS_LEFT:
++    case IDC_HIVEY_TABS_RIGHT:
++      return browser_->GetProfile()->GetPrefs()->GetBoolean(
++                 hivey::kHiveyVerticalTabsRight) ==
++             (command_id == IDC_HIVEY_TABS_RIGHT);
++  }
+ #if BUILDFLAG(IS_LINUX)
+   if (command_id == IDC_USE_SYSTEM_TITLE_BAR) {
+     PrefService* prefs = browser_->GetProfile()->GetPrefs();
+--- a/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
++++ b/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
+@@ -472,9 +472,9 @@
+ 
+   // Manually position the resize area as it overlaps views handled by the flex
+   // layout.
+-  resize_area_->SetBoundsRect(gfx::Rect(bounds().right() - resize_area_width_,
+-                                        0, resize_area_width_,
+-                                        bounds().height()));
++  resize_area_->SetBoundsRect(
++      gfx::Rect(hivey_on_trailing_side_ ? 0 : width() - resize_area_width_, 0,
++                resize_area_width_, bounds().height()));
+   shadow_frame_->SetBoundsRect(GetLocalBounds());
+ 
+   // Ensure that we update the drop arrow position so that it does not render in
+@@ -700,8 +700,19 @@
+   return gfx::Point(target_x, target_y);
+ }
+ 
++void VerticalTabStripRegionView::SetHiveyOnTrailingSide(bool trailing) {
++  if (hivey_on_trailing_side_ != trailing) {
++    hivey_on_trailing_side_ = trailing;
++    InvalidateLayout();
++  }
++}
++
+ void VerticalTabStripRegionView::OnResize(int resize_amount,
+                                           bool done_resizing) {
++  // Hivey: dragging the leading edge outwards widens a trailing strip.
++  if (hivey_on_trailing_side_) {
++    resize_amount = -resize_amount;
++  }
+   CHECK(tab_strip_view());
+   tab_strip_view()->SetIsAnimatingSize(!done_resizing);
+   if (!starting_width_on_resize_.has_value()) {
+--- a/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.h
++++ b/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.h
+@@ -136,6 +136,10 @@
+   // views::ResizeAreaDelegate:
+   void OnResize(int resize_amount, bool done_resizing) override;
+ 
++  // Hivey: the strip is at the trailing edge of the window ("Tabs on the
++  // right"): its resize handle is on its leading edge.
++  void SetHiveyOnTrailingSide(bool trailing);
++
+   // tabs::VerticalTabStripStateController::Delegate
+   void SetCollapsedStateUpdatedCallback(
+       base::RepeatingCallback<void(bool)> callback) override;
+@@ -276,6 +280,7 @@
+   // The width of the vertical tabstrip at the beginning of the current resize
+   // operation. Is std::nullopt when not resizing.
+   std::optional<int> starting_width_on_resize_;
++  bool hivey_on_trailing_side_ = false;
+ 
+   // The intended collapse state by the user as a result of dragging the resize
+   // area. This differs from the state controller in that its uncollapsed_width
+--- a/chrome/browser/ui/views/toolbar/hivey_resources_coordinator.cc
++++ b/chrome/browser/ui/views/toolbar/hivey_resources_coordinator.cc
+@@ -54,6 +54,20 @@
+                      weak_factory_.GetWeakPtr()));
+ }
+ 
++void HiveyResourcesCoordinator::ShowAnchoredTo(
++    views::View* anchor,
++    views::BubbleBorder::Arrow arrow) {
++  if (bubble_manager_->GetBubbleWidget()) {
++    bubble_manager_->CloseBubble();
++    return;
++  }
++  bubble_manager_->ShowBubble(WebUIBubbleManager::Anchor(anchor), arrow);
++  if (views::Widget* widget = bubble_manager_->GetBubbleWidget()) {
++    widget_observation_.Observe(widget);
++    SetShowing(true);
++  }
++}
++
+ void HiveyResourcesCoordinator::ShowAt(BubbleAnchorResult anchor) {
+   if (!anchor.has_value() || bubble_manager_->GetBubbleWidget()) {
+     return;
+--- a/chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h
++++ b/chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h
+@@ -12,6 +12,7 @@
+ #include "base/scoped_observation.h"
+ #include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions.h"
+ #include "ui/base/unowned_user_data/scoped_unowned_user_data.h"
++#include "ui/views/bubble/bubble_border.h"
+ #include "ui/views/widget/widget.h"
+ #include "ui/views/widget/widget_observer.h"
+ 
+@@ -40,6 +41,9 @@
+   // Opens the bubble, or closes it when it is open.
+   void ShowOrHide();
+ 
++  // The same, anchored to `anchor` (the Hivey bar's button).
++  void ShowAnchoredTo(views::View* anchor, views::BubbleBorder::Arrow arrow);
++
+   // views::WidgetObserver:
+   void OnWidgetDestroying(views::Widget* widget) override;
+ 

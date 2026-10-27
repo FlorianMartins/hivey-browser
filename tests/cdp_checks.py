@@ -301,8 +301,9 @@ try:
     p.shot('hivey-studio-vertical-tabs')
     p.eval("chrome.send('setPref', ['vertical_tabs.enabled', false])")
     time.sleep(1)
-    check('Hivey Studio refreshes live', vertical is True and isinstance(before, int) and after == before + 1,
-          f'vertical tabs {vertical} from another tab: {before} -> {after} switches (hover option shown)')
+    check('Hivey Studio refreshes live', vertical is True and isinstance(before, int) and isinstance(after, int)
+          and after > before,
+          f'vertical tabs {vertical} from another tab: {before} -> {after} switches (vertical tab options shown)')
 
     # Hivey Studio, end to end: a preset changes the browser color (handler
     # and ThemeService), and the network limiter slows a download down.

@@ -3,6 +3,52 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4704 — 27 octobre 2026
+
+### Barre Hivey
+- Nouvelle **barre Hivey** au bord de la fenêtre : les espaces de **Hivey
+  Tools** (chat, chats web, agent, traduction, amélioration de texte, images,
+  PDF, sécurité, Wisebase, benchmark, MCP) s'ouvrent directement dans le
+  panneau latéral, plus **Hivey Cyber**, **Hivey Shield**, **Ressources** et
+  **Hivey Studio**.
+- À droite par défaut, **à gauche avec les onglets verticaux** ; clic droit
+  pour la déplacer ou la masquer (elle revient par le clic droit sur la barre
+  d'onglets ou dans Hivey Studio).
+- La sidebar Hivey AI est **intégrée au navigateur** : ses onglets sont les
+  boutons de la barre Hivey, qui ouvrent et referment le panneau sur
+  l'onglet choisi, sans en-tête ni logo en double.
+- Barre Hivey masquée : la sidebar (**Hivey Tools**) et Hivey Cyber
+  reviennent en haut avec les extensions, et y repartent quand la barre
+  revient.
+
+### Onglets verticaux
+- **Une seule surface** avec la barre de navigation : même couleur, plus de
+  séparation ; la page a un coin arrondi en haut et un coin droit en bas.
+- **À gauche ou à droite**, au choix (clic droit sur la barre d'onglets ou
+  Hivey Studio).
+
+### Thèmes
+- Choisir un thème **remplace vraiment toutes les couleurs**, y compris
+  celles que vous aviez changées à la main ; le thème actif est mis en
+  évidence.
+- Quatre nouveaux thèmes : **Minuit** (noir pur pour écrans OLED),
+  **Océan**, **Forêt** et **Rose**.
+- Les thèmes colorent aussi la page Nouvel onglet, les survols d'onglets,
+  les séparateurs, les barres d'information, la recherche dans la page, les
+  suggestions de la barre d'adresse, les boutons, les champs et les
+  interrupteurs.
+- **Material** : un clic sur sa carte ouvre le sélecteur de couleur, sa
+  palette est générée à partir de la couleur choisie.
+- L'**icône de la barre des tâches** (Windows) et du dock ou du menu (Linux)
+  prend la couleur du thème.
+
+### Barre d'adresse
+- Le **logo Hivey**, centré, devant « Hivey Browser » sur les pages internes.
+- **Pays du serveur** de chaque site (drapeau et code) ; un clic donne son
+  adresse IP, le pays et la connexion (HTTP/2, TLS…), avec des liens WHOIS et
+  détails IP. La base de données est livrée avec le navigateur : **aucune
+  requête** n'est faite pour cela.
+
 ## 156.0.8078.4702 — 26 octobre 2026
 
 ### Téléchargement

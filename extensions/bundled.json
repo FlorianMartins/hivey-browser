@@ -15,10 +15,12 @@
     "type": "submodule",
     "path": "third_party/hivey-ai-sidebar",
     "manifest": "manifest.chrome.json",
+    "display_name": "Hivey Tools",
+    "bar_tabs": true,
     "files": ["LICENSE", "README.md", "CHANGELOG.md", "icons", "src", "vendor", "rules"],
     "license": "MIT",
     "source": "https://github.com/FlorianMartins/HiveyAI-Sidebar",
-    "pin": true
+    "pin": false
   },
   "hivey-cyber": {
     "name": "Hivey Cyber",
@@ -27,6 +29,6 @@
     "icon_svg": "icon.svg",
     "license": "MIT",
     "source": "https://github.com/FlorianMartins/hivey-browser/tree/main/extensions/hivey-cyber",
-    "pin": true
+    "pin": false
   }
 }

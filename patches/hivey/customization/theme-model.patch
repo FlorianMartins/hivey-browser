@@ -1,0 +1,688 @@
+# Themes: a theme (hivey.theme) plus the user's own colors on top (hivey.colors), cleared by choosing a theme; Midnight, Ocean, Forest and Rose themes; the color engine covers the new tab page, hovers, separators, info bars, find bar, omnibox results, buttons, fields and toggles; Material picks its seed color from its card; Hivey bar and tab side options in Hivey Studio.
+--- a/chrome/browser/hivey/hivey_colors.cc
++++ b/chrome/browser/hivey/hivey_colors.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "chrome/browser/hivey/hivey_colors.h"
+ 
++#include <algorithm>
+ #include <initializer_list>
+ #include <string>
+ 
+@@ -84,6 +85,75 @@
+     {"page_text", "#16172a"},
+ };
+ 
++// Pure black, for OLED screens.
++constexpr ColorEntry kMidnight[] = {
++    {"frame", "#000000"},
++    {"toolbar", "#0a0a0f"},
++    {"tab_inactive", "#000000"},
++    {"tab_text", "#ececf1"},
++    {"omnibox", "#16161d"},
++    {"omnibox_text", "#ececf1"},
++    {"icons", "#b4b4c4"},
++    {"accent", "#8b5cf6"},
++    {"menu", "#111117"},
++    {"menu_text", "#ececf1"},
++    {"panel", "#0a0a0f"},
++    {"panel_text", "#ececf1"},
++    {"page", "#050507"},
++    {"page_text", "#ececf1"},
++};
++
++constexpr ColorEntry kOcean[] = {
++    {"frame", "#08121c"},
++    {"toolbar", "#0f1d2b"},
++    {"tab_inactive", "#08121c"},
++    {"tab_text", "#e6f4ff"},
++    {"omnibox", "#172a3c"},
++    {"omnibox_text", "#e6f4ff"},
++    {"icons", "#a9c7de"},
++    {"accent", "#0ea5e9"},
++    {"menu", "#122233"},
++    {"menu_text", "#e6f4ff"},
++    {"panel", "#0f1d2b"},
++    {"panel_text", "#e6f4ff"},
++    {"page", "#0a1520"},
++    {"page_text", "#e6f4ff"},
++};
++
++constexpr ColorEntry kForest[] = {
++    {"frame", "#08130f"},
++    {"toolbar", "#0f1f19"},
++    {"tab_inactive", "#08130f"},
++    {"tab_text", "#e7f7ef"},
++    {"omnibox", "#172c24"},
++    {"omnibox_text", "#e7f7ef"},
++    {"icons", "#a8cfbd"},
++    {"accent", "#10b981"},
++    {"menu", "#122620"},
++    {"menu_text", "#e7f7ef"},
++    {"panel", "#0f1f19"},
++    {"panel_text", "#e7f7ef"},
++    {"page", "#0a1612"},
++    {"page_text", "#e7f7ef"},
++};
++
++constexpr ColorEntry kRose[] = {
++    {"frame", "#140a10"},
++    {"toolbar", "#21111b"},
++    {"tab_inactive", "#140a10"},
++    {"tab_text", "#fdeef6"},
++    {"omnibox", "#2e1826"},
++    {"omnibox_text", "#fdeef6"},
++    {"icons", "#e2b8cd"},
++    {"accent", "#ec4899"},
++    {"menu", "#25131e"},
++    {"menu_text", "#fdeef6"},
++    {"panel", "#21111b"},
++    {"panel_text", "#fdeef6"},
++    {"page", "#170c13"},
++    {"page_text", "#fdeef6"},
++};
++
+ struct Preset {
+   const char* name;
+   base::span<const ColorEntry> colors;
+@@ -91,10 +161,10 @@
+ 
+ // "material": no override, Chromium's palette from the user color alone.
+ const Preset kPresets[] = {
+-    {"aura", kAura},
+-    {"amber_night", kAmberNight},
+-    {"daylight", kDaylight},
+-    {"material", {}},
++    {"aura", kAura},         {"midnight", kMidnight},
++    {"ocean", kOcean},       {"forest", kForest},
++    {"rose", kRose},         {"amber_night", kAmberNight},
++    {"daylight", kDaylight}, {"material", {}},
+ };
+ 
+ SkColor Mix(SkColor foreground, SkColor background, float amount) {
+@@ -132,8 +202,23 @@
+   return names;
+ }
+ 
++bool IsHiveyColorPreset(std::string_view name) {
++  return std::ranges::any_of(
++      kPresets, [&](const Preset& preset) { return name == preset.name; });
++}
++
++base::DictValue GetHiveyEffectiveColors(PrefService* local_state) {
++  base::DictValue colors =
++      GetHiveyColorPreset(local_state->GetString(kHiveyTheme));
++  for (const auto [element, value] : local_state->GetDict(kHiveyColors)) {
++    colors.Set(element, value.Clone());
++  }
++  return colors;
++}
++
+ void RegisterHiveyColorsPrefs(PrefRegistrySimple* registry) {
+-  registry->RegisterDictionaryPref(kHiveyColors, GetHiveyColorPreset("aura"));
++  registry->RegisterStringPref(kHiveyTheme, "aura");
++  registry->RegisterDictionaryPref(kHiveyColors);
+ }
+ 
+ void AddHiveyColorMixer(ui::ColorProvider* provider,
+@@ -143,7 +228,7 @@
+   if (!local_state) {
+     return;
+   }
+-  const base::DictValue& colors = local_state->GetDict(kHiveyColors);
++  const base::DictValue colors = GetHiveyEffectiveColors(local_state);
+   if (colors.empty()) {
+     return;
+   }
+@@ -162,20 +247,34 @@
+     set({ui::kColorFrameActive, ui::kColorFrameInactive, ui::kColorSysHeader,
+          ui::kColorSysHeaderInactive},
+         *frame);
++    const SkColor text = get("tab_text").value_or(SK_ColorWHITE);
++    set({kColorTabDividerFrameActive, kColorTabDividerFrameInactive,
++         kColorTabStrokeFrameActive, kColorTabStrokeFrameInactive},
++        Mix(text, *frame, 0.14f));
+   }
+   if (auto toolbar = get("toolbar")) {
+-    // The active tab, the bookmarks bar and the vertical tab strip blend
+-    // into the toolbar.
++    // The active tab, the bookmarks bar, the vertical tab strip and the bars
++    // that open under the toolbar blend into it.
++    const SkColor icons = get("icons").value_or(SK_ColorWHITE);
+     set({kColorToolbar, kColorTabBackgroundActiveFrameActive,
+          kColorTabBackgroundActiveFrameInactive, kColorBookmarkBarBackground,
+          kColorToolbarTopSeparatorFrameActive,
+-         kColorToolbarTopSeparatorFrameInactive},
++         kColorToolbarTopSeparatorFrameInactive, kColorInfoBarBackground,
++         kColorVerticalTabStripShadow},
+         *toolbar);
++    set({kColorToolbarBackgroundSubtleEmphasis}, Mix(icons, *toolbar, 0.07f));
++    set({kColorToolbarSeparator, kColorToolbarContentAreaSeparator,
++         kColorBookmarkBarSeparator},
++        Mix(icons, *toolbar, 0.16f));
+   }
+   if (auto inactive = get("tab_inactive")) {
++    const SkColor text = get("tab_text").value_or(SK_ColorWHITE);
+     set({kColorTabBackgroundInactiveFrameActive,
+          kColorTabBackgroundInactiveFrameInactive},
+         *inactive);
++    set({kColorTabBackgroundInactiveHoverFrameActive,
++         kColorTabBackgroundInactiveHoverFrameInactive},
++        Mix(text, *inactive, 0.08f));
+   }
+   if (auto text = get("tab_text")) {
+     set({kColorTabForegroundActiveFrameActive,
+@@ -185,19 +284,31 @@
+     set({kColorTabForegroundInactiveFrameActive,
+          kColorTabForegroundInactiveFrameInactive},
+         Mix(*text, base, 0.7f));
++    set({kColorInfoBarForeground}, *text);
+   }
+   if (auto omnibox = get("omnibox")) {
+     const SkColor text = get("omnibox_text").value_or(SK_ColorWHITE);
+     set({kColorLocationBarBackground, kColorOmniboxResultsBackground},
+         *omnibox);
++    const SkColor accent = get("accent").value_or(text);
++    set({kColorLocationBarBackground, kColorOmniboxResultsBackground,
++         ui::kColorSysOmniboxContainer},
++        *omnibox);
+     set({kColorLocationBarBackgroundHovered,
+          kColorOmniboxResultsBackgroundHovered},
+         Mix(text, *omnibox, 0.07f));
++    set({kColorOmniboxResultsBackgroundSelected}, Mix(accent, *omnibox, 0.22f));
++    set({kColorOmniboxSelectionBackground}, Mix(accent, *omnibox, 0.4f));
++    set({kColorLocationBarBorder}, Mix(text, *omnibox, 0.12f));
++    set({kColorOmniboxChipBackground}, Mix(text, *omnibox, 0.1f));
+   }
+   if (auto text = get("omnibox_text")) {
+     set({kColorOmniboxText}, *text);
+     if (auto omnibox = get("omnibox")) {
+-      set({kColorOmniboxTextDimmed}, Mix(*text, *omnibox, 0.6f));
++      set({kColorOmniboxTextDimmed, kColorOmniboxResultsTextDimmed},
++          Mix(*text, *omnibox, 0.6f));
++      set({kColorOmniboxResultsUrl},
++          Mix(get("accent").value_or(*text), *text, 0.75f));
+     }
+   }
+   if (auto icons = get("icons")) {
+@@ -210,9 +321,19 @@
+         bright);
+   }
+   if (auto accent = get("accent")) {
++    // Text on the accent: white, or near black on a light accent.
++    const SkColor on_accent = color_utils::IsDark(*accent)
++                                  ? SK_ColorWHITE
++                                  : SkColorSetRGB(0x14, 0x14, 0x1c);
++    const SkColor page = get("page").value_or(*accent);
+     set({ui::kColorSysPrimary, ui::kColorAccent, ui::kColorFocusableBorderFocused,
+-         ui::kColorSysStateFocusRing},
++         ui::kColorSysStateFocusRing, ui::kColorButtonBackgroundProminent,
++         ui::kColorToggleButtonTrackOn, ui::kColorLinkForeground, ui::kColorHelpIconActive},
+         *accent);
++    set({ui::kColorSysOnPrimary, ui::kColorButtonForegroundProminent},
++        on_accent);
++    set({ui::kColorSysPrimaryContainer, ui::kColorSysTonalContainer},
++        Mix(*accent, page, 0.24f));
+   }
+   if (auto menu = get("menu")) {
+     const SkColor text = get("menu_text").value_or(SK_ColorWHITE);
+@@ -231,15 +352,29 @@
+     set({ui::kColorMenuItemForegroundSecondary}, Mix(*text, base, 0.65f));
+   }
+   if (auto panel = get("panel")) {
++    const SkColor text = get("panel_text").value_or(SK_ColorWHITE);
+     set({ui::kColorBubbleBackground, ui::kColorDialogBackground,
+          ui::kColorTooltipBackground, ui::kColorPrimaryBackground,
+-         kColorSidePanelBackground, kColorSidePanelContentBackground},
++         kColorSidePanelBackground, kColorSidePanelContentBackground,
++         kColorFindBarBackground, kColorStatusBubbleBackgroundFrameActive,
++         kColorExtensionsMenuContainerBackground},
+         *panel);
++    set({ui::kColorTextfieldBackground, ui::kColorButtonBackground},
++        Mix(text, *panel, 0.06f));
++    set({ui::kColorBubbleFooterBackground}, Mix(text, *panel, 0.04f));
++    set({ui::kColorSeparator}, Mix(text, *panel, 0.12f));
++    set({ui::kColorTextfieldOutline, ui::kColorButtonBorder},
++        Mix(text, *panel, 0.2f));
+   }
+   if (auto text = get("panel_text")) {
++    const SkColor base = get("panel").value_or(*text);
+     set({ui::kColorDialogForeground, ui::kColorTooltipForeground,
+-         ui::kColorPrimaryForeground},
++         ui::kColorPrimaryForeground, ui::kColorTextfieldForeground,
++         ui::kColorButtonForeground, kColorFindBarForeground,
++         kColorStatusBubbleForegroundFrameActive, kColorSidePanelEntryTitle},
+         *text);
++    set({kColorSidePanelEntryIcon, kColorSidePanelHeaderButtonIcon},
++        Mix(*text, base, 0.75f));
+   }
+   if (auto page = get("page")) {
+     // The browser's own pages (Settings, History, Hivey Studio...) draw with
+@@ -252,21 +387,63 @@
+     set({ui::kColorSysSurface4}, Mix(text, *page, 0.09f));
+     set({ui::kColorSysSurface5}, Mix(text, *page, 0.11f));
+     set({ui::kColorSysBaseContainer}, Mix(text, *page, 0.06f));
++    set({ui::kColorSysNeutralContainer}, Mix(text, *page, 0.08f));
++    set({ui::kColorSysDivider}, Mix(text, *page, 0.12f));
++    set({ui::kColorSysOutline}, Mix(text, *page, 0.25f));
++    // The new tab page.
++    set({kColorNewTabPageBackground}, *page);
++    set({kColorNewTabPageMostVisitedTileBackground}, Mix(text, *page, 0.08f));
+   }
+   if (auto text = get("page_text")) {
+-    set({ui::kColorSysOnSurface}, *text);
+     const SkColor base = get("page").value_or(*text);
+-    set({ui::kColorSysOnSurfaceSubtle}, Mix(*text, base, 0.7f));
++    set({ui::kColorSysOnSurface, kColorNewTabPageText}, *text);
++    set({ui::kColorSysOnSurfaceSubtle, ui::kColorSysOnSurfaceSecondary},
++        Mix(*text, base, 0.7f));
+   }
+ }
+ 
+ HiveyColorsObserver::HiveyColorsObserver() {
+   if (PrefService* local_state = g_browser_process->local_state()) {
++    MigrateWholePalette(local_state);
+     registrar_.Init(local_state);
+-    registrar_.Add(kHiveyColors,
+-                   base::BindRepeating(&HiveyColorsObserver::OnColorsChanged,
+-                                       base::Unretained(this)));
++    auto changed = base::BindRepeating(&HiveyColorsObserver::OnColorsChanged,
++                                       base::Unretained(this));
++    registrar_.Add(kHiveyTheme, changed);
++    registrar_.Add(kHiveyColors, changed);
++  }
++}
++
++void HiveyColorsObserver::MigrateWholePalette(PrefService* local_state) {
++  if (local_state->HasPrefPath(kHiveyTheme) ||
++      !local_state->HasPrefPath(kHiveyColors)) {
++    return;
++  }
++  const base::DictValue& saved = local_state->GetDict(kHiveyColors);
++  // The theme sharing the most colors with the saved palette (an empty one
++  // was Material).
++  std::string_view best = saved.empty() ? "material" : "aura";
++  size_t best_shared = 0;
++  for (const Preset& preset : kPresets) {
++    size_t shared = 0;
++    for (const ColorEntry& entry : preset.colors) {
++      const std::string* hex = saved.FindString(entry.element);
++      shared += hex && *hex == entry.hex;
++    }
++    if (shared > best_shared) {
++      best = preset.name;
++      best_shared = shared;
++    }
++  }
++  const base::DictValue theme = GetHiveyColorPreset(best);
++  base::DictValue own;
++  for (const auto [element, value] : saved) {
++    const std::string* theirs = theme.FindString(element);
++    if (!theirs || !value.is_string() || value.GetString() != *theirs) {
++      own.Set(element, value.Clone());
++    }
+   }
++  local_state->SetString(kHiveyTheme, best);
++  local_state->SetDict(kHiveyColors, std::move(own));
+ }
+ 
+ HiveyColorsObserver::~HiveyColorsObserver() = default;
+--- a/chrome/browser/hivey/hivey_colors.h
++++ b/chrome/browser/hivey/hivey_colors.h
+@@ -12,6 +12,7 @@
+ #include "third_party/skia/include/core/SkColor.h"
+ 
+ class PrefRegistrySimple;
++class PrefService;
+ 
+ namespace ui {
+ class ColorProvider;
+@@ -24,11 +25,14 @@
+ // user's choosing (Hivey Studio > Colors): the frame and tab strip, the
+ // toolbar and active tab, inactive tabs, tab text, the address bar and its
+ // text, toolbar icons, the accent, menus, bubbles and panels, and the
+-// browser's own pages (Settings, Hivey Studio...). The colors live in Local
+-// State ("hivey.colors": element -> "#rrggbb"); a postprocessing color mixer
+-// applies them after every other mixer (Material palette, themes), with the
+-// hover, selected and secondary shades derived from them. The default is the
+-// Aura preset, the look of the Hivey AI sidebar.
++// browser's own pages (Settings, Hivey Studio...). A theme ("hivey.theme",
++// a preset name) gives every element a color; the user's own colors
++// ("hivey.colors": element -> "#rrggbb") override single elements of it, and
++// choosing a theme clears them. A postprocessing color mixer applies the
++// result after every other mixer (Material palette, browser themes), with the
++// hover, selected and secondary shades derived from it. The default theme is
++// Aura, the look of the Hivey AI sidebar.
++inline constexpr char kHiveyTheme[] = "hivey.theme";
+ inline constexpr char kHiveyColors[] = "hivey.colors";
+ 
+ // Element keys, in Hivey Studio's order.
+@@ -40,10 +44,14 @@
+ 
+ void RegisterHiveyColorsPrefs(PrefRegistrySimple* registry);
+ 
+-// Presets ("aura", "amber_night", "daylight", "material"), as element -> hex.
+-// "material" is empty: Chromium's palette from the user color alone.
++// Themes ("aura", "midnight", ...), as element -> hex. "material" is empty:
++// Chromium's palette from the user color alone.
+ base::DictValue GetHiveyColorPreset(std::string_view name);
+ base::ListValue GetHiveyColorPresetNames();
++bool IsHiveyColorPreset(std::string_view name);
++
++// The colors in effect: the theme's, with the user's own on top.
++base::DictValue GetHiveyEffectiveColors(PrefService* local_state);
+ 
+ // The color mixer, appended after Chrome's (chrome_browser_main.cc).
+ void AddHiveyColorMixer(ui::ColorProvider* provider,
+@@ -61,6 +69,9 @@
+ 
+  private:
+   void OnColorsChanged();
++  // Before themes, "hivey.colors" held a whole palette: keep the theme it
++  // came from and only what differs from it.
++  void MigrateWholePalette(PrefService* local_state);
+ 
+   PrefChangeRegistrar registrar_;
+ };
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -12,10 +12,18 @@
+     theme_aura_hint: "Deep ink and indigo, like the Hivey AI sidebar",
+     theme_amber_night: "Amber night",
+     theme_amber_night_hint: "Dark, with Hivey amber",
++    theme_midnight: "Midnight",
++    theme_midnight_hint: "Pure black, for OLED screens",
++    theme_ocean: "Ocean",
++    theme_ocean_hint: "Deep navy and cyan",
++    theme_forest: "Forest",
++    theme_forest_hint: "Dark green and mint",
++    theme_rose: "Rose",
++    theme_rose_hint: "Plum and pink",
+     theme_daylight: "Daylight",
+     theme_daylight_hint: "Light and soft",
+     theme_material: "Material",
+-    theme_material_hint: "Colors generated from the accent only",
++    theme_material_hint: "Generated from a color: click to pick it",
+     accentTitle: 'Accent',
+     elementsTitle: "Each part of the browser",
+     elementsHint: "Pick any color, or take it from anywhere on the screen with the eyedropper. The undo button gives the part back to the palette.",
+@@ -92,6 +100,12 @@
+     verticalTabs: 'Vertical tabs',
+     verticalTabsHint: 'Tabs in a sidebar on the left, like Firefox and Edge.',
+     expandOnHover: 'Expand vertical tabs on hover',
++    tabsRight: 'Vertical tabs on the right',
++    tabsRightHint: 'Also from the right-click menu of the tab strip.',
++    hiveyBar: 'Hivey bar',
++    hiveyBarHint: 'Hivey Tools, Hivey Cyber, Hivey Shield, Resources and Studio in a column at the edge of the window. Right-click it to move or hide it.',
++    hiveyBarSide: 'Hivey bar position',
++    hiveyBarAuto: 'Automatic (left with vertical tabs)',
+     sidePanel: 'Side panel position',
+     left: 'Left',
+     right: 'Right',
+@@ -214,10 +228,18 @@
+     theme_aura_hint: "Encre profonde et indigo, comme la sidebar Hivey AI",
+     theme_amber_night: "Nuit ambrée",
+     theme_amber_night_hint: "Sombre, avec l’ambre Hivey",
++    theme_midnight: "Minuit",
++    theme_midnight_hint: "Noir pur, pour les écrans OLED",
++    theme_ocean: "Océan",
++    theme_ocean_hint: "Bleu marine et cyan",
++    theme_forest: "Forêt",
++    theme_forest_hint: "Vert sombre et menthe",
++    theme_rose: "Rose",
++    theme_rose_hint: "Prune et rose",
+     theme_daylight: "Jour",
+     theme_daylight_hint: "Clair et doux",
+     theme_material: "Material",
+-    theme_material_hint: "Couleurs générées à partir de l’accent seul",
++    theme_material_hint: "Générées à partir d’une couleur : cliquez pour la choisir",
+     accentTitle: 'Accent',
+     elementsTitle: "Chaque partie du navigateur",
+     elementsHint: "Choisissez n’importe quelle couleur, ou prenez-la n’importe où sur l’écran avec la pipette. Le bouton Annuler rend la partie à la palette.",
+@@ -294,6 +316,12 @@
+     verticalTabs: 'Onglets verticaux',
+     verticalTabsHint: 'Les onglets dans une barre latérale à gauche, comme dans Firefox et Edge.',
+     expandOnHover: 'Déployer les onglets verticaux au survol',
++    tabsRight: 'Onglets verticaux à droite',
++    tabsRightHint: 'Aussi depuis le menu clic droit de la barre d’onglets.',
++    hiveyBar: 'Barre Hivey',
++    hiveyBarHint: 'Hivey Tools, Hivey Cyber, Hivey Shield, Ressources et Studio dans une colonne au bord de la fenêtre. Clic droit dessus pour la déplacer ou la masquer.',
++    hiveyBarSide: 'Position de la barre Hivey',
++    hiveyBarAuto: 'Automatique (à gauche avec les onglets verticaux)',
+     sidePanel: 'Position du panneau latéral',
+     left: 'Gauche',
+     right: 'Droite',
+--- a/chrome/browser/resources/hivey_studio/studio.css
++++ b/chrome/browser/resources/hivey_studio/studio.css
+@@ -144,6 +144,7 @@
+   display: flex;
+   align-items: center;
+   gap: 12px;
++  white-space: nowrap;
+   padding: 10px 14px;
+   border: 1px solid transparent;
+   border-radius: 12px;
+@@ -724,10 +725,49 @@
+   border: 1px solid var(--border-strong);
+ }
+ 
+-.theme-dot.material {
+-  width: 70px;
+-  border-radius: 11px;
+-  background: conic-gradient(from 90deg, #f43f5e, #f59e0b, #10b981, #0ea5e9, #6366f1, #a855f7, #f43f5e);
++.theme-card {
++  position: relative;
++}
++
++.theme-card.active {
++  border-color: var(--accent);
++  box-shadow: 0 0 0 1px var(--accent) inset;
++}
++
++.theme-card.active::after {
++  content: '';
++  position: absolute;
++  top: 12px;
++  right: 12px;
++  width: 8px;
++  height: 8px;
++  border-radius: 50%;
++  background: var(--accent);
++}
++
++/* Material's color picker: opened by the card, never shown itself. */
++.theme-seed {
++  position: absolute;
++  bottom: 0;
++  left: 0;
++  width: 1px;
++  height: 1px;
++  opacity: 0;
++  pointer-events: none;
++}
++
++.theme-pick {
++  display: grid;
++  place-items: center;
++  width: 22px;
++  height: 22px;
++  margin-left: 2px;
++  color: var(--muted);
++}
++
++.theme-pick svg {
++  width: 14px;
++  height: 14px;
+ }
+ 
+ .color-grid {
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -27,11 +27,22 @@
+ // frame, toolbar and accent colors shown on their card.
+ const THEMES = [
+   {id: 'aura', swatch: ['#0b0c14', '#151726', '#7c6cf6']},
++  {id: 'midnight', swatch: ['#000000', '#0a0a0f', '#8b5cf6']},
++  {id: 'ocean', swatch: ['#08121c', '#0f1d2b', '#0ea5e9']},
++  {id: 'forest', swatch: ['#08130f', '#0f1f19', '#10b981']},
++  {id: 'rose', swatch: ['#140a10', '#21111b', '#ec4899']},
+   {id: 'amber_night', swatch: ['#0e0c09', '#1a1610', '#f7a21b']},
+   {id: 'daylight', swatch: ['#e6e7f2', '#f8f8fd', '#6366f1']},
+   {id: 'material', swatch: null},
+ ];
+ 
++function mixHex(a, b, amount) {
++  // `amount` of color a over color b.
++  const parse = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
++  const [ca, cb] = [parse(a), parse(b)];
++  return '#' + ca.map((v, i) => Math.round(v * amount + cb[i] * (1 - amount)).toString(16).padStart(2, '0')).join('');
++}
++
+ // Every part of the browser that takes its own color.
+ const ELEMENTS = ['frame', 'toolbar', 'tab_inactive', 'tab_text', 'omnibox', 'omnibox_text', 'icons', 'accent',
+                   'menu', 'menu_text', 'panel', 'panel_text', 'page', 'page_text'];
+@@ -291,17 +302,36 @@
+ }
+ 
+ function themeCard(theme) {
+-  const dots = theme.swatch ?
+-      theme.swatch.map(color => {
+-        const dot = el('span', {class: 'theme-dot'});
+-        dot.style.background = color;
+-        return dot;
+-      }) :
+-      [el('span', {class: 'theme-dot material'})];
+-  return el('button', {class: 'theme-card', onclick: () => chrome.send('applyPreset', [theme.id])},
+-            el('span', {class: 'theme-dots'}, ...dots),
+-            el('span', {class: 'row-label', text: t(`theme_${theme.id}`)}),
+-            el('span', {class: 'row-hint', text: t(`theme_${theme.id}_hint`)}));
++  const active = state.colors.theme === theme.id;
++  // Material: its palette comes from one color, picked by clicking the card.
++  const seed = state.theme.color || palette().accent;
++  const swatch = theme.swatch ||
++      [mixHex(seed, '#0b0c14', 0.14), mixHex(seed, '#151726', 0.32), seed];
++  const dots = swatch.map(color => {
++    const dot = el('span', {class: 'theme-dot'});
++    dot.style.background = color;
++    return dot;
++  });
++  let picker = null;
++  if (!theme.swatch) {
++    picker = el('input', {type: 'color', class: 'theme-seed', value: seed, tabindex: '-1', 'aria-hidden': 'true'});
++    picker.addEventListener('change', () => chrome.send('applyPreset', ['material', picker.value]));
++  }
++  const card = el('button', {
++    class: `theme-card${active ? ' active' : ''}`,
++    'aria-pressed': active ? 'true' : 'false',
++    'data-key': `theme-${theme.id}`,
++    onclick: () => {
++      chrome.send('applyPreset', [theme.id]);
++      picker?.showPicker();
++    },
++  },
++                  el('span', {class: 'theme-dots'}, ...dots,
++                     picker ? el('span', {class: 'theme-pick'}, icon('pipette')) : null),
++                  el('span', {class: 'row-label', text: t(`theme_${theme.id}`)}),
++                  el('span', {class: 'row-hint', text: t(`theme_${theme.id}_hint`)}),
++                  picker);
++  return card;
+ }
+ 
+ function preview() {
+@@ -444,6 +474,14 @@
+             card(null,
+                  prefToggle('vertical_tabs.enabled', 'verticalTabs', 'verticalTabsHint'),
+                  vertical ? prefToggle('vertical_tabs.expand_on_hover', 'expandOnHover') : null,
++                 vertical ? prefToggle('hivey.vertical_tabs.right', 'tabsRight', 'tabsRightHint') : null,
++                 prefToggle('hivey.bar.visible', 'hiveyBar', 'hiveyBarHint'),
++                 hasPref('hivey.bar.side') && pref('hivey.bar.visible') ? selectRow({
++                   label: t('hiveyBarSide'), value: pref('hivey.bar.side'),
++                   options: [{value: 0, label: t('hiveyBarAuto')}, {value: 1, label: t('left')},
++                             {value: 2, label: t('right')}],
++                   onChange: v => setPref('hivey.bar.side', Number(v)),
++                 }) : null,
+                  flagToggle({flag: 'hivey-compact-ui'}, 'compactMode', 'compactModeHint'),
+                  hasPref('side_panel.is_right_aligned') ? selectRow({
+                    label: t('sidePanel'), value: pref('side_panel.is_right_aligned') ? 1 : 0,
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -55,6 +55,9 @@
+ constexpr AllowedPref kAllowedPrefs[] = {
+     {"vertical_tabs.enabled", false},
+     {"vertical_tabs.expand_on_hover", false},
++    {"hivey.vertical_tabs.right", false},
++    {"hivey.bar.visible", false},
++    {"hivey.bar.side", false},
+     {"side_panel.is_right_aligned", false},
+     {"browser.show_home_button", false},
+     {"browser.show_forward_button", false},
+@@ -236,6 +239,7 @@
+     }
+   }
+   local_state_prefs_.Add(hivey::kHiveyColors, refresh);
++  local_state_prefs_.Add(hivey::kHiveyTheme, refresh);
+   // chrome://flags and Hivey Studio both store flags here.
+   local_state_prefs_.Add("browser.enabled_labs_experiments", refresh);
+   theme_observation_.Observe(ThemeServiceFactory::GetForProfile(profile));
+@@ -397,6 +401,8 @@
+     palette.Set(element, ColorToHex(provider.GetColor(id)));
+   }
+   return base::DictValue()
++      .Set("theme", g_browser_process->local_state()->GetString(
++                        hivey::kHiveyTheme))
+       .Set("custom", g_browser_process->local_state()
+                          ->GetDict(hivey::kHiveyColors)
+                          .Clone())
+@@ -645,26 +651,31 @@
+                       ui::mojom::BrowserColorVariant::kSystem
+                   ? ui::mojom::BrowserColorVariant::kTonalSpot
+                   : theme->GetBrowserColorVariant());
+-  base::DictValue colors =
+-      g_browser_process->local_state()->GetDict(hivey::kHiveyColors).Clone();
+-  if (!colors.empty()) {
++  // A Hivey theme keeps its other colors and takes this accent.
++  PrefService* local_state = g_browser_process->local_state();
++  if (local_state->GetString(hivey::kHiveyTheme) != "material") {
++    base::DictValue colors = local_state->GetDict(hivey::kHiveyColors).Clone();
+     colors.Set("accent", *hex);
+-    g_browser_process->local_state()->SetDict(hivey::kHiveyColors,
+-                                              std::move(colors));
++    local_state->SetDict(hivey::kHiveyColors, std::move(colors));
+   }
+ }
+ 
+ void HiveyStudioHandler::HandleApplyPreset(const base::ListValue& args) {
++  // [theme] or ["material", "#rrggbb"]: the whole theme, without the user's
++  // own colors (they were changes to the previous theme).
+   const std::string* name = args[0].GetIfString();
+-  if (!name) {
++  if (!name || !hivey::IsHiveyColorPreset(*name)) {
+     return;
+   }
+   base::DictValue colors = hivey::GetHiveyColorPreset(*name);
+   ThemeService* theme = ThemeServiceFactory::GetForProfile(GetProfile());
+   if (*name == "material") {
+-    theme->SetBrowserColorScheme(ThemeService::BrowserColorScheme::kSystem);
+-  } else if (colors.empty()) {
+-    return;  // Unknown preset.
++    const std::string* seed =
++        args.size() > 1 ? args[1].GetIfString() : nullptr;
++    if (std::optional<SkColor> color = seed ? HexToColor(*seed) : std::nullopt) {
++      theme->SetUserColorAndBrowserColorVariant(
++          *color, ui::mojom::BrowserColorVariant::kTonalSpot);
++    }
+   } else {
+     theme->SetBrowserColorScheme(*name == "daylight"
+                                      ? ThemeService::BrowserColorScheme::kLight
+@@ -676,8 +687,9 @@
+       }
+     }
+   }
+-  g_browser_process->local_state()->SetDict(hivey::kHiveyColors,
+-                                            std::move(colors));
++  PrefService* local_state = g_browser_process->local_state();
++  local_state->SetString(hivey::kHiveyTheme, *name);
++  local_state->SetDict(hivey::kHiveyColors, base::DictValue());
+ }
+ 
+ void HiveyStudioHandler::HandleSetSecurity(const base::ListValue& args) {

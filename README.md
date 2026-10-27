@@ -23,6 +23,10 @@ Linux, built on [ungoogled-chromium](https://github.com/ungoogled-software/ungoo
 - **AI that is not a security hole.** The Hivey AI sidebar is built in, with
   your own key or a local model; it reads a page only when you invoke it
   there, so pages cannot steer it (prompt injection).
+- **One bar for every tool.** The Hivey bar at the edge of the window opens
+  Hivey Tools' workspaces, the security tools, Resources and Hivey Studio.
+- **Know where a site lives.** The address bar shows the server's country
+  and IP, from a database shipped with the browser: no lookup leaves it.
 - **Security tools at hand.** WHOIS, geolocation, DNS, certificates,
   VirusTotal, urlscan, Shodan and more from the toolbar or a right-click.
 - **Light on your machine.** Like a gaming browser: RAM, CPU and network
@@ -92,6 +96,8 @@ the [MIT license](LICENSE). Chromium and ungoogled-chromium keep their own
 licenses (BSD-3-Clause and others); the browser binary includes their notices
 at `chrome://credits`. uBlock Origin Lite is GPL-3.0-or-later and ships
 unmodified except for its default rulesets
-([source](https://github.com/uBlockOrigin/uBOL-home)).
+([source](https://github.com/uBlockOrigin/uBOL-home)). The server country in
+the location bar uses [IP to Country Lite by DB-IP](https://db-ip.com),
+licensed under CC BY 4.0.
 
 Hivey Browser is not affiliated with Google or the Chromium project.

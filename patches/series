@@ -29,3 +29,8 @@ hivey/customization/aura-color-engine.patch
 hivey/privacy/block-device-apis.patch
 hivey/customization/hivey-studio-themes.patch
 hivey/customization/resources-toolbar-button.patch
+hivey/customization/theme-model.patch
+hivey/customization/vertical-tabs-one-surface.patch
+hivey/customization/hivey-tools-panel-header.patch
+hivey/customization/hivey-bar.patch
+hivey/privacy/location-bar-server-info.patch

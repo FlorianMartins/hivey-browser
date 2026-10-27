@@ -64,6 +64,7 @@ import prune_binaries  # noqa: E402
 sys.path.pop(0)
 sys.path.insert(0, str(ROOT / 'scripts'))
 import crx3  # noqa: E402
+import geoip  # noqa: E402
 sys.path.pop(0)
 
 STEPS = ['fetch', 'unpack', 'prune', 'toolchain', 'patch', 'brand', 'bundle', 'domsub', 'configure', 'build',
@@ -805,7 +806,8 @@ def _unpack_release_zip(name, spec, unpacked):
 def _unpack_submodule(name, spec, unpacked):
     """A pinned git submodule (the Hivey AI sidebar): its files plus its
     Chromium manifest. The version is major.minor from the manifest and the
-    submodule's commit count, so each update installs as a newer version."""
+    submodule's commit count, so each update installs as a newer version;
+    "display_name" renames it in the browser."""
     src = ROOT / spec['path']
     for item in spec['files']:
         path = src / item
@@ -818,8 +820,57 @@ def _unpack_submodule(name, spec, unpacked):
                            text=True).stdout.strip()
     major_minor = '.'.join(manifest['version'].split('.')[:2])
     manifest['version'] = f'{major_minor}.{count}'
+    if spec.get('display_name'):
+        # The name the browser shows (side panel header, menus, tooltips).
+        manifest['name'] = spec['display_name']
+        manifest.pop('short_name', None)
+        if 'action' in manifest:
+            manifest['action']['default_title'] = spec['display_name']
+    if spec.get('bar_tabs'):
+        _hivey_bar_tabs(src, unpacked)
     (unpacked / 'manifest.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
     return manifest['version']
+
+
+def _hivey_bar_tabs(src, unpacked):
+    """The sidebar's workspaces (the rail tabs of sidebar.html), for the
+    browser's Hivey bar: hivey-bar/tabs.json lists them (mode, English and
+    French titles from the sidebar's own strings) and hivey-bar/<mode>.png is
+    each icon in white, which the browser tints with the theme."""
+    import cairosvg
+    html = (src / 'src/sidebar/sidebar.html').read_text()
+    i18n = (src / 'src/lib/i18n.js').read_text()
+
+    def strings(lang):
+        start = i18n.index(f'const {lang} = {{')
+        block = i18n[start:i18n.index('\n};', start)]
+        return dict(re.findall(r'^\s*"([\w.]+)":\s*"((?:[^"\\]|\\.)*)",?$', block, re.M))
+
+    titles = {'en': strings('EN'), 'fr': strings('FR')}
+    out = unpacked / 'hivey-bar'
+    out.mkdir()
+    tabs = []
+    for button in re.finditer(r'<button class="railtab[^"]*"([^>]*)>(<svg.*?</svg>)</button>', html, re.S):
+        attrs, svg = button.groups()
+        mode = re.search(r'data-mode="([\w-]+)"', attrs)
+        if not mode:
+            continue  # links and the "+" button, not workspaces
+        mode = mode.group(1)
+        key = re.search(r'data-i18n-title="([\w.]+)"', attrs)
+        fallback = re.search(r'title="([^"]*)"', attrs)
+        tab = {'mode': mode, 'icon': f'hivey-bar/{mode}.png', 'title': {}}
+        for lang, table in titles.items():
+            tab['title'][lang] = (key and table.get(key.group(1))) or (fallback and fallback.group(1)) or mode
+        if 'xmlns=' not in svg:
+            svg = svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ', 1)
+        svg = svg.replace('currentColor', '#ffffff')
+        cairosvg.svg2png(bytestring=svg.encode(), write_to=str(out / f'{mode}.png'), output_width=40,
+                         output_height=40)
+        tabs.append(tab)
+    if not tabs:
+        raise SystemExit('no workspace found in the sidebar\'s rail (sidebar.html changed?)')
+    (out / 'tabs.json').write_text(json.dumps(tabs, indent=2, ensure_ascii=False))
+    log(f'Hivey bar: {len(tabs)} sidebar workspaces ({", ".join(t["mode"] for t in tabs)})')
 
 
 def _unpack_directory(name, spec, unpacked):
@@ -874,16 +925,23 @@ def step_bundle(args):
         + '\n'.join(entries) + '\n};\n\n'
         '#endif  // CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n')
     log(f'update public key {update_key}')
-    mark_done('bundle', extensions=info, update_key=update_key)
+    # The offline IP-to-country database of the location bar's server chip
+    # (scripts/geoip.py); the download cache lives outside BUNDLED, which this
+    # step wipes.
+    geoip_bin, geoip_month = geoip.build(BUNDLED, BUILD / 'downloads' / 'geoip')
+    mark_done('bundle', extensions=info, update_key=update_key,
+              geoip={'month': geoip_month, 'sha256': sha256_file(geoip_bin)})
 
 
 def _stage_bundled_extensions():
-    """Put the .crx files where the browser looks for them: <module dir>/
-    extensions (the Windows installer packs out/Default/Extensions)."""
+    """Put the .crx files and the GeoIP database where the browser looks for
+    them: <module dir>/extensions (the Windows installer packs
+    out/Default/Extensions)."""
     dest = OUT / ('Extensions' if TARGET == 'win' else 'extensions')
     dest.mkdir(parents=True, exist_ok=True)
-    for crx in BUNDLED.glob('*.crx'):
-        shutil.copy2(crx, dest / crx.name)
+    for f in [*BUNDLED.glob('*.crx'), BUNDLED / geoip.FILE_NAME]:
+        if f.exists():
+            shutil.copy2(f, dest / f.name)
 
 
 def step_domsub(args):
