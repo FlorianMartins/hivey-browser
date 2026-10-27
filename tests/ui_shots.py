@@ -115,6 +115,12 @@ try:
                         '-ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*Hivey*" } | ForEach-Object { '
                         '$l = $s.CreateShortcut($_.FullName); "{0} -> {1} icon={2}" -f $_.FullName, $l.TargetPath, '
                         '$l.IconLocation }'])
+        # Is it the shell's icon cache? Restart Explorer and look again.
+        subprocess.run(['powershell', '-NoProfile', '-Command',
+                        'Stop-Process -Name explorer -Force; Start-Sleep -Seconds 10; '
+                        'if (-not (Get-Process explorer -ErrorAction SilentlyContinue)) { Start-Process explorer }; '
+                        'Start-Sleep -Seconds 8'])
+        shot('6c-material-after-explorer-restart')
     studio(('applyPreset', ['aura']))
     activate('https://example.com/')
     shot('7-aura-example')
