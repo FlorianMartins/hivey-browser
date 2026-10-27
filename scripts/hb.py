@@ -1130,7 +1130,11 @@ def _ccache_env():
         'CCACHE_BASEDIR': str(SRC),
         # Each tree has its own copy of clang: compare its contents, not its path.
         'CCACHE_COMPILERCHECK': 'content',
-        'CCACHE_SLOPPINESS': 'include_file_mtime,include_file_ctime,time_macros,file_macro,pch_defines',
+        # Chromium compiles with Clang modules: cacheable only in direct and
+        # depend mode (dependencies from the compiler's own -MD output).
+        'CCACHE_SLOPPINESS': 'include_file_mtime,include_file_ctime,time_macros,file_macro,pch_defines,modules',
+        'CCACHE_DIRECT': '1',
+        'CCACHE_DEPEND': '1',
         'CCACHE_NOHASHDIR': '1',
     }
 
