@@ -61,7 +61,11 @@ page cannot reach it on its own:
 - **No site access by default.** It reads a page only when you open it on
   that tab (the extension's *on click* access), or on sites you allow in
   `chrome://extensions`. Only the AI providers' API addresses it names in its
-  manifest stay allowed, so the chat works.
+  manifest, and the web chats it shows (Gemini, Claude, ChatGPT…), stay
+  allowed, so the chat works.
+
+The sites you add to the Hivey bar open in the side panel like in a tab of
+the same profile (same cookies, same protections); no extension is involved.
 - **Your key, your provider.** Nothing is sent anywhere until you add an API
   key (Anthropic, OpenAI, OpenRouter, Mistral…) or point it at a local model;
   requests go straight from the browser to that provider, with no Hivey

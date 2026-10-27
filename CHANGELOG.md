@@ -3,6 +3,34 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4706 — 27 octobre 2026
+
+### Barre Hivey personnalisable
+- **Paramètres > Disposition > Barre Hivey** : changez l'**ordre** des
+  boutons (flèches ou glisser-déposer), **masquez** ceux que vous n'utilisez
+  pas (aussi par clic droit sur un bouton : « Masquer ce bouton ») et
+  **ajoutez vos propres sites** (WhatsApp, Notion, Spotify…) : ils s'ouvrent
+  dans le panneau latéral, connectés comme dans un onglet ; un second clic
+  les referme.
+- **Icônes** : couleur du thème ou **multicolore**, chaque bouton avec une
+  couleur qui a du sens (vert pour la sécurité, rouge pour le PDF, ambre pour
+  la traduction…), adaptée aux thèmes clairs et sombres.
+- **MCP** passe entre Agent et Traduction.
+- Clic droit sur la barre : « Personnaliser la barre Hivey… ».
+
+### Correctifs
+- **Les chats web fonctionnent aussi sur les profils existants** (l'accès
+  aux sites des chats n'était donné qu'aux nouvelles installations).
+- Plus de **bordure claire sous la barre de navigation** : la barre et la
+  page forment une seule surface.
+
+### Apparence
+- Nouvelle couleur **« Onglets verticaux »** dans Paramètres > Apparence :
+  le fond des onglets verticaux (et du bouton « + ») n'est plus gris fixe.
+- **Nouveau logo** : celui de la sidebar Hivey AI (quatre barres, violet vers
+  indigo), pour la fenêtre, la barre des tâches, l'installateur, la barre
+  d'adresse et les Paramètres.
+
 ## 156.0.8078.4705 — 27 octobre 2026
 
 ### Barre Hivey

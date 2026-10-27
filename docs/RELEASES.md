@@ -40,8 +40,9 @@ at the lowest CPU and I/O priority.
    been quiet for 30 minutes, so a series of merges makes one release.
 2. **Build.** Fresh tree, Windows and Linux, packages (`hb.py package`).
    Compile jobs follow the memory the host can spare (about 3 GB each,
-   within the build's 26 GB cap; `HB_JOBS` overrides), and a build that
-   crashes is resumed once with half the jobs.
+   within a cap of the available memory minus 16 GB; `HB_JOBS` and
+   `HB_MEM_MAX` override), compiles go through a ccache shared by every
+   build tree, and a build that crashes is resumed once with half the jobs.
 3. **Draft release** (`scripts/release.py draft`): installers, `SHA256SUMS`,
    and the signed update manifest.
 4. **Checks.** Linux on the build host, Windows on a GitHub runner

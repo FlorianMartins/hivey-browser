@@ -22,6 +22,7 @@ Chromium's BSD license.
 """
 
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -190,23 +191,102 @@ def rebrand_install_modes(src):
     write(p, text)
 
 
-def _png(svg, size, out):
+LOGO = ROOT / 'brand' / 'logo.svg'
+SVG_NS = 'http://www.w3.org/2000/svg'
+
+
+def _mark_svg(size, fill=None):
+    """brand/logo.svg with its bars snapped to the pixel grid of a `size` px image.
+
+    The logo is four fully-rounded horizontal bars centered on the canvas. Drawn
+    as is, their edges fall between pixels at small sizes (blurry at 16 px), so
+    every bar gets a whole-pixel height, gap, top and width (width of the same
+    parity as the image, so the bar stays centered). Height, gap and widths
+    come from the rects of brand/logo.svg. Same rules as
+    chrome/browser/hivey/hivey_app_icon.cc. `fill` replaces the gradient
+    (monochrome icons).
+    """
+    import xml.etree.ElementTree as ET
+    ET.register_namespace('', SVG_NS)
+    tree = ET.parse(LOGO)
+    svg = tree.getroot()
+    view = float(svg.get('viewBox').split()[2])
+    rects = svg.findall(f'.//{{{SVG_NS}}}rect')
+    s = size / view
+    height = float(rects[0].get('height'))
+    gap = float(rects[1].get('y')) - float(rects[0].get('y')) - height
+    h = max(3, int(height * s + 0.5))
+    g = max(1, int(gap * s + 0.5))
+    top = (size - (len(rects) * h + (len(rects) - 1) * g) + 1) // 2
+    for i, rect in enumerate(rects):
+        w = float(rect.get('width')) * s
+        # Rounded half down, so bars of different widths stay different.
+        w = 2 * math.ceil(w / 2 - 0.5) if size % 2 == 0 else 2 * math.ceil((w - 1) / 2 - 0.5) + 1
+        w = min(w, size)
+        y = top + i * (h + g)
+        # Back to logo units, so the gradient keeps its coordinates.
+        for key, value in (('x', (size - w) / 2), ('y', y), ('width', w), ('height', h), ('rx', h / 2)):
+            rect.set(key, f'{value / s:.4f}')
+        if fill:
+            rect.set('fill', fill)
+    return ET.tostring(svg)
+
+
+def _render(size, fill=None):
+    import io
     import cairosvg
+    from PIL import Image
+    png = cairosvg.svg2png(bytestring=_mark_svg(size, fill), output_width=size, output_height=size)
+    return Image.open(io.BytesIO(png)).convert('RGBA')
+
+
+def _save(image, out, **kwargs):
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + '.hb-tmp')
-    cairosvg.svg2png(url=str(svg), write_to=str(tmp), output_width=size, output_height=size)
+    image.save(tmp, **kwargs)
     tmp.replace(out)
 
 
-def _wordmark(svg, height, color, out):
+def _png(size, out, fill=None):
+    _save(_render(size, fill), out, format='PNG')
+
+
+def _ico(out, sizes=(16, 24, 32, 48, 64, 128, 256)):
+    """Multi-size .ico, every size drawn at its own size (crisp at 16 px)."""
+    images = [_render(size) for size in sizes]
+    _save(images[-1], out, format='ICO', sizes=[(s, s) for s in sizes], append_images=images[:-1])
+
+
+def _xpm(size, out):
+    """XPM with 1-bit transparency (Linux menus that still want one)."""
+    image = _render(size)
+    opaque = [a >= 128 for a in image.getchannel('A').getdata()]
+    indexed = image.convert('RGB').quantize(colors=64)
+    palette = indexed.getpalette()
+    chars = '.#$%&*+-/0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+    pixels = list(indexed.getdata())
+    used = sorted({p for p, o in zip(pixels, opaque) if o})
+    lines = ['/* XPM */', 'static char *product_logo[] = {', f'"{size} {size} {len(used) + 1} 1",',
+             '"  c None",']
+    lines += ['"%s c #%02X%02X%02X",' % (chars[p], *palette[3 * p:3 * p + 3]) for p in used]
+    rows = [''.join(chars[p] if o else ' ' for p, o in
+                    zip(pixels[y * size:(y + 1) * size], opaque[y * size:(y + 1) * size]))
+            for y in range(size)]
+    lines += [f'"{row}",' for row in rows]
+    lines[-1] = lines[-1][:-1]
+    lines += ['};', '']
+    tmp = out.with_name(out.name + '.hb-tmp')
+    tmp.write_text('\n'.join(lines))
+    tmp.replace(out)
+
+
+def _wordmark(height, color, out):
     """Logo + "Hivey" in Space Grotesk Bold, at the size Chromium expects."""
-    import io
-    import cairosvg
     from PIL import Image, ImageDraw, ImageFont
     scale = height // 22
     width = 97 * scale
     canvas = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-    icon = Image.open(io.BytesIO(cairosvg.svg2png(url=str(svg), output_width=height, output_height=height)))
+    icon = _render(height)
     canvas.paste(icon, (0, 0), icon)
     font = ImageFont.truetype(str(ROOT / 'brand' / 'fonts' / 'SpaceGrotesk.ttf'), int(15 * scale))
     font.set_variation_by_name('Bold')
@@ -214,35 +294,39 @@ def _wordmark(svg, height, color, out):
     box = draw.textbbox((0, 0), BRAND['short_name'], font=font)
     draw.text((height + 4 * scale, (height - (box[3] - box[1])) // 2 - box[1]), BRAND['short_name'],
               font=font, fill=color)
-    canvas.save(out.with_name(out.name + '.hb-tmp'), format='PNG')
-    out.with_name(out.name + '.hb-tmp').replace(out)
+    _save(canvas, out, format='PNG')
 
 
 def rebrand_icons(src):
     """Every Chromium product logo replaced by brand/logo.svg renders."""
-    from PIL import Image
-    svg = ROOT / 'brand' / 'logo.svg'
     theme = src / 'chrome/app/theme'
+    chromium = theme / 'chromium'
     for size in (16, 24, 32, 48, 64, 128, 256):
-        if (theme / f'chromium/product_logo_{size}.png').exists():
-            _png(svg, size, theme / f'chromium/product_logo_{size}.png')
+        if (chromium / f'product_logo_{size}.png').exists():
+            _png(size, chromium / f'product_logo_{size}.png')
+    # Linux packages (desktop entry, menus).
+    for path in sorted((chromium / 'linux').glob('product_logo_*.png')):
+        _png(int(path.stem.rsplit('_', 1)[1]), path)
+    if (chromium / 'linux/product_logo_32.xpm').exists():
+        _xpm(32, chromium / 'linux/product_logo_32.xpm')
+    # Status tray (monochrome).
+    _png(22, chromium / 'product_logo_22_mono.png', fill='#121212')
+    # WebUI pages (profile picker, first run...): the vector logo itself.
+    for name in ('product_logo.svg', 'product_logo_animation.svg'):
+        (chromium / name).write_text(LOGO.read_text())
     for scale, folder in ((1, 'default_100_percent'), (2, 'default_200_percent')):
         for size in (16, 32):
-            _png(svg, size * scale, theme / folder / 'chromium' / f'product_logo_{size}.png')
-        _wordmark(svg, 22 * scale, (32, 24, 12, 255), theme / folder / 'chromium' / 'product_logo_name_22.png')
-        _wordmark(svg, 22 * scale, (255, 255, 255, 255),
+            _png(size * scale, theme / folder / 'chromium' / f'product_logo_{size}.png')
+        _wordmark(22 * scale, (32, 24, 12, 255), theme / folder / 'chromium' / 'product_logo_name_22.png')
+        _wordmark(22 * scale, (255, 255, 255, 255),
                   theme / folder / 'chromium' / 'product_logo_name_22_white.png')
-    _png(svg, 600, theme / 'chromium/win/tiles/Logo.png')
-    _png(svg, 176, theme / 'chromium/win/tiles/SmallLogo.png')
-    # Multi-size .ico for the executable, the app list and the installer.
-    big = theme / 'chromium/win/hivey-256.png.hb-tmp'
-    _png(svg, 256, big)
-    ico_sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+    _png(600, chromium / 'win/tiles/Logo.png')
+    _png(176, chromium / 'win/tiles/SmallLogo.png')
+    # .ico for the executable, the app list and the installers.
     for name in ('chromium.ico', 'app_list.ico'):
-        out = theme / 'chromium/win' / name
-        Image.open(big).save(out.with_name(name + '.hb-tmp'), format='ICO', sizes=ico_sizes)
-        out.with_name(name + '.hb-tmp').replace(out)
-    big.unlink()
+        _ico(chromium / 'win' / name)
+    _ico(src / 'chrome/installer/setup/setup.ico')
+    _ico(src / 'chrome/installer/mini_installer/mini_installer.ico')
     print('[brand] icons rendered from brand/logo.svg')
 
 

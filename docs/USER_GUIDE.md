@@ -51,14 +51,21 @@ status, checks on demand, and turns automatic updates off.
 ## The Hivey bar
 
 A column at the edge of the window gathers Hivey's tools: in the middle, the
-workspaces of **Hivey Tools** (chat, web chats, agent, translation, text
-improvement, images, PDF, security, Wisebase, benchmark, MCP), which open the
+workspaces of **Hivey Tools** (chat, web chats, agent, MCP, translation, text
+improvement, images, PDF, security, Wisebase, benchmark), which open the
 side panel on that workspace (click again to close it; the mouse wheel moves
 between workspaces while it is open); at the bottom, **Hivey Cyber**,
 **Performance**, **History**, **Bookmarks** and **Settings**. It sits on the right, or on the left with vertical tabs.
 Right-click it to move it or hide it; right-click the tab strip (or use Hivey
 Settings > Layout) to show it again. The same tab strip menu puts vertical tabs
 on the left or the right.
+
+Hivey Settings > Layout > **Hivey bar** customizes it: the order of its
+buttons (arrows or drag and drop), which ones show (also: right-click a button
+> *Hide this button*), icons in the theme's color or **multicolor** (a color
+per tool), and **your own sites**: each gets a button with its initial and
+opens in the side panel, signed in like in a tab; links to other windows open
+in tabs.
 
 ## Server info
 
