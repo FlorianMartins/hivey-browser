@@ -1008,7 +1008,7 @@
  #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_WINDOW_PROPERTY_MANAGER_WIN_H_
 --- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
 +++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
-@@ -0,0 +1,443 @@
+@@ -0,0 +1,445 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
@@ -1067,6 +1067,7 @@
 +#include "ui/gfx/image/image_skia_operations.h"
 +#include "ui/gfx/image/image_skia_rep.h"
 +#include "ui/views/background.h"
++#include "ui/views/bubble/bubble_anchor.h"
 +#include "ui/views/controls/menu/menu_runner.h"
 +#include "ui/views/controls/separator.h"
 +#include "ui/views/layout/box_layout.h"
@@ -1396,7 +1397,8 @@
 +      browser,
 +      extensions::ExtensionViewHostFactory::CreatePopupHost(
 +          *extension, action->GetPopupUrl(tab_id), browser),
-+      anchor, PopupArrow(), PopupShowAction::kShow, base::DoNothing());
++      views::BubbleAnchor(anchor), PopupArrow(), PopupShowAction::kShow,
++      base::DoNothing());
 +}
 +
 +void HiveyBarView::OnResourcesPressed() {
