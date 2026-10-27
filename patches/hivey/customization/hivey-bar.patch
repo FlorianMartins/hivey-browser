@@ -1853,14 +1853,14 @@
      const int task_manager_string_id =
 --- a/chrome/browser/ui/views/frame/system_menu_model_delegate.cc
 +++ b/chrome/browser/ui/views/frame/system_menu_model_delegate.cc
-@@ -34,6 +34,7 @@
- #endif
- 
- #if BUILDFLAG(IS_LINUX)
+@@ -8,6 +8,7 @@
+ #include "build/build_config.h"
+ #include "chrome/app/chrome_command_ids.h"
+ #include "chrome/browser/glic/glic_pref_names.h"
 +#include "chrome/browser/hivey/hivey_bar_prefs.h"
- #include "chrome/common/pref_names.h"
- #endif
- 
+ #include "chrome/browser/glic/public/glic_enabling.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/sessions/tab_restore_service_factory.h"
 @@ -52,6 +53,17 @@
  SystemMenuModelDelegate::~SystemMenuModelDelegate() = default;
  
