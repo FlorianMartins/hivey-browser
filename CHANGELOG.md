@@ -3,7 +3,7 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
-## 156.0.8078.4703 — 27 octobre 2026
+## 156.0.8078.4704 — 27 octobre 2026
 
 ### Barre Hivey
 - Nouvelle **barre Hivey** au bord de la fenêtre : les espaces de **Hivey
