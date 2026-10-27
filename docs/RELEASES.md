@@ -33,7 +33,15 @@ at the lowest CPU and I/O priority.
    it has a newer commit whose checks all passed, the submodule moves to it
    (in the Chromium branch, or in `auto/hivey-ai-<commit>` with
    `HIVEY_REVISION` bumped). `CHANGELOG.md` gets the new version's entry.
+   Not every commit is worth a release: the sidebar's daily model catalogue
+   update (`chore(models): daily auto-update…`, prices and context windows;
+   the model lists themselves are fetched live) waits for the next real
+   change, or ships after 7 days at most; a real change waits until it has
+   been quiet for 30 minutes, so a series of merges makes one release.
 2. **Build.** Fresh tree, Windows and Linux, packages (`hb.py package`).
+   Compile jobs follow the memory the host can spare (about 3 GB each,
+   within the build's 26 GB cap; `HB_JOBS` overrides), and a build that
+   crashes is resumed once with half the jobs.
 3. **Draft release** (`scripts/release.py draft`): installers, `SHA256SUMS`,
    and the signed update manifest.
 4. **Checks.** Linux on the build host, Windows on a GitHub runner

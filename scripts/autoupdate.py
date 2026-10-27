@@ -45,6 +45,7 @@ import subprocess
 import sys
 import tarfile
 import time
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,6 +64,14 @@ FAILED = AUTO_BUILD / 'autoupdate-failed.txt'
 UG_REPO = 'ungoogled-software/ungoogled-chromium'
 UGW_REPO = 'ungoogled-software/ungoogled-chromium-windows'
 AI_REPO = 'FlorianMartins/HiveyAI-Sidebar'
+# The sidebar's robot refreshes its model catalogue (prices, context windows,
+# reasoning profiles) every day; on its own, that is no reason for a browser
+# release: it rides along with the next real change, or at most weekly.
+CATALOGUE_COMMIT = re.compile(r'^chore\(models\): daily auto-update', re.IGNORECASE)
+CATALOGUE_MAX_AGE = 7 * 24 * 3600
+# A real change must have been quiet this long (merges come in series: one
+# release for the series, not one multi-hour build per merge).
+SIDEBAR_SETTLE = 30 * 60
 AI_PATH = 'third_party/hivey-ai-sidebar'
 MONTHS = ('janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre',
           'novembre', 'décembre')
@@ -123,9 +132,17 @@ def pinned_sidebar():
     return git('-C', AI_PATH, 'rev-parse', 'HEAD').strip()
 
 
+def iso_age(timestamp):
+    """Seconds since an ISO 8601 UTC timestamp from the GitHub API."""
+    return time.time() - datetime.fromisoformat(timestamp.replace('Z', '+00:00')).timestamp()
+
+
 def latest_sidebar(pinned):
-    """Newest commit on the sidebar's main branch whose checks all passed,
-    if it is ahead of `pinned`; else None."""
+    """Newest commit on the sidebar's main branch whose checks all passed, if
+    it is ahead of `pinned` and worth a release: it brings a real change (not
+    only the daily model catalogue) that has settled for SIDEBAR_SETTLE, or
+    the catalogue in the bundled sidebar is more than CATALOGUE_MAX_AGE old.
+    Else None."""
     if not pinned:
         return None
     for commit in gh_json('api', f'repos/{AI_REPO}/commits?sha=main&per_page=10'):
@@ -133,10 +150,25 @@ def latest_sidebar(pinned):
         if sha == pinned:
             return None
         runs = gh_json('api', f'repos/{AI_REPO}/commits/{sha}/check-runs?per_page=100')['check_runs']
-        if runs and all(r['status'] == 'completed' and r['conclusion'] in ('success', 'skipped', 'neutral')
-                        for r in runs):
-            ahead = gh_json('api', f'repos/{AI_REPO}/compare/{pinned}...{sha}')['status'] == 'ahead'
-            return sha if ahead else None
+        if not runs or not all(r['status'] == 'completed' and r['conclusion'] in ('success', 'skipped', 'neutral')
+                               for r in runs):
+            continue
+        compare = gh_json('api', f'repos/{AI_REPO}/compare/{pinned}...{sha}')
+        if compare['status'] != 'ahead':
+            return None
+        real = [c for c in compare['commits'] if not CATALOGUE_COMMIT.match(c['commit']['message'])]
+        if real:
+            age = iso_age(real[-1]['commit']['committer']['date'])
+            if age < SIDEBAR_SETTLE:
+                log(f'sidebar {sha[:7]}: newest change is {int(age // 60)} min old, waiting for it to settle')
+                return None
+            return sha
+        pinned_age = iso_age(gh_json('api', f'repos/{AI_REPO}/commits/{pinned}')['commit']['committer']['date'])
+        if pinned_age >= CATALOGUE_MAX_AGE:
+            log(f'sidebar {sha[:7]}: only model catalogue updates, weekly refresh')
+            return sha
+        log(f'sidebar {sha[:7]}: only model catalogue updates, they wait for a real change')
+        return None
     return None
 
 

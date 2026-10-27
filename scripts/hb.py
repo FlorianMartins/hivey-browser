@@ -1088,13 +1088,31 @@ def step_configure(args):
 
 
 def args_jobs():
-    return int(os.environ.get('HB_JOBS', '8'))
+    """Parallel compile jobs: HB_JOBS, else what the machine can afford now:
+    one per CPU, and about 3 GB of memory available per job (the host also
+    runs other services, whose memory use changes; compilers starved of
+    memory crash at random)."""
+    if os.environ.get('HB_JOBS'):
+        return int(os.environ['HB_JOBS'])
+    available_gb = 8.0
+    try:
+        for line in Path('/proc/meminfo').read_text().splitlines():
+            if line.startswith('MemAvailable:'):
+                available_gb = int(line.split()[1]) / (1 << 20)
+    except OSError:
+        pass
+    # The build's own memory cap (step_build's systemd scope) bounds it too.
+    mem_max = os.environ.get('HB_MEM_MAX', '26G')
+    if mem_max.endswith('G') and mem_max[:-1].isdigit():
+        available_gb = min(available_gb, float(mem_max[:-1]))
+    return max(2, min(os.cpu_count() or 2, int(available_gb // 3)))
 
 
 def step_build(args):
     env = _build_env()
     targets = args.targets or (['chrome', 'mini_installer'] if TARGET == 'win' else ['chrome'])
-    cmd = [TOOLS / 'ninja', '-C', OUT, '-j', str(args_jobs())] + targets
+    jobs = args_jobs()
+    cmd = [TOOLS / 'ninja', '-C', OUT, '-j', str(jobs)] + targets
     if os.environ.get('HB_KEEP_GOING'):  # e.g. 0 = keep going past every failure
         cmd[1:1] = ['-k', os.environ['HB_KEEP_GOING']]
     # Run inside a transient systemd scope with a memory cap: if a ThinLTO link
@@ -1104,7 +1122,17 @@ def step_build(args):
         cmd = ['systemd-run', '--scope', '--quiet', '--collect', '-p', f'MemoryMax={mem_max}',
                '-p', 'MemorySwapMax=0', '-p', 'CPUWeight=10', '-p', 'IOWeight=10', '--'] + cmd
     _stage_bundled_extensions()
-    run(cmd, cwd=SRC, env=env)
+    log(f'building with {jobs} jobs')
+    try:
+        run(cmd, cwd=SRC, env=env)
+    except subprocess.CalledProcessError:
+        if os.environ.get('HB_KEEP_GOING') or jobs <= 2:
+            raise
+        # A compiler that crashed for want of memory: once more with half the
+        # jobs (ninja resumes where it stopped).
+        log(f'build failed with {jobs} jobs, retrying with {jobs // 2}')
+        cmd[cmd.index(str(jobs), cmd.index('-j'))] = str(jobs // 2)
+        run(cmd, cwd=SRC, env=env)
     mark_done('build')
 
 
