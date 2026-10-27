@@ -1,4 +1,32 @@
-# Side panel header: no extension icon for Hivey Tools (the Hivey AI sidebar shows its logo itself).
+# Side panel header for Hivey Tools (the Hivey AI sidebar): none while the Hivey bar opens it as the browser's own sidebar; otherwise its name without the extension icon (the sidebar shows its logo itself).
+--- a/chrome/browser/ui/views/side_panel/side_panel_coordinator.cc
++++ b/chrome/browser/ui/views/side_panel/side_panel_coordinator.cc
+@@ -12,7 +12,10 @@
+ #include "base/functional/bind.h"
+ #include "base/functional/callback.h"
+ #include "base/time/time.h"
++#include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "chrome/browser/profiles/profile.h"
++#include "components/prefs/pref_service.h"
+ #include "chrome/browser/ui/browser_element_identifiers.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+@@ -274,7 +277,13 @@
+ 
+   side_panel->UpdateHorizontalAlignment(entry->key().id());
+ 
+-  if (entry->should_show_header()) {
++  // Hivey: with the Hivey bar shown, Hivey Tools is the browser's own sidebar,
++  // opened and closed from the bar: no header (name, pin, close).
++  const bool hivey_integrated =
++      entry->key().id() == SidePanelEntryId::kExtension &&
++      entry->key().extension_id() == HIVEY_BUNDLED_AI_ID &&
++      browser_->GetProfile()->GetPrefs()->GetBoolean(hivey::kHiveyBarVisible);
++  if (entry->should_show_header() && !hivey_integrated) {
+     side_panel->AddHeaderView(std::make_unique<SidePanelHeader>(
+         std::make_unique<SidePanelHeaderController>(
+             &*browser_, side_panel_toolbar_pinning_controller_.get(), entry)));
 --- a/chrome/browser/ui/views/side_panel/side_panel_header_controller.cc
 +++ b/chrome/browser/ui/views/side_panel/side_panel_header_controller.cc
 @@ -8,6 +8,7 @@

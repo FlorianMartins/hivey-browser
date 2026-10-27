@@ -51,7 +51,10 @@ def evaluate(target, expression):
 
 def studio(*messages):
     """chrome.send(name, args) calls from the Hivey Studio tab."""
-    tab = next(t for t in targets() if t['type'] == 'page' and t['url'].startswith('chrome://hivey/'))
+    tab = next((t for t in targets() if t['type'] == 'page' and t['url'].startswith('chrome://hivey/')), None)
+    if not tab:
+        tab = new_tab('chrome://hivey/')
+        time.sleep(3)
     for name, args in messages:
         evaluate(tab, f'chrome.send({json.dumps(name)}, {json.dumps(args)})')
     time.sleep(2.5)

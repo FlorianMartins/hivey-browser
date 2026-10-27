@@ -1008,7 +1008,7 @@
  #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_WINDOW_PROPERTY_MANAGER_WIN_H_
 --- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
 +++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
-@@ -0,0 +1,445 @@
+@@ -0,0 +1,462 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
@@ -1045,6 +1045,7 @@
 +#include "chrome/browser/ui/side_panel/side_panel_enums.h"
 +#include "chrome/browser/ui/side_panel/side_panel_ui.h"
 +#include "chrome/browser/ui/toolbar/toolbar_action_view_model.h"
++#include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
 +#include "chrome/browser/ui/views/extensions/extension_popup.h"
 +#include "chrome/browser/ui/views/frame/browser_view.h"
 +#include "chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h"
@@ -1111,7 +1112,9 @@
 +  prefs_.Init(profile->GetPrefs());
 +  const auto changed = base::BindRepeating(&HiveyBarView::OnPrefsChanged,
 +                                           base::Unretained(this));
-+  prefs_.Add(hivey::kHiveyBarVisible, changed);
++  prefs_.Add(hivey::kHiveyBarVisible,
++             base::BindRepeating(&HiveyBarView::OnVisibilityChanged,
++                                 base::Unretained(this)));
 +  prefs_.Add(hivey::kHiveyBarSide, changed);
 +  prefs_.Add(prefs::kVerticalTabsEnabled, changed);
 +  prefs_.Add(hivey::kHiveyVerticalTabsRight, changed);
@@ -1142,6 +1145,20 @@
 +void HiveyBarView::OnThemeChanged() {
 +  views::View::OnThemeChanged();
 +  UpdateColors();
++}
++
++void HiveyBarView::OnVisibilityChanged() {
++  // Without the bar, Hivey Tools and Hivey Cyber go back to the toolbar with
++  // the other extensions; with it, they live in the bar.
++  if (ToolbarActionsModel* model =
++          ToolbarActionsModel::Get(browser_view_->GetProfile())) {
++    for (const char* id : {HIVEY_BUNDLED_AI_ID, HIVEY_BUNDLED_CYBER_ID}) {
++      if (model->IsActionPinned(id) == ShouldShow()) {
++        model->SetActionVisibility(id, !ShouldShow());
++      }
++    }
++  }
++  OnPrefsChanged();
 +}
 +
 +void HiveyBarView::OnPrefsChanged() {
@@ -1456,7 +1473,7 @@
 +END_METADATA
 --- a/chrome/browser/ui/views/frame/hivey_bar_view.h
 +++ b/chrome/browser/ui/views/frame/hivey_bar_view.h
-@@ -0,0 +1,131 @@
+@@ -0,0 +1,132 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
@@ -1550,6 +1567,7 @@
 +  };
 +
 +  void OnPrefsChanged();
++  void OnVisibilityChanged();
 +  void Rebuild();
 +  void OnWorkspacesRead(std::optional<base::ListValue> tabs);
 +  void OnWorkspaceIcon(size_t index, const gfx::Image& image);
@@ -1711,7 +1729,19 @@
        }
      }
      layout.AddChild(views().vertical_tab_strip_region_view,
-@@ -1249,7 +1286,8 @@
+@@ -1001,7 +1038,10 @@
+     } else {
+       main_background_bounds = params.visual_client_area;
+     }
+-    const bool main_background_visibility = horizontal_layout.has_side_panel();
++    // Hivey: also behind the page's rounded corner with vertical tabs.
++    const bool main_background_visibility =
++        horizontal_layout.has_side_panel() ||
++        layout_data_->tab_strip_type == TabStripType::kVertical;
+     main_background_layout =
+         &layout.AddChild(views().main_background_region, main_background_bounds,
+                          main_background_visibility);
+@@ -1249,7 +1289,8 @@
          !is_fullscreen(layout_data_->window_state)) {
        const int radius =
            views().vertical_tab_strip_top_corner->GetCornerRadius();
@@ -1721,7 +1751,7 @@
          content_corners.set_upper_right(radius);
        } else {
          content_corners.set_upper_left(radius);
-@@ -1559,25 +1597,39 @@
+@@ -1559,25 +1600,39 @@
                                                1.0f));
      }
  
@@ -1766,7 +1796,7 @@
            base::ClampRound(vertical_tabs_background->default_radius() *
                             -animation.top_corner);
      }
-@@ -1588,12 +1640,12 @@
+@@ -1588,12 +1643,12 @@
      int vertical_tabs_bottom_corner_size = 0;
      if (animation.bottom_corner < 0.0) {
        vertical_tabs_bottom_corner_amount = -animation.bottom_corner;
@@ -1781,7 +1811,7 @@
            vertical_tabs_bottom_corner_size;
      }
  
-@@ -1621,8 +1673,9 @@
+@@ -1621,8 +1676,9 @@
                                            vertical_tabs_bottom_corner_amount) *
              frame_color.opacity,
      };

@@ -14,8 +14,12 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
 - À droite par défaut, **à gauche avec les onglets verticaux** ; clic droit
   pour la déplacer ou la masquer (elle revient par le clic droit sur la barre
   d'onglets ou dans Hivey Studio).
-- La sidebar Hivey AI devient **Hivey Tools** dans le navigateur : plus de
-  logo en double, ses onglets sont dans la barre Hivey.
+- La sidebar Hivey AI est **intégrée au navigateur** : ses onglets sont les
+  boutons de la barre Hivey, qui ouvrent et referment le panneau sur
+  l'onglet choisi, sans en-tête ni logo en double.
+- Barre Hivey masquée : la sidebar (**Hivey Tools**) et Hivey Cyber
+  reviennent en haut avec les extensions, et y repartent quand la barre
+  revient.
 
 ### Onglets verticaux
 - **Une seule surface** avec la barre de navigation : même couleur, plus de

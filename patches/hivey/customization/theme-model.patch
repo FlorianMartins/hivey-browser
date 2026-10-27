@@ -454,7 +454,15 @@
      right: 'Droite',
 --- a/chrome/browser/resources/hivey_studio/studio.css
 +++ b/chrome/browser/resources/hivey_studio/studio.css
-@@ -724,10 +724,49 @@
+@@ -144,6 +144,7 @@
+   display: flex;
+   align-items: center;
+   gap: 12px;
++  white-space: nowrap;
+   padding: 10px 14px;
+   border: 1px solid transparent;
+   border-radius: 12px;
+@@ -724,10 +725,49 @@
    border: 1px solid var(--border-strong);
  }
  
