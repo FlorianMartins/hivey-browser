@@ -1,0 +1,850 @@
+# Hivey bar: built-in workspaces and duotone icons (Phosphor) in the theme's accent, workspaces centered, Cyber/Performance/History/Bookmarks/Settings at the bottom, mouse wheel switches workspaces, no Hivey Shield; Hivey Tools keeps its web chat hosts; sharper side panel motion; Hivey Studio becomes Hivey Settings.
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -1930,12 +1930,24 @@
+         <message name="IDS_SETTINGS" desc="The text label of the Settings menu item">
+           Settin&amp;gs
+         </message>
+-        <message name="IDS_HIVEY_STUDIO" desc="The text label of the Hivey Studio menu item (product name, not translated)" translateable="false">
+-          Hivey &amp;Studio
++        <message name="IDS_HIVEY_STUDIO" desc="The text label of the menu item that opens Hivey Settings (chrome://hivey: themes, layout, resources, privacy)">
++          Hivey Se&amp;ttings
+         </message>
+         <message name="IDS_HIVEY_RESOURCES" desc="Name and tooltip of the toolbar button that shows the browser's resource use (CPU, memory, network) and limiters">
+           Hivey Resources
+         </message>
++        <message name="IDS_HIVEY_BAR_PERFORMANCE" desc="Tooltip of the Hivey bar button that shows the browser's resource use and limiters">
++          Performance
++        </message>
++        <message name="IDS_HIVEY_BAR_HISTORY" desc="Tooltip of the Hivey bar button that opens the browsing history">
++          History
++        </message>
++        <message name="IDS_HIVEY_BAR_BOOKMARKS" desc="Tooltip of the Hivey bar button that opens the bookmarks">
++          Bookmarks
++        </message>
++        <message name="IDS_HIVEY_BAR_SETTINGS" desc="Tooltip of the Hivey bar button that opens Hivey Settings (themes, layout, resources, privacy)">
++          Settings
++        </message>
+         <message name="IDS_HIVEY_BAR_LEFT" desc="Context menu item of the Hivey bar (a column of tool buttons at the edge of the window): put it at the left edge">
+           Hivey bar on the left
+         </message>
+@@ -2006,8 +2018,8 @@
+         <message name="IDS_SETTINGS" desc="In Title Case: The text label of the Settings menu item">
+           &amp;Settings
+         </message>
+-        <message name="IDS_HIVEY_STUDIO" desc="In Title Case: The text label of the Hivey Studio menu item (product name, not translated)" translateable="false">
+-          Hivey &amp;Studio
++        <message name="IDS_HIVEY_STUDIO" desc="In Title Case: The text label of the menu item that opens Hivey Settings (chrome://hivey: themes, layout, resources, privacy)">
++          Hivey Se&amp;ttings
+         </message>
+         <message name="IDS_OPTIONS" desc="In Title Case: The text label of the Options menu item">
+           &amp;Options
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10853,6 +10853,7 @@
+ <translation id="621601378681755227">Quand le navigateur utilise plus de mémoire que cette limite, les onglets que vous n'utilisez plus depuis un moment deviennent inactifs</translation>
+ <translation id="3413832581901426260">Aucune limite</translation>
+ <translation id="5513158291575788957">Ressources Hivey</translation>
++<translation id="4391633888022791894">Paramètres &amp;Hivey</translation>
+ <translation id="3848411427005625672">Barre Hivey à gauche</translation>
+ <translation id="580084749815693328">Barre Hivey à droite</translation>
+ <translation id="3984522169890105733">Masquer la barre Hivey</translation>
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -53,7 +53,7 @@
+     hardenedHint: "Turns off V8's optimizing compilers, where most browser exploits strike. Heavy web apps get slower.",
+     devices: "Block access to USB, HID, serial and Bluetooth devices",
+     devicesHint: "A large attack surface few sites need. A site can still be allowed in its settings.",
+-    title: 'Hivey Studio',
++    title: 'Settings',
+     subtitle: 'Make the browser yours: colors, layout, behaviour and resources.',
+     navAppearance: 'Colors',
+     navLayout: 'Layout',
+@@ -83,7 +83,7 @@
+     resetTheme: 'Back to Hivey colors',
+     extensionTheme: 'A theme extension is installed: it takes precedence over these colors.',
+     preview: 'Preview',
+-    previewTab: 'Hivey Studio',
++    previewTab: 'Settings',
+     previewAddress: 'hivey://studio',
+ 
+     presetAmber: 'Hivey amber',
+@@ -174,7 +174,7 @@
+     perTab: 'per tab',
+     hotTabs: 'Hot tabs',
+     hotTabsHint: 'What uses the most right now.',
+-    openStudio: 'Open in Hivey Studio',
++    openStudio: 'Open in Settings',
+     show: 'Show',
+     close: 'Close',
+     browserProcess: 'Browser',
+@@ -269,7 +269,7 @@
+     hardenedHint: "Coupe les compilateurs optimisants de V8, là où frappent la plupart des failles des navigateurs. Les applications web lourdes ralentissent.",
+     devices: "Bloquer l’accès aux appareils USB, HID, série et Bluetooth",
+     devicesHint: "Une grande surface d’attaque dont peu de sites ont besoin. Un site peut toujours être autorisé dans ses paramètres.",
+-    title: 'Hivey Studio',
++    title: 'Paramètres',
+     subtitle: 'Faites du navigateur le vôtre : couleurs, disposition, comportement et ressources.',
+     navAppearance: 'Couleurs',
+     navLayout: 'Disposition',
+@@ -299,7 +299,7 @@
+     resetTheme: 'Revenir aux couleurs Hivey',
+     extensionTheme: 'Une extension de thème est installée : elle passe avant ces couleurs.',
+     preview: 'Aperçu',
+-    previewTab: 'Hivey Studio',
++    previewTab: 'Paramètres',
+     previewAddress: 'hivey://studio',
+ 
+     presetAmber: 'Ambre Hivey',
+@@ -390,7 +390,7 @@
+     perTab: 'par onglet',
+     hotTabs: 'Onglets gourmands',
+     hotTabsHint: 'Ce qui consomme le plus en ce moment.',
+-    openStudio: 'Ouvrir dans Hivey Studio',
++    openStudio: 'Ouvrir dans les paramètres',
+     show: 'Afficher',
+     close: 'Fermer',
+     browserProcess: 'Navigateur',
+--- a/chrome/browser/resources/hivey_studio/studio.html
++++ b/chrome/browser/resources/hivey_studio/studio.html
+@@ -4,7 +4,7 @@
+   <meta charset="utf-8">
+   <meta name="color-scheme" content="dark light">
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+-  <title>Hivey Studio</title>
++  <title>Hivey Settings</title>
+   <link rel="stylesheet" href="studio.css">
+   <script type="module" src="studio.js"></script>
+ </head>
+@@ -13,12 +13,12 @@
+   <header class="top">
+     <div class="logo" aria-hidden="true"></div>
+     <div>
+-      <h1 id="title">Hivey Studio</h1>
++      <h1 id="title">Settings</h1>
+       <p id="subtitle" class="muted"></p>
+     </div>
+   </header>
+   <div class="layout">
+-    <nav id="nav" class="rail" aria-label="Hivey Studio"></nav>
++    <nav id="nav" class="rail" aria-label="Hivey Settings"></nav>
+     <main id="main" tabindex="-1"></main>
+   </div>
+   <div id="restart" class="restart-bar" role="status" hidden></div>
+--- a/chrome/browser/ui/toolbar/toolbar_actions_model.cc
++++ b/chrome/browser/ui/toolbar/toolbar_actions_model.cc
+@@ -10,6 +10,7 @@
+ #include <vector>
+ 
+ #include "base/functional/bind.h"
++#include "base/strings/strcat.h"
+ #include "base/functional/callback_helpers.h"
+ #include "base/json/values_util.h"
+ #include "base/location.h"
+@@ -18,9 +19,11 @@
+ #include "base/numerics/safe_conversions.h"
+ #include "base/observer_list.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/browser/hivey/hivey_bar_assets.h"
+ #include "extensions/browser/permissions/scripting_permissions_modifier.h"
+ #include "extensions/common/manifest_handlers/permissions_parser.h"
+ #include "extensions/common/url_pattern.h"
++#include "extensions/common/url_pattern_set.h"
+ #include "extensions/browser/permissions_manager.h"
+ #include "base/one_shot_event.h"
+ #include "base/strings/utf_string_conversions.h"
+@@ -60,6 +63,41 @@
+ 
+ namespace {
+ 
++// Hivey: the sites Hivey Tools (the AI sidebar) may reach while its site
++// access is withheld: the AI providers' APIs named in its manifest, and the
++// web chats it shows in frames (Gemini, Claude, ChatGPT...: kHiveyAiFrameHosts,
++// from its header rules), which need host access for the rules that let them
++// be framed and for their sign-in cookies. Nothing else.
++void GrantHiveyToolsHosts(Profile* profile,
++                          const extensions::Extension* extension) {
++  extensions::PermissionsManager* permissions =
++      extensions::PermissionsManager::Get(profile);
++  if (!permissions->CanAffectExtension(*extension) ||
++      !permissions->HasWithheldHostPermissions(*extension)) {
++    return;  // the user gave it every site
++  }
++  extensions::ScriptingPermissionsModifier modifier(profile, extension);
++  const extensions::URLPatternSet& granted =
++      extension->permissions_data()->active_permissions().explicit_hosts();
++  auto grant = [&](const URLPattern& pattern) {
++    if (!granted.ContainsPattern(pattern)) {
++      modifier.GrantHostPermission(pattern, base::DoNothing());
++    }
++  };
++  for (const URLPattern& pattern :
++       extensions::PermissionsParser::GetRequiredPermissions(extension)
++           .explicit_hosts()) {
++    if (!pattern.match_all_urls() && !pattern.host().empty() &&
++        !pattern.match_subdomains()) {
++      grant(pattern);
++    }
++  }
++  for (const char* host : kHiveyAiFrameHosts) {
++    grant(URLPattern(URLPattern::SCHEME_HTTPS,
++                     base::StrCat({"https://", host, "/*"})));
++  }
++}
++
+ // These values are persisted to logs. Entries should not be renumbered and
+ // numeric values should never be reused.
+ enum class DefaultPinnedExtensionState {
+@@ -165,21 +203,12 @@
+   // Hivey: the AI sidebar starts with its site access withheld: it reads a
+   // page only when the user invokes it on that tab (activeTab) or allows the
+   // site, so a malicious page cannot reach it by itself (prompt injection).
+-  // The AI providers' API hosts it names in its manifest stay granted, so
+-  // the chat works.
+   if (extension->id() == HIVEY_BUNDLED_AI_ID &&
+       extensions::PermissionsManager::Get(profile_)->CanAffectExtension(
+           *extension)) {
+-    extensions::ScriptingPermissionsModifier modifier(profile_, extension);
+-    modifier.SetWithholdHostPermissions(true);
+-    for (const URLPattern& pattern :
+-         extensions::PermissionsParser::GetRequiredPermissions(extension)
+-             .explicit_hosts()) {
+-      if (!pattern.match_all_urls() && !pattern.host().empty() &&
+-          !pattern.match_subdomains()) {
+-        modifier.GrantHostPermission(pattern, base::DoNothing());
+-      }
+-    }
++    extensions::ScriptingPermissionsModifier(profile_, extension)
++        .SetWithholdHostPermissions(true);
++    GrantHiveyToolsHosts(profile_, extension);
+   }
+ 
+   // Hivey: bundled extensions marked "pinned" (the content blocker and its
+@@ -233,6 +262,11 @@
+ void ToolbarActionsModel::OnExtensionLoaded(
+     content::BrowserContext* browser_context,
+     const extensions::Extension* extension) {
++  // Hivey: the sites Hivey Tools needs follow its updates (and reach
++  // profiles made before they were granted).
++  if (extension->id() == HIVEY_BUNDLED_AI_ID) {
++    GrantHiveyToolsHosts(profile_, extension);
++  }
+   // We don't want to add the same extension twice. It may have already been
+   // added by EXTENSION_BROWSER_ACTION_VISIBILITY_CHANGED below, if the user
+   // hides the browser action and then disables and enables the extension.
+--- a/chrome/browser/ui/views/animations/side_panel_animations.cc
++++ b/chrome/browser/ui/views/animations/side_panel_animations.cc
+@@ -48,21 +48,22 @@
+ 
+ SidePanelAnimations::GroupInfos SidePanelAnimations::GenerateAnimations()
+     const {
+-  const int kDefaultAnimationMs = features::kSidePanelFlyoverDurationMs.Get();
+-  const bool use_flyover = features::UseSidePanelFlyoverAnimation();
+-  const gfx::Tween::Type tween = use_flyover
+-                                     ? gfx::Tween::Type::ACCEL_80_DECEL_20
+-                                     : gfx::Tween::Type::ACCEL_45_DECEL_88;
++  // Hivey: the panel springs open fast and settles softly (a strongly
++  // decelerating curve), and closes quicker than it opens.
++  const int kOpenAnimationMs = 260;
++  const int kCloseAnimationMs = 170;
++  const gfx::Tween::Type open_tween = gfx::Tween::Type::ACCEL_0_40_DECEL_100;
++  const gfx::Tween::Type close_tween = gfx::Tween::Type::FAST_OUT_LINEAR_IN;
+   const auto show_shadow_sequence =
+       Sequence(kMainAreaShadow, StartingValue(0.0),
+-               Segment(StartMs(150), LengthMs(100), ToValue(1.0)));
++               Segment(StartMs(90), LengthMs(140), ToValue(1.0)));
+   const auto hide_shadow_sequence =
+       Sequence(kMainAreaShadow, StartingValue(1.0),
+                Segment(StartMs(0), LengthMs(100), ToValue(0.0)));
+ 
+   return Groups(
+       Group(kSidePanel,
+-            Motion(kOpen, TotalDurationMs(kDefaultAnimationMs), tween,
++            Motion(kOpen, TotalDurationMs(kOpenAnimationMs), open_tween,
+                    Animate(kPanelWidth, FromValue(0.0), ToValue(1.0)),
+                    show_shadow_sequence),
+             Motion(kOpenWithContentTransition, TotalDurationMs(400),
+@@ -80,7 +81,7 @@
+                             Segment(StartMs(100), LengthMs(300), ToValue(0.0),
+                                     gfx::Tween::Type::ACCEL_5_70_DECEL_90)),
+                    show_shadow_sequence),
+-            Motion(kClose, TotalDurationMs(kDefaultAnimationMs), tween,
++            Motion(kClose, TotalDurationMs(kCloseAnimationMs), close_tween,
+                    Animate(kPanelWidth, FromValue(1.0), ToValue(0.0)),
+                    hide_shadow_sequence)));
+ }
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
+@@ -4,22 +4,21 @@
+ 
+ #include "chrome/browser/ui/views/frame/hivey_bar_view.h"
+ 
++#include <cstdlib>
+ #include <utility>
+ 
+-#include "base/files/file_util.h"
++#include "base/containers/span.h"
+ #include "base/functional/bind.h"
+ #include "base/functional/callback_helpers.h"
+-#include "base/json/json_reader.h"
+ #include "base/strings/string_util.h"
+ #include "base/strings/utf_string_conversions.h"
+-#include "base/task/thread_pool.h"
+ #include "chrome/app/chrome_command_ids.h"
+-#include "chrome/app/vector_icons/vector_icons.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
+ #include "chrome/browser/extensions/extension_view_host.h"
+ #include "chrome/browser/extensions/extension_view_host_factory.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/browser/hivey/hivey_bar_assets.h"
+ #include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser.h"
+@@ -28,12 +27,10 @@
+ #include "chrome/browser/ui/extensions/extension_popup_types.h"
+ #include "chrome/browser/ui/extensions/extension_side_panel_coordinator.h"
+ #include "chrome/browser/ui/extensions/extension_side_panel_manager.h"
+-#include "chrome/browser/ui/extensions/extensions_container.h"
+ #include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
+ #include "chrome/browser/ui/side_panel/side_panel_entry_key.h"
+ #include "chrome/browser/ui/side_panel/side_panel_enums.h"
+ #include "chrome/browser/ui/side_panel/side_panel_ui.h"
+-#include "chrome/browser/ui/toolbar/toolbar_action_view_model.h"
+ #include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
+ #include "chrome/browser/ui/views/extensions/extension_popup.h"
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+@@ -44,29 +41,25 @@
+ #include "components/prefs/pref_service.h"
+ #include "extensions/browser/extension_action.h"
+ #include "extensions/browser/extension_action_manager.h"
+-#include "extensions/browser/image_loader.h"
++#include "extensions/browser/extension_prefs.h"
+ #include "extensions/browser/permissions/active_tab_permission_granter.h"
+ #include "extensions/common/extension.h"
+-#include "extensions/common/extension_resource.h"
+ #include "ui/base/l10n/l10n_util.h"
+ #include "ui/base/metadata/metadata_impl_macros.h"
+ #include "ui/color/color_provider.h"
++#include "ui/events/event.h"
++#include "ui/gfx/codec/png_codec.h"
+ #include "ui/gfx/color_utils.h"
+-#include "ui/gfx/image/image.h"
+-#include "ui/gfx/image/image_skia.h"
+ #include "ui/gfx/image/image_skia_operations.h"
+-#include "ui/gfx/image/image_skia_rep.h"
+ #include "ui/views/background.h"
+ #include "ui/views/bubble/bubble_anchor.h"
+ #include "ui/views/controls/menu/menu_runner.h"
+-#include "ui/views/controls/separator.h"
+ #include "ui/views/layout/box_layout.h"
+ 
+ namespace {
+ 
+-// The column's width, and the size of the workspace icons (DIP).
++// The column's width (DIP).
+ constexpr int kBarWidth = 44;
+-constexpr int kIconSize = 20;
+ 
+ enum Command {
+   kCommandLeft = 1,
+@@ -78,22 +71,31 @@
+   return SidePanelEntryKey(SidePanelEntryId::kExtension, HIVEY_BUNDLED_AI_ID);
+ }
+ 
+-std::optional<base::ListValue> ReadWorkspaces(const base::FilePath& file) {
+-  std::string json;
+-  if (!base::ReadFileToString(file, &json)) {
+-    return std::nullopt;
+-  }
+-  return base::JSONReader::ReadList(json, base::JSON_PARSE_RFC);
++// A built-in white icon, drawn at 40 px for 20 DIP (crisp at 2x).
++gfx::ImageSkia DecodeIcon(const unsigned char* png, size_t size) {
++  const SkBitmap bitmap = gfx::PNGCodec::Decode(base::span(png, size));
++  return bitmap.isNull() ? gfx::ImageSkia()
++                         : gfx::ImageSkia::CreateFromBitmap(bitmap, 2.0f);
++}
++
++// The bar's icons take the theme's accent, a little lighter on a dark
++// toolbar (a little deeper on a light one) so they read as Hivey's own.
++SkColor IconColor(const ui::ColorProvider& colors) {
++  const SkColor accent = colors.GetColor(ui::kColorSysPrimary);
++  return color_utils::IsDark(colors.GetColor(kColorToolbar))
++             ? color_utils::AlphaBlend(SK_ColorWHITE, accent, 0.38f)
++             : color_utils::AlphaBlend(SK_ColorBLACK, accent, 0.12f);
+ }
+ 
+ }  // namespace
+ 
+ HiveyBarView::HiveyBarView(BrowserView* browser_view)
+     : browser_view_(browser_view) {
+-  auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
+-      views::BoxLayout::Orientation::kVertical, gfx::Insets::VH(8, 0), 4));
+-  layout->set_cross_axis_alignment(
+-      views::BoxLayout::CrossAxisAlignment::kCenter);
++  SetLayoutManager(std::make_unique<views::BoxLayout>(
++                       views::BoxLayout::Orientation::kVertical,
++                       gfx::Insets::VH(8, 0), 4))
++      ->set_cross_axis_alignment(
++          views::BoxLayout::CrossAxisAlignment::kCenter);
+   set_context_menu_controller(this);
+   SetBackground(views::CreateSolidBackground(kColorToolbar));
+ 
+@@ -159,8 +161,7 @@
+ void HiveyBarView::OnExtensionReady(content::BrowserContext* browser_context,
+                                     const extensions::Extension* extension) {
+   if (extension->id() == HIVEY_BUNDLED_AI_ID ||
+-      extension->id() == HIVEY_BUNDLED_CYBER_ID ||
+-      extension->id() == HIVEY_BUNDLED_SHIELD_ID) {
++      extension->id() == HIVEY_BUNDLED_CYBER_ID) {
+     Rebuild();
+   }
+ }
+@@ -173,32 +174,53 @@
+ }
+ 
+ void HiveyBarView::Rebuild() {
+-  weak_factory_.InvalidateWeakPtrs();
+   RemoveAllChildViews();
+   workspaces_.clear();
+-  cyber_button_ = shield_button_ = resources_button_ = studio_button_ = nullptr;
+-
+-  Profile* profile = browser_view_->GetProfile();
+-  const extensions::ExtensionSet& enabled =
+-      extensions::ExtensionRegistry::Get(profile)->enabled_extensions();
+-
+-  // Hivey Tools' workspaces, read from its package.
+-  if (const extensions::Extension* tools =
+-          enabled.GetByID(HIVEY_BUNDLED_AI_ID)) {
+-    base::ThreadPool::PostTaskAndReplyWithResult(
+-        FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+-        base::BindOnce(&ReadWorkspaces,
+-                       tools->path().AppendASCII("hivey-bar/tabs.json")),
+-        base::BindOnce(&HiveyBarView::OnWorkspacesRead,
+-                       weak_factory_.GetWeakPtr()));
+-  }
+-  separator_ = AddChildView(std::make_unique<views::Separator>());
+-  separator_->SetPreferredSize(gfx::Size(24, views::Separator::kThickness));
+-  separator_->SetVisible(false);  // shown with the workspaces
++  icons_.clear();
++  cyber_button_ = performance_button_ = nullptr;
++  auto* layout = static_cast<views::BoxLayout*>(GetLayoutManager());
++
++  // Built-in extensions the user turned off leave the bar (before they load
++  // at startup they are neither enabled nor disabled: they stay).
++  extensions::ExtensionPrefs* extension_prefs =
++      extensions::ExtensionPrefs::Get(browser_view_->GetProfile());
++  auto turned_off = [&](const char* id) {
++    return extension_prefs->IsExtensionDisabled(id);
++  };
++
++  // Hivey Tools' workspaces, centered in the column.
++  layout->SetFlexForView(AddChildView(std::make_unique<views::View>()), 1);
++  if (!turned_off(HIVEY_BUNDLED_AI_ID)) {
++    auto* group = AddChildView(std::make_unique<views::View>());
++    group->SetLayoutManager(std::make_unique<views::BoxLayout>(
++                                views::BoxLayout::Orientation::kVertical,
++                                gfx::Insets(), 6))
++        ->set_cross_axis_alignment(
++            views::BoxLayout::CrossAxisAlignment::kCenter);
++    const bool french =
++        base::StartsWith(g_browser_process->GetApplicationLocale(), "fr");
++    for (const HiveyBarWorkspace& workspace : kHiveyBarWorkspaces) {
++      ToolbarButton* button = AddButton(
++          group,
++          base::UTF8ToUTF16(french ? workspace.title_fr : workspace.title_en),
++          workspace.png, workspace.png_size,
++          base::BindRepeating(&HiveyBarView::OnWorkspacePressed,
++                              base::Unretained(this),
++                              std::string(workspace.mode)));
++      workspaces_.push_back({workspace.mode, button});
++    }
++  }
++  layout->SetFlexForView(AddChildView(std::make_unique<views::View>()), 1);
+ 
+-  if (enabled.Contains(HIVEY_BUNDLED_CYBER_ID)) {
++  // The browser's own tools, at the bottom.
++  auto* tools = AddChildView(std::make_unique<views::View>());
++  tools->SetLayoutManager(std::make_unique<views::BoxLayout>(
++                              views::BoxLayout::Orientation::kVertical,
++                              gfx::Insets(), 4))
++      ->set_cross_axis_alignment(views::BoxLayout::CrossAxisAlignment::kCenter);
++  if (!turned_off(HIVEY_BUNDLED_CYBER_ID)) {
+     cyber_button_ = AddButton(
+-        u"Hivey Cyber",
++        tools, u"Hivey Cyber", kHiveyBarCyberIcon.png, kHiveyBarCyberIcon.size,
+         base::BindRepeating(
+             [](HiveyBarView* bar) {
+               bar->ShowExtensionPopup(HIVEY_BUNDLED_CYBER_ID,
+@@ -206,31 +228,35 @@
+             },
+             base::Unretained(this)));
+   }
+-  if (enabled.Contains(HIVEY_BUNDLED_SHIELD_ID)) {
+-    shield_button_ = AddButton(
+-        u"Hivey Shield",
+-        base::BindRepeating(
+-            [](HiveyBarView* bar) {
+-              bar->ShowExtensionPopup(HIVEY_BUNDLED_SHIELD_ID,
+-                                      bar->shield_button_);
+-            },
+-            base::Unretained(this)));
+-  }
+-  resources_button_ = AddButton(
+-      l10n_util::GetStringUTF16(IDS_HIVEY_RESOURCES),
+-      base::BindRepeating(&HiveyBarView::OnResourcesPressed,
+-                          base::Unretained(this)));
+-  resources_button_->SetVectorIcon(kSpeedIcon);
+-  std::u16string studio = l10n_util::GetStringUTF16(IDS_HIVEY_STUDIO);
+-  base::RemoveChars(studio, u"&", &studio);
+-  studio_button_ = AddButton(std::move(studio),
+-                             base::BindRepeating(&HiveyBarView::OnStudioPressed,
+-                                                 base::Unretained(this)));
+-  studio_button_->SetVectorIcon(kBrushFilledIcon);
++  performance_button_ =
++      AddButton(tools, l10n_util::GetStringUTF16(IDS_HIVEY_BAR_PERFORMANCE),
++                kHiveyBarPerformanceIcon.png, kHiveyBarPerformanceIcon.size,
++                base::BindRepeating(&HiveyBarView::OnPerformancePressed,
++                                    base::Unretained(this)));
++  AddButton(tools, l10n_util::GetStringUTF16(IDS_HIVEY_BAR_HISTORY),
++            kHiveyBarHistoryIcon.png, kHiveyBarHistoryIcon.size,
++            base::BindRepeating(&HiveyBarView::RunCommand,
++                                base::Unretained(this),
++                                IDC_SHOW_HISTORY_SIDE_PANEL, IDC_SHOW_HISTORY));
++  AddButton(tools, l10n_util::GetStringUTF16(IDS_HIVEY_BAR_BOOKMARKS),
++            kHiveyBarBookmarksIcon.png, kHiveyBarBookmarksIcon.size,
++            base::BindRepeating(&HiveyBarView::RunCommand,
++                                base::Unretained(this),
++                                IDC_SHOW_BOOKMARK_SIDE_PANEL,
++                                IDC_SHOW_BOOKMARK_MANAGER));
++  AddButton(tools, l10n_util::GetStringUTF16(IDS_HIVEY_BAR_SETTINGS),
++            kHiveyBarSettingsIcon.png, kHiveyBarSettingsIcon.size,
++            base::BindRepeating(&HiveyBarView::RunCommand,
++                                base::Unretained(this), IDC_HIVEY_STUDIO,
++                                IDC_HIVEY_STUDIO));
+   UpdateColors();
++  InvalidateLayout();
+ }
+ 
+-ToolbarButton* HiveyBarView::AddButton(std::u16string tooltip,
++ToolbarButton* HiveyBarView::AddButton(views::View* parent,
++                                       std::u16string tooltip,
++                                       const unsigned char* png,
++                                       size_t png_size,
+                                        base::RepeatingClosure callback) {
+   auto button = std::make_unique<ToolbarButton>(base::BindRepeating(
+       [](base::RepeatingClosure callback, const ui::Event&) { callback.Run(); },
+@@ -238,57 +264,9 @@
+   button->SetTooltipText(tooltip);
+   button->GetViewAccessibility().SetName(tooltip);
+   button->set_context_menu_controller(this);
+-  return AddChildView(std::move(button));
+-}
+-
+-void HiveyBarView::OnWorkspacesRead(std::optional<base::ListValue> tabs) {
+-  if (!tabs) {
+-    return;
+-  }
+-  Profile* profile = browser_view_->GetProfile();
+-  const extensions::Extension* tools =
+-      extensions::ExtensionRegistry::Get(profile)->enabled_extensions().GetByID(
+-          HIVEY_BUNDLED_AI_ID);
+-  if (!tools) {
+-    return;
+-  }
+-  const bool french =
+-      base::StartsWith(g_browser_process->GetApplicationLocale(), "fr");
+-  for (const base::Value& tab : *tabs) {
+-    const base::DictValue* dict = tab.GetIfDict();
+-    const std::string* mode = dict ? dict->FindString("mode") : nullptr;
+-    const std::string* icon = dict ? dict->FindString("icon") : nullptr;
+-    if (!mode || !icon) {
+-      continue;
+-    }
+-    const base::DictValue* titles = dict->FindDict("title");
+-    const std::string* title =
+-        titles ? titles->FindString(french ? "fr" : "en") : nullptr;
+-    const size_t index = workspaces_.size();
+-    ToolbarButton* button =
+-        AddButton(base::UTF8ToUTF16(title ? *title : *mode),
+-                  base::BindRepeating(&HiveyBarView::OnWorkspacePressed,
+-                                      base::Unretained(this), *mode));
+-    // Workspaces come first, before the separator and the tools.
+-    ReorderChildView(button, index);
+-    workspaces_.push_back({*mode, button, gfx::ImageSkia()});
+-    extensions::ImageLoader::Get(profile)->LoadImageAsync(
+-        tools, tools->GetResource(*icon), gfx::Size(40, 40),
+-        base::BindOnce(&HiveyBarView::OnWorkspaceIcon,
+-                       weak_factory_.GetWeakPtr(), index));
+-  }
+-  separator_->SetVisible(!workspaces_.empty());
+-  UpdateActive();
+-}
+-
+-void HiveyBarView::OnWorkspaceIcon(size_t index, const gfx::Image& image) {
+-  if (index >= workspaces_.size() || image.IsEmpty()) {
+-    return;
+-  }
+-  // 40 px drawn for 20 DIP: crisp at 2x, scaled down at 1x.
+-  workspaces_[index].icon =
+-      gfx::ImageSkia::CreateFromBitmap(image.AsBitmap(), 2.0f);
+-  UpdateColors();
++  ToolbarButton* added = parent->AddChildView(std::move(button));
++  icons_.emplace_back(added, DecodeIcon(png, png_size));
++  return added;
+ }
+ 
+ void HiveyBarView::UpdateColors() {
+@@ -296,30 +274,13 @@
+   if (!colors) {
+     return;
+   }
+-  const SkColor icon_color = colors->GetColor(kColorToolbarButtonIcon);
+-  for (const Workspace& workspace : workspaces_) {
+-    if (!workspace.icon.isNull()) {
+-      workspace.button->SetImageModel(
+-          views::Button::STATE_NORMAL,
+-          ui::ImageModel::FromImageSkia(
+-              gfx::ImageSkiaOperations::CreateColorMask(workspace.icon,
+-                                                        icon_color)));
+-    }
+-  }
+-  // The extensions' own icons.
+-  ExtensionsContainer* container =
+-      ExtensionsContainer::From(*browser_view_->browser());
+-  content::WebContents* contents = browser_view_->GetActiveWebContents();
+-  for (auto [button, id] :
+-       {std::pair(cyber_button_.get(), HIVEY_BUNDLED_CYBER_ID),
+-        std::pair(shield_button_.get(), HIVEY_BUNDLED_SHIELD_ID)}) {
+-    ToolbarActionViewModel* action =
+-        container && button ? container->GetActionForId(id) : nullptr;
+-    if (action && contents) {
++  const SkColor icon_color = IconColor(*colors);
++  for (const auto& [button, icon] : icons_) {
++    if (!icon.isNull()) {
+       button->SetImageModel(
+           views::Button::STATE_NORMAL,
+-          action->GetIcon(contents, gfx::Size(kIconSize, kIconSize)));
+-      button->SetTooltipText(action->GetActionName());
++          ui::ImageModel::FromImageSkia(
++              gfx::ImageSkiaOperations::CreateColorMask(icon, icon_color)));
+     }
+   }
+   UpdateActive();
+@@ -354,6 +315,19 @@
+ }
+ 
+ void HiveyBarView::OnWorkspacePressed(std::string mode) {
++  SidePanelUI* side_panel = SidePanelUI::From(browser_view_->browser());
++  if (side_panel && side_panel->IsSidePanelEntryShowing(HiveyToolsKey()) &&
++      mode == active_mode_) {
++    // A second click on the open workspace closes the panel.
++    side_panel->Close();
++    active_mode_.clear();
++    UpdateActive();
++    return;
++  }
++  ShowWorkspace(std::move(mode));
++}
++
++void HiveyBarView::ShowWorkspace(std::string mode) {
+   BrowserWindowInterface* browser = browser_view_->browser();
+   SidePanelUI* side_panel = SidePanelUI::From(browser);
+   extensions::ExtensionSidePanelManager* manager =
+@@ -363,19 +337,37 @@
+   if (!side_panel || !coordinator) {
+     return;
+   }
+-  if (side_panel->IsSidePanelEntryShowing(HiveyToolsKey()) &&
+-      mode == active_mode_) {
+-    // A second click on the open workspace closes the panel.
+-    side_panel->Close();
+-    active_mode_.clear();
+-  } else {
+-    coordinator->ShowHiveyMode(mode);
+-    side_panel->Show(HiveyToolsKey(), SidePanelOpenTrigger::kExtension);
+-    active_mode_ = std::move(mode);
+-  }
++  coordinator->ShowHiveyMode(mode);
++  side_panel->Show(HiveyToolsKey(), SidePanelOpenTrigger::kExtension);
++  active_mode_ = std::move(mode);
+   UpdateActive();
+ }
+ 
++bool HiveyBarView::OnMouseWheel(const ui::MouseWheelEvent& event) {
++  // With Hivey Tools open, the wheel moves to the workspace above or below.
++  SidePanelUI* side_panel = SidePanelUI::From(browser_view_->browser());
++  if (workspaces_.empty() || !side_panel ||
++      !side_panel->IsSidePanelEntryShowing(HiveyToolsKey())) {
++    wheel_accumulator_ = 0;
++    return false;
++  }
++  wheel_accumulator_ += event.y_offset();
++  if (std::abs(wheel_accumulator_) < ui::MouseWheelEvent::kWheelDelta) {
++    return true;  // a touchpad: wait for a full notch
++  }
++  const int step = wheel_accumulator_ > 0 ? -1 : 1;
++  wheel_accumulator_ = 0;
++  const int count = static_cast<int>(workspaces_.size());
++  int current = 0;
++  for (int i = 0; i < count; ++i) {
++    if (workspaces_[i].mode == active_mode_) {
++      current = i;
++    }
++  }
++  ShowWorkspace(workspaces_[(current + step + count) % count].mode);
++  return true;
++}
++
+ void HiveyBarView::ShowExtensionPopup(const char* extension_id,
+                                       views::View* anchor) {
+   BrowserWindowInterface* browser = browser_view_->browser();
+@@ -407,15 +399,19 @@
+       base::DoNothing());
+ }
+ 
+-void HiveyBarView::OnResourcesPressed() {
++void HiveyBarView::OnPerformancePressed() {
+   if (auto* coordinator =
+           HiveyResourcesCoordinator::From(browser_view_->browser())) {
+-    coordinator->ShowAnchoredTo(resources_button_, PopupArrow());
++    coordinator->ShowAnchoredTo(performance_button_, PopupArrow());
+   }
+ }
+ 
+-void HiveyBarView::OnStudioPressed() {
+-  chrome::ExecuteCommand(browser_view_->browser(), IDC_HIVEY_STUDIO);
++void HiveyBarView::RunCommand(int command, int fallback_command) {
++  // History and Bookmarks open in the side panel when the browser offers it.
++  Browser* browser = browser_view_->browser();
++  chrome::ExecuteCommand(
++      browser, chrome::IsCommandEnabled(browser, command) ? command
++                                                          : fallback_command);
+ }
+ 
+ void HiveyBarView::ShowContextMenuForViewImpl(
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.h
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.h
+@@ -6,21 +6,19 @@
+ #define CHROME_BROWSER_UI_VIEWS_FRAME_HIVEY_BAR_VIEW_H_
+ 
+ #include <memory>
+-#include <optional>
+ #include <string>
++#include <utility>
+ #include <vector>
+ 
+ #include "base/callback_list.h"
+ #include "base/memory/raw_ptr.h"
+-#include "base/memory/weak_ptr.h"
+ #include "base/scoped_observation.h"
+-#include "base/values.h"
+-#include "ui/gfx/image/image_skia.h"
+ #include "components/prefs/pref_change_registrar.h"
+ #include "extensions/browser/extension_registry.h"
+ #include "extensions/browser/extension_registry_observer.h"
+-#include "ui/menus/simple_menu_model.h"
+ #include "ui/base/metadata/metadata_header_macros.h"
++#include "ui/gfx/image/image_skia.h"
++#include "ui/menus/simple_menu_model.h"
+ #include "ui/views/bubble/bubble_border.h"
+ #include "ui/views/context_menu_controller.h"
+ #include "ui/views/view.h"
+@@ -28,21 +26,19 @@
+ class BrowserView;
+ class ToolbarButton;
+ 
+-namespace gfx {
+-class Image;
+-}
+-
+ namespace views {
+ class MenuRunner;
+ }
+ 
+ // The Hivey bar: a column at the left or right edge of the window (Hivey
+-// Studio, or its own right-click menu) with Hivey's tools. On top, the
+-// workspaces of Hivey Tools (the Hivey AI sidebar: chat, translation...),
+-// which open the side panel on that workspace; then Hivey Cyber and Hivey
+-// Shield (their popup), Resources (its dropdown) and Hivey Studio. The
+-// workspaces come from the sidebar itself (hivey-bar/tabs.json in its
+-// package, written at build time), so new ones show up with its updates.
++// Settings, or its own right-click menu) with Hivey's tools. In the middle,
++// the workspaces of Hivey Tools (the Hivey AI sidebar: chat, web chats,
++// translation...), which open the side panel on that workspace (the mouse
++// wheel moves between them while it is open); at the bottom, Hivey Cyber,
++// Performance (resources), History, Bookmarks and Hivey Settings. The
++// workspaces and the icons are built into the browser
++// (chrome/browser/hivey/hivey_bar_assets.h, generated from the sidebar at
++// build time), so the bar is complete as soon as the window opens.
+ class HiveyBarView : public views::View,
+                      public views::ContextMenuController,
+                      public ui::SimpleMenuModel::Delegate,
+@@ -65,6 +61,7 @@
+   gfx::Size CalculatePreferredSize(
+       const views::SizeBounds& available_size) const override;
+   void OnThemeChanged() override;
++  bool OnMouseWheel(const ui::MouseWheelEvent& event) override;
+ 
+   // views::ContextMenuController:
+   void ShowContextMenuForViewImpl(
+@@ -87,37 +84,41 @@
+   struct Workspace {
+     std::string mode;
+     raw_ptr<ToolbarButton> button = nullptr;
+-    gfx::ImageSkia icon;  // white: tinted with the theme
+   };
+ 
+   void OnPrefsChanged();
+   void OnVisibilityChanged();
+   void Rebuild();
+-  void OnWorkspacesRead(std::optional<base::ListValue> tabs);
+-  void OnWorkspaceIcon(size_t index, const gfx::Image& image);
+   void UpdateColors();
+   void UpdateActive();
+-  ToolbarButton* AddButton(std::u16string tooltip,
++  // A button with a built-in white icon (tinted by UpdateColors()).
++  ToolbarButton* AddButton(views::View* parent,
++                           std::u16string tooltip,
++                           const unsigned char* png,
++                           size_t png_size,
+                            base::RepeatingClosure callback);
+   views::BubbleBorder::Arrow PopupArrow() const;
+ 
+   void OnWorkspacePressed(std::string mode);
++  // Opens the side panel on `mode` (or switches it there).
++  void ShowWorkspace(std::string mode);
+   void ShowExtensionPopup(const char* extension_id, views::View* anchor);
+-  void OnResourcesPressed();
+-  void OnStudioPressed();
++  void OnPerformancePressed();
++  void RunCommand(int command, int fallback_command);
+ 
+   raw_ptr<BrowserView> browser_view_;
+   PrefChangeRegistrar prefs_;
+ 
+   std::vector<Workspace> workspaces_;
++  // Every button with its white icon.
++  std::vector<std::pair<raw_ptr<ToolbarButton>, gfx::ImageSkia>> icons_;
+   // The workspace last opened from the bar, highlighted while Hivey Tools is
+   // showing.
+   std::string active_mode_;
++  // Mouse wheel movement not yet turned into a workspace change.
++  int wheel_accumulator_ = 0;
+   raw_ptr<ToolbarButton> cyber_button_ = nullptr;
+-  raw_ptr<ToolbarButton> shield_button_ = nullptr;
+-  raw_ptr<ToolbarButton> resources_button_ = nullptr;
+-  raw_ptr<ToolbarButton> studio_button_ = nullptr;
+-  raw_ptr<views::View> separator_ = nullptr;
++  raw_ptr<ToolbarButton> performance_button_ = nullptr;
+ 
+   std::unique_ptr<ui::SimpleMenuModel> menu_model_;
+   std::unique_ptr<views::MenuRunner> menu_runner_;
+@@ -126,7 +127,6 @@
+                           extensions::ExtensionRegistryObserver>
+       registry_observation_{this};
+   base::CallbackListSubscription side_panel_shown_subscription_;
+-  base::WeakPtrFactory<HiveyBarView> weak_factory_{this};
+ };
+ 
+ #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_HIVEY_BAR_VIEW_H_

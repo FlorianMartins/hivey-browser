@@ -826,18 +826,58 @@ def _unpack_submodule(name, spec, unpacked):
         manifest.pop('short_name', None)
         if 'action' in manifest:
             manifest['action']['default_title'] = spec['display_name']
-    if spec.get('bar_tabs'):
-        _hivey_bar_tabs(src, unpacked)
     (unpacked / 'manifest.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
     return manifest['version']
 
 
-def _hivey_bar_tabs(src, unpacked):
-    """The sidebar's workspaces (the rail tabs of sidebar.html), for the
-    browser's Hivey bar: hivey-bar/tabs.json lists them (mode, English and
-    French titles from the sidebar's own strings) and hivey-bar/<mode>.png is
-    each icon in white, which the browser tints with the theme."""
+# The Hivey bar's icons: Phosphor Icons (MIT, https://phosphoricons.com),
+# duotone style, drawn in white at build time and tinted by the browser.
+PHOSPHOR_VERSION = '2.1.1'
+PHOSPHOR_URL = f'https://registry.npmjs.org/@phosphor-icons/core/-/core-{PHOSPHOR_VERSION}.tgz'
+PHOSPHOR_SHA512 = ('v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/'
+                   'twvLpkfnEODCOJp5dM4eZilxQ==')  # npm "integrity", base64
+# Sidebar workspace (data-mode) -> icon. A workspace not listed here keeps the
+# sidebar's own icon.
+WORKSPACE_ICONS = {
+    'chat': 'chat-circle-dots', 'web': 'globe-hemisphere-west', 'agent': 'robot',
+    'translate': 'translate', 'improve': 'magic-wand', 'image': 'image', 'pdf': 'file-pdf',
+    'security': 'shield-check', 'wisebase': 'books', 'benchmark': 'chart-bar', 'mcp': 'plugs-connected',
+}
+TOOL_ICONS = {
+    'Cyber': 'detective', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
+    'Bookmarks': 'bookmark-simple', 'Settings': 'gear-six',
+}
+ICON_PX = 40  # drawn for 20 DIP at 2x
+
+
+def _phosphor_duotone_dir():
+    cache = BUILD / 'downloads' / f'phosphor-{PHOSPHOR_VERSION}'
+    icons = cache / 'package' / 'assets' / 'duotone'
+    if icons.is_dir():
+        return icons
+    cache.mkdir(parents=True, exist_ok=True)
+    tgz = cache / 'core.tgz'
+    with urllib.request.urlopen(PHOSPHOR_URL, timeout=120) as r:
+        tgz.write_bytes(r.read())
+    digest = base64.b64encode(hashlib.sha512(tgz.read_bytes()).digest()).decode()
+    if digest != PHOSPHOR_SHA512:
+        raise SystemExit(f'Phosphor Icons {PHOSPHOR_VERSION}: checksum mismatch')
+    with tarfile.open(tgz) as t:
+        t.extractall(cache, filter='data')
+    return icons
+
+
+def _white_png(svg):
     import cairosvg
+    if 'xmlns=' not in svg:
+        svg = svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ', 1)
+    return cairosvg.svg2png(bytestring=svg.replace('currentColor', '#ffffff').encode(),
+                            output_width=ICON_PX, output_height=ICON_PX)
+
+
+def _sidebar_workspaces(src):
+    """The sidebar's workspaces (the rail tabs of sidebar.html): mode, English
+    and French titles (from the sidebar's own strings) and its SVG icon."""
     html = (src / 'src/sidebar/sidebar.html').read_text()
     i18n = (src / 'src/lib/i18n.js').read_text()
 
@@ -847,30 +887,87 @@ def _hivey_bar_tabs(src, unpacked):
         return dict(re.findall(r'^\s*"([\w.]+)":\s*"((?:[^"\\]|\\.)*)",?$', block, re.M))
 
     titles = {'en': strings('EN'), 'fr': strings('FR')}
-    out = unpacked / 'hivey-bar'
-    out.mkdir()
     tabs = []
     for button in re.finditer(r'<button class="railtab[^"]*"([^>]*)>(<svg.*?</svg>)</button>', html, re.S):
         attrs, svg = button.groups()
         mode = re.search(r'data-mode="([\w-]+)"', attrs)
         if not mode:
             continue  # links and the "+" button, not workspaces
-        mode = mode.group(1)
         key = re.search(r'data-i18n-title="([\w.]+)"', attrs)
         fallback = re.search(r'title="([^"]*)"', attrs)
-        tab = {'mode': mode, 'icon': f'hivey-bar/{mode}.png', 'title': {}}
+        tab = {'mode': mode.group(1), 'svg': svg, 'title': {}}
         for lang, table in titles.items():
-            tab['title'][lang] = (key and table.get(key.group(1))) or (fallback and fallback.group(1)) or mode
-        if 'xmlns=' not in svg:
-            svg = svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ', 1)
-        svg = svg.replace('currentColor', '#ffffff')
-        cairosvg.svg2png(bytestring=svg.encode(), write_to=str(out / f'{mode}.png'), output_width=40,
-                         output_height=40)
+            tab['title'][lang] = (key and table.get(key.group(1))) or (fallback and fallback.group(1)) \
+                or mode.group(1)
         tabs.append(tab)
     if not tabs:
         raise SystemExit('no workspace found in the sidebar\'s rail (sidebar.html changed?)')
-    (out / 'tabs.json').write_text(json.dumps(tabs, indent=2, ensure_ascii=False))
-    log(f'Hivey bar: {len(tabs)} sidebar workspaces ({", ".join(t["mode"] for t in tabs)})')
+    return tabs
+
+
+def _sidebar_frame_hosts(src):
+    """Domains whose pages the sidebar shows in frames (its web chats): the
+    request domains of its header-rewriting rules."""
+    hosts = []
+    for rules in sorted((src / 'rules').glob('*.json')):
+        for rule in json.loads(rules.read_text()):
+            if rule.get('action', {}).get('type') == 'modifyHeaders':
+                hosts += rule.get('condition', {}).get('requestDomains', [])
+    return sorted(set(hosts))
+
+
+def _c_string(text):
+    out = []
+    for byte in text.encode():
+        ch = chr(byte)
+        out.append(ch if 32 <= byte < 127 and ch not in '"\\?' else f'\\{byte:03o}')
+    return '"' + ''.join(out) + '"'
+
+
+def _c_bytes(name, data):
+    rows = [', '.join(f'0x{b:02x}' for b in data[i:i + 16]) for i in range(0, len(data), 16)]
+    return f'inline constexpr unsigned char {name}[] = {{\n    ' + ',\n    '.join(rows) + '};\n'
+
+
+def _write_bar_assets(src):
+    """chrome/browser/hivey/hivey_bar_assets.h: the Hivey bar's workspaces and
+    icons, and the web chat hosts Hivey Tools keeps when its site access is
+    withheld. Built into the browser, so the bar is complete at once."""
+    phosphor = _phosphor_duotone_dir()
+    tabs = _sidebar_workspaces(src)
+    arrays, workspaces, tools = [], [], []
+    for i, tab in enumerate(tabs):
+        name = WORKSPACE_ICONS.get(tab['mode'])
+        svg = (phosphor / f'{name}-duotone.svg').read_text() if name else tab['svg']
+        arrays.append(_c_bytes(f'kHiveyBarWorkspacePng{i}', _white_png(svg)))
+        workspaces.append(f'    {{{_c_string(tab["mode"])}, {_c_string(tab["title"]["en"])}, '
+                          f'{_c_string(tab["title"]["fr"])}, kHiveyBarWorkspacePng{i}, '
+                          f'sizeof(kHiveyBarWorkspacePng{i})}},')
+    for tool, name in TOOL_ICONS.items():
+        arrays.append(_c_bytes(f'kHiveyBar{tool}Png', _white_png((phosphor / f'{name}-duotone.svg').read_text())))
+        tools.append(f'inline constexpr HiveyBarIcon kHiveyBar{tool}Icon = {{kHiveyBar{tool}Png, '
+                     f'sizeof(kHiveyBar{tool}Png)}};')
+    hosts = _sidebar_frame_hosts(src)
+    header = SRC / 'chrome/browser/hivey/hivey_bar_assets.h'
+    header.write_text(
+        '// Generated by scripts/hb.py (step "bundle"). Do not edit.\n'
+        '// Icons: Phosphor Icons (MIT), duotone, white; the browser tints them.\n'
+        '#ifndef CHROME_BROWSER_HIVEY_HIVEY_BAR_ASSETS_H_\n'
+        '#define CHROME_BROWSER_HIVEY_HIVEY_BAR_ASSETS_H_\n\n'
+        '#include <stddef.h>\n\n'
+        + ''.join(arrays) + '\n'
+        'struct HiveyBarIcon {\n  const unsigned char* png;\n  size_t size;\n};\n\n'
+        '// Hivey Tools\' workspaces (the sidebar\'s rail), in its order.\n'
+        'struct HiveyBarWorkspace {\n  const char* mode;\n  const char* title_en;\n'
+        '  const char* title_fr;\n  const unsigned char* png;\n  size_t png_size;\n};\n'
+        'inline constexpr HiveyBarWorkspace kHiveyBarWorkspaces[] = {\n' + '\n'.join(workspaces) + '\n};\n\n'
+        + '\n'.join(tools) + '\n\n'
+        '// Sites Hivey Tools shows in frames (its web chats).\n'
+        'inline constexpr const char* kHiveyAiFrameHosts[] = {\n'
+        + ''.join(f'    {_c_string(h)},\n' for h in hosts) + '};\n\n'
+        '#endif  // CHROME_BROWSER_HIVEY_HIVEY_BAR_ASSETS_H_\n')
+    log(f'Hivey bar: {len(tabs)} sidebar workspaces ({", ".join(t["mode"] for t in tabs)}), '
+        f'{len(hosts)} web chat hosts')
 
 
 def _unpack_directory(name, spec, unpacked):
@@ -925,6 +1022,9 @@ def step_bundle(args):
         + '\n'.join(entries) + '\n};\n\n'
         '#endif  // CHROME_BROWSER_HIVEY_BUNDLED_EXTENSIONS_H_\n')
     log(f'update public key {update_key}')
+    for spec in specs.values():
+        if spec.get('bar_tabs'):
+            _write_bar_assets(ROOT / spec['path'])
     # The offline IP-to-country database of the location bar's server chip
     # (scripts/geoip.py); the download cache lives outside BUNDLED, which this
     # step wipes.
