@@ -75,7 +75,7 @@ and of the dev pre-release.
 The update check (`chrome/browser/hivey/hivey_updater.cc`):
 
 - never runs at startup: first 10 minutes after launch, then every 12 hours,
-  and not at all when *Hivey Studio > About > Automatic updates* is off;
+  and not at all when *Hivey Settings > About > Automatic updates* is off;
 - downloads `hivey-update.json` and `hivey-update.json.sig` from the latest
   **published** release (drafts are invisible), without cookies;
 - accepts the manifest only if its **Ed25519** signature matches the public
@@ -85,7 +85,7 @@ The update check (`chrome/browser/hivey/hivey_updater.cc`):
   size and **sha256** in the signed manifest, runs it silently, and the
   browser then offers *Relaunch to update*;
 - on Linux (portable package) and system-wide Windows installs, shows the new
-  version in Hivey Studio with a link to the release.
+  version in Hivey Settings with a link to the release.
 
 ## Keys
 

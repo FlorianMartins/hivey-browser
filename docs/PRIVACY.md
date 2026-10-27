@@ -39,17 +39,17 @@ Hivey Browser build flags additionally keep crash/usage reporting
 | Content blocker: uBlock Origin Lite with uBlock filters, EasyList, EasyPrivacy, Peter Lowe's list, malware lists (uBlock badware, URLhaus), tracking parameters (AdGuard URL tracking) and cookie banners; cosmetic filtering and scriptlets; rules ship with the browser, nothing is downloaded at runtime | **On** | Its toolbar icon (per site), or `chrome://extensions` | `privacy/bundled-content-blocker` |
 | Cross-origin referrers cut to the origin, whatever the page's referrer policy (`Referer` header and `document.referrer`) | **On** | — | `privacy/referrer-cap-no-ad-apis` |
 | No Topics API, Attribution Reporting or fenced frames (interest-based ads and their measurement) | **Off** | — | `privacy/referrer-cap-no-ad-apis` |
-| Fingerprinting deception: tiny noise in Canvas image data, `measureText()`, `get*ClientRects()` and Web Audio data (`AudioBuffer`, `AnalyserNode`), recomputed per session | **On** | Hivey Studio > Privacy, or `chrome://flags/#disable-fingerprinting-noise` | `privacy/fingerprinting-*` |
+| Fingerprinting deception: tiny noise in Canvas image data, `measureText()`, `get*ClientRects()` and Web Audio data (`AudioBuffer`, `AnalyserNode`), recomputed per session | **On** | Hivey Settings > Privacy, or `chrome://flags/#disable-fingerprinting-noise` | `privacy/fingerprinting-*` |
 | `navigator.hardwareConcurrency` reports at most 8 | **On** | same switch | `privacy/fingerprinting-audio-cpu` |
 | Font fingerprinting protection: web pages only see the fonts that ship with Windows and common Linux desktops | **On** | same switch | `privacy/font-fingerprinting` |
 | GPU vendor and model hidden from WebGL | **On** | `chrome://flags/#spoof-webgl-info` | `privacy/webgl-gpu-info-hidden` |
 | Global Privacy Control (`Sec-GPC: 1`, `navigator.globalPrivacyControl`) | **On** | `chrome://flags/#enable-global-privacy-control` | `privacy/hardened-defaults` |
-| Always use secure connections (strict HTTPS-only) | **On** | Hivey Studio > Privacy, or Settings > Security | `privacy/hardened-defaults` |
+| Always use secure connections (strict HTTPS-only) | **On** | Hivey Settings > Privacy, or Settings > Security | `privacy/hardened-defaults` |
 | Encrypted DNS (DNS-over-HTTPS, secure mode) through Quad9, which also refuses known malicious domains | **On** | Settings > Privacy and security > Security | `privacy/secure-dns-quad9` |
 | DuckDuckGo as default search engine; its remote new tab page is removed | **On** | Settings > Search engine | `privacy/duckduckgo-default-search` |
 | Web pages see the upstream Chromium version, not Hivey's | **On** | — | `build/hivey-updater` |
-| USB, serial, HID and Bluetooth devices: sites cannot even ask for them (a common way to fingerprint and to attack hardware) | **Blocked** | Hivey Studio > Privacy, or per site in the address bar | `privacy/block-device-apis` |
-| Hardened mode: no JavaScript optimizer (JIT) on any site, which removes the code most browser exploits target, at some speed cost | Off | Hivey Studio > Privacy | `customization/hivey-studio-themes` |
+| USB, serial, HID and Bluetooth devices: sites cannot even ask for them (a common way to fingerprint and to attack hardware) | **Blocked** | Hivey Settings > Privacy, or per site in the address bar | `privacy/block-device-apis` |
+| Hardened mode: no JavaScript optimizer (JIT) on any site, which removes the code most browser exploits target, at some speed cost | Off | Hivey Settings > Privacy | `customization/hivey-studio-themes` |
 
 ## The Hivey AI sidebar
 
@@ -68,7 +68,7 @@ page cannot reach it on its own:
   server in between.
 - **Open source** (MIT, [HiveyAI-Sidebar](https://github.com/FlorianMartins/HiveyAI-Sidebar)),
   built from a pinned commit and signed into the browser like Hivey Shield.
-  Hivey Studio > Privacy shows its status and links to its site access;
+  Hivey Settings > Privacy shows its status and links to its site access;
   `chrome://extensions` turns it off.
 
 ## Server country in the location bar
@@ -96,7 +96,7 @@ asks Quad9's encrypted DNS, the resolver the browser already uses.
 The noise is far too small to see or hear (audio: under 1e-6 of each sample,
 about -120 dB) but changes the fingerprint a tracker computes. If a site that
 draws in a canvas or processes audio misbehaves, turn the protection off in
-Hivey Studio and restart.
+Hivey Settings and restart.
 
 Why Quad9: a Swiss non-profit, no IP address logging, and it refuses to
 resolve known malicious domains. Captive portals (hotel or airport Wi-Fi)
@@ -108,7 +108,7 @@ still work: Chromium opens their login page without secure DNS.
 | --- | --- | --- | --- |
 | Encrypted DNS probe to `dns.quad9.net` | at startup in secure DNS mode | a DNS query for a probe name, no browsing data | Settings > Security > secure DNS |
 | Proxy auto-discovery (`wpad`, Windows) | at startup, when Windows' *Automatically detect settings* is on | a DNS lookup on the local network only | Windows Settings > Network > Proxy |
-| Update check: `hivey-update.json` (+ signature) from GitHub releases | 10 minutes after start, then every 12 hours | a plain GET without cookies | Hivey Studio > About > Automatic updates |
+| Update check: `hivey-update.json` (+ signature) from GitHub releases | 10 minutes after start, then every 12 hours | a plain GET without cookies | Hivey Settings > About > Automatic updates |
 | Update download (installer) | only when a newer, correctly signed release exists | a plain GET without cookies | same |
 
 Nothing else: no extension, component or field-trial update service is

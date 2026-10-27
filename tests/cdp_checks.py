@@ -235,7 +235,8 @@ try:
       const h = i.permissions.runtimeHostPermissions;
       return h ? {{access: h.hostAccess, granted: h.hosts.filter(x => x.granted).map(x => x.host)}} : null; }})""")
     check('Hivey AI site access on click', isinstance(access, dict) and access['access'] != 'ON_ALL_SITES' and
-          any('api.anthropic.com' in host for host in access['granted']), f'runtime host permissions: {access}')
+          any('api.anthropic.com' in host for host in access['granted']) and
+          any('claude.ai' in host for host in access['granted']), f'runtime host permissions: {access}')
     # The security tools (opened in a tab, the popup has no site to check:
     # ask its module for a site instead).
     p.goto(f'chrome-extension://{CYBER_ID}/popup.html', settle=1.5)

@@ -36,12 +36,12 @@ ticked: Linux on the build host, Windows on a GitHub Actions runner.
 - [x] RAM limiter
 - [x] CPU limiter (Windows)
 - [x] Network limiter
-- [x] Live usage gauges and hot tabs (Hivey Studio > Resources)
+- [x] Live usage gauges and hot tabs (Hivey Settings > Resources)
 - [ ] CPU limiter on Linux (cgroups)
 
 ## Phase 3: Look and feel
 
-- [x] Hivey Studio (`chrome://hivey`): colors, layout, tabs, resources, privacy, updates
+- [x] Hivey Settings (`chrome://hivey`): colors, layout, tabs, resources, privacy, updates
 - [x] Any color for the whole browser, palette styles, light/dark, grayscale
 - [x] Vertical tabs, side panel position, toolbar buttons, compact mode
 - [x] Custom new tab page

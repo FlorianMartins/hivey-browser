@@ -63,7 +63,7 @@ Hivey's patches, by area:
 | `build/` | ThinLTO thread cap, 7-Zip on a Linux host, the updater |
 | `privacy/` | content blocker loader, referrer cap and ad APIs off, fingerprinting (canvas, text, rects, audio, CPU count, fonts, WebGL), GPC + HTTPS-only, Quad9, DuckDuckGo |
 | `resources/` | Memory Saver, RAM limiter (+ settings), CPU and network limiters |
-| `customization/` | default color, overlay scrollbars, compact mode, Hivey Studio |
+| `customization/` | default color, overlay scrollbars, compact mode, Hivey Settings |
 
 New features go into new files (`chrome/browser/hivey/`,
 `chrome/browser/ui/webui/hivey/`, `chrome/browser/resources/hivey_studio/`)

@@ -11,8 +11,8 @@
   and run `hivey-browser`. `hivey-browser.desktop` and `hivey-browser.png`
   are there for your menu.
 
-The first window opens **Hivey Studio**, where everything below can be
-changed. Open it later from the menu (⋮ > *Hivey Studio*) or at
+The first window opens **Hivey Settings**, where everything below can be
+changed. Open it later from the menu (⋮ > *Hivey Settings*) or at
 `chrome://hivey`.
 
 ## Updates
@@ -20,8 +20,8 @@ changed. Open it later from the menu (⋮ > *Hivey Studio*) or at
 Hivey Browser keeps itself up to date. It checks for a new version 10
 minutes after it starts and then twice a day; on Windows it installs it in
 the background and the menu shows *Relaunch to update*. On Linux, Hivey
-Studio > About shows the new version with a download link. Updates are
-signed: the browser refuses anything else. *Hivey Studio > About* shows the
+Settings > About shows the new version with a download link. Updates are
+signed: the browser refuses anything else. *Hivey Settings > About* shows the
 status, checks on demand, and turns automatic updates off.
 
 ## Privacy, out of the box
@@ -37,26 +37,27 @@ status, checks on demand, and turns automatic updates off.
 - **Fingerprinting protection.** Sites cannot recognize your computer from
   how it draws, measures text, plays audio, which fonts it has or which GPU it
   uses. If a site that draws or processes sound misbehaves, turn
-  *Anti-fingerprinting* off in Hivey Studio > Privacy and restart.
+  *Anti-fingerprinting* off in Hivey Settings > Privacy and restart.
 - **Referrers** sent to other sites only say which site you came from, never
   the page.
 - **No Google services, no telemetry, no crash reports**, and no request at
   startup.
 - **Devices** (USB, serial, HID, Bluetooth) are off limits to sites. If you
   use a site that programs a board or talks to a security key over HID,
-  allow it from the address bar or turn the protection off in Hivey Studio >
+  allow it from the address bar or turn the protection off in Hivey Settings >
   Privacy. *Hardened mode* (same place) turns the JavaScript optimizer off
   everywhere: slower pages, much less to attack.
 
 ## The Hivey bar
 
-A column at the edge of the window gathers Hivey's tools: the workspaces of
-**Hivey Tools** (chat, web chats, agent, translation, text improvement,
-images, PDF, security, Wisebase, benchmark, MCP), which open in the side
-panel, then **Hivey Cyber**, **Hivey Shield**, **Resources** and **Hivey
-Studio**. It sits on the right, or on the left with vertical tabs.
+A column at the edge of the window gathers Hivey's tools: in the middle, the
+workspaces of **Hivey Tools** (chat, web chats, agent, translation, text
+improvement, images, PDF, security, Wisebase, benchmark, MCP), which open the
+side panel on that workspace (click again to close it; the mouse wheel moves
+between workspaces while it is open); at the bottom, **Hivey Cyber**,
+**Performance**, **History**, **Bookmarks** and **Settings**. It sits on the right, or on the left with vertical tabs.
 Right-click it to move it or hide it; right-click the tab strip (or use Hivey
-Studio > Layout) to show it again. The same tab strip menu puts vertical tabs
+Settings > Layout) to show it again. The same tab strip menu puts vertical tabs
 on the left or the right.
 
 ## Server info
@@ -81,7 +82,7 @@ Labs, security headers, Observatory and the Wayback Machine. Right-click a
 link or a selection for the same tools, or to look selected text up in
 VirusTotal or Have I Been Pwned.
 
-## Hivey Studio
+## Hivey Settings
 
 | Section | What you can do |
 | --- | --- |
@@ -92,14 +93,14 @@ VirusTotal or Have I Been Pwned.
 | Privacy & security | Hivey Shield and Hivey AI status, anti-fingerprinting, secure connections, clear data on exit, device blocking, hardened mode, secure DNS and cookie settings. |
 | About | Version and automatic updates. |
 
-Options marked ↻ apply after a restart; Hivey Studio offers a *Restart*
-button when one is pending. Hivey Studio follows changes made elsewhere (a
+Options marked ↻ apply after a restart; Hivey Settings offers a *Restart*
+button when one is pending. Hivey Settings follows changes made elsewhere (a
 right-click on the tab strip, Settings) as they happen.
 
 The **Resources** button (gauge icon) in the toolbar opens the live gauges,
 the hot tabs and the limiters in a dropdown, like an extension's popup.
 
-![First start: Hivey Studio in the Aura theme; in the toolbar, Hivey Cyber, Hivey AI, Hivey Shield and the Resources button](images/hivey-studio-first-run.png)
+![First start: Hivey Settings in the Aura theme; in the toolbar, Hivey Cyber, Hivey AI, Hivey Shield and the Resources button](images/hivey-studio-first-run.png)
 
 ![Compact mode: a lower tab strip and toolbar](images/compact-mode.png)
 
@@ -121,4 +122,4 @@ the hot tabs and the limiters in a dropdown, like an extension's popup.
 ## Advanced switches
 
 `chrome://flags` lists every Hivey Browser and ungoogled-chromium option
-(search for "Hivey" or "ungoogled"); Hivey Studio shows the useful ones.
+(search for "Hivey" or "ungoogled"); Hivey Settings shows the useful ones.
