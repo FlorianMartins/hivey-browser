@@ -1,0 +1,275 @@
+# Hivey logo: the Hivey AI sidebar's mark (four bars, violet to indigo) for the window icon, the location bar and Hivey Settings.
+--- a/chrome/app/vector_icons/hivey_logo.icon
++++ b/chrome/app/vector_icons/hivey_logo.icon
+@@ -2,67 +2,27 @@
+ // Use of this source code is governed by the MIT license that can be found in
+ // the LICENSE file of the Hivey Browser repository.
+ 
+-// The Hivey Browser logo (brand/logo.svg), monochrome: a honeycomb cell
+-// (pointy-top hexagon outline, even-odd) holding a globe crossed by its orbit
+-// (tilted -28 degrees like the logo's, with a cleared gap where its front half
+-// passes over the globe). Centered on each canvas. The 16 dip version is the
+-// one the location bar uses by default (kLocationBarIconSize), so it is not
+-// scaled; the 20 dip one is for touch UI.
++// The Hivey Browser logo (brand/logo.svg), monochrome: the Hivey mark of the
++// Hivey AI sidebar, four fully-rounded horizontal bars, widest second,
++// smallest at the bottom. Centered on each canvas, bar edges on whole pixels
++// (as hivey_app_icon.cc draws it), so it stays crisp at 1x. The 16 dip version
++// is the one the location bar uses by default (kLocationBarIconSize), so it is
++// not scaled; the 20 dip one is for touch UI.
+ 
+ CANVAS_DIMENSIONS, 20,
+-MOVE_TO, 10, 1,
+-LINE_TO, 17.79f, 5.5f,
+-LINE_TO, 17.79f, 14.5f,
+-LINE_TO, 10, 19,
+-LINE_TO, 2.21f, 14.5f,
+-LINE_TO, 2.21f, 5.5f,
+-CLOSE,
+-MOVE_TO, 10, 2.7f,
+-LINE_TO, 3.68f, 6.35f,
+-LINE_TO, 3.68f, 13.65f,
+-LINE_TO, 10, 17.3f,
+-LINE_TO, 16.32f, 13.65f,
+-LINE_TO, 16.32f, 6.35f,
+-CLOSE,
+-NEW_PATH,
+-CIRCLE, 10, 10, 3.7f,
+-NEW_PATH,
+-PATH_MODE_CLEAR,
+-STROKE, 2.2f,
+-MOVE_TO, 5.14f, 12.58f,
+-ARC_TO, 5.5f, 1.9f, -28, 0, 0, 14.86f, 7.42f,
+-NEW_PATH,
+-STROKE, 1,
+-MOVE_TO, 5.14f, 12.58f,
+-ARC_TO, 5.5f, 1.9f, -28, 0, 0, 14.86f, 7.42f,
+-ARC_TO, 5.5f, 1.9f, -28, 0, 0, 5.14f, 12.58f,
+-CLOSE
++ROUND_RECT, 4, 3, 12, 3, 1.5f,
++NEW_PATH,
++ROUND_RECT, 2, 7, 16, 3, 1.5f,
++NEW_PATH,
++ROUND_RECT, 3, 11, 14, 3, 1.5f,
++NEW_PATH,
++ROUND_RECT, 5, 15, 10, 3, 1.5f
+ 
+ CANVAS_DIMENSIONS, 16,
+-MOVE_TO, 8, 0.5f,
+-LINE_TO, 14.5f, 4.25f,
+-LINE_TO, 14.5f, 11.75f,
+-LINE_TO, 8, 15.5f,
+-LINE_TO, 1.5f, 11.75f,
+-LINE_TO, 1.5f, 4.25f,
+-CLOSE,
+-MOVE_TO, 8, 2.1f,
+-LINE_TO, 2.89f, 5.05f,
+-LINE_TO, 2.89f, 10.95f,
+-LINE_TO, 8, 13.9f,
+-LINE_TO, 13.11f, 10.95f,
+-LINE_TO, 13.11f, 5.05f,
+-CLOSE,
+-NEW_PATH,
+-CIRCLE, 8, 8, 2.9f,
+-NEW_PATH,
+-PATH_MODE_CLEAR,
+-STROKE, 1.9f,
+-MOVE_TO, 4.12f, 10.07f,
+-ARC_TO, 4.4f, 1.5f, -28, 0, 0, 11.88f, 5.93f,
+-NEW_PATH,
+-STROKE, 0.9f,
+-MOVE_TO, 4.12f, 10.07f,
+-ARC_TO, 4.4f, 1.5f, -28, 0, 0, 11.88f, 5.93f,
+-ARC_TO, 4.4f, 1.5f, -28, 0, 0, 4.12f, 10.07f,
+-CLOSE
++ROUND_RECT, 3, 1, 10, 3, 1.5f,
++NEW_PATH,
++ROUND_RECT, 1, 5, 14, 3, 1.5f,
++NEW_PATH,
++ROUND_RECT, 2, 9, 12, 3, 1.5f,
++NEW_PATH,
++ROUND_RECT, 4, 13, 8, 3, 1.5f
+--- a/chrome/browser/hivey/hivey_app_icon.cc
++++ b/chrome/browser/hivey/hivey_app_icon.cc
+@@ -4,76 +4,65 @@
+ 
+ #include "chrome/browser/hivey/hivey_app_icon.h"
+ 
++#include <algorithm>
++#include <iterator>
++
++#include "base/numerics/safe_conversions.h"
+ #include "cc/paint/paint_flags.h"
+-#include "third_party/skia/include/core/SkMatrix.h"
+ #include "third_party/skia/include/core/SkPath.h"
+ #include "third_party/skia/include/core/SkPathBuilder.h"
++#include "third_party/skia/include/core/SkRRect.h"
++#include "third_party/skia/include/core/SkRect.h"
+ #include "ui/gfx/canvas.h"
+-#include "ui/gfx/color_utils.h"
+-#include "ui/gfx/geometry/point_f.h"
+ #include "ui/gfx/image/canvas_image_source.h"
+ 
+ namespace hivey {
+ 
+ namespace {
+ 
+-// Draws brand/logo.svg (256 x 256 units) scaled to the image size.
++// brand/logo.svg, the Hivey mark of the Hivey AI sidebar: four fully-rounded
++// horizontal bars centered on a 96 x 96 unit canvas, from top to bottom 62,
++// 80, 72 and 50 units wide, 14 high, 7 apart (tops at y = 9, 30, 51, 72).
++constexpr float kLogoUnits = 96;
++constexpr float kBarHeight = 14;
++constexpr float kBarGap = 7;
++constexpr float kBarWidths[] = {62, 80, 72, 50};
++
++// Draws the mark in the accent color with every bar edge on a whole pixel
++// (whole height, gap and top, and a width of the image's parity so each bar
++// stays centered), so it is crisp down to 16 px. Same rules as
++// scripts/branding.py, which renders the static icons.
+ class ThemedLogoSource : public gfx::CanvasImageSource {
+  public:
+   ThemedLogoSource(SkColor accent, int size)
+       : gfx::CanvasImageSource(gfx::Size(size, size)), accent_(accent) {}
+ 
+   void Draw(gfx::Canvas* canvas) override {
+-    const float scale = size().width() / 256.f;
+-    canvas->sk_canvas()->scale(scale, scale);
++    const int size = this->size().width();
++    const float scale = size / kLogoUnits;
++    const int height = std::max(3, base::ClampRound(kBarHeight * scale));
++    const int gap = std::max(1, base::ClampRound(kBarGap * scale));
++    const int bars = static_cast<int>(std::size(kBarWidths));
++    const int top = (size - (bars * height + (bars - 1) * gap) + 1) / 2;
++
++    SkPathBuilder builder;
++    for (int i = 0; i < bars; ++i) {
++      const float width = kBarWidths[i] * scale;
++      // Rounded half down, so bars of different widths stay different.
++      const int snapped = size % 2 == 0
++                              ? 2 * base::ClampCeil(width / 2 - 0.5f)
++                              : 2 * base::ClampCeil((width - 1) / 2 - 0.5f) + 1;
++      const int bar_width = std::min(snapped, size);
++      const SkRect bar =
++          SkRect::MakeXYWH((size - bar_width) / 2.f, top + i * (height + gap),
++                           bar_width, height);
++      builder.addRRect(SkRRect::MakeRectXY(bar, height / 2.f, height / 2.f));
++    }
+ 
+-    const SkColor dark = color_utils::AlphaBlend(SK_ColorBLACK, accent_, 0.8f);
+-    const SkColor light = color_utils::AlphaBlend(SK_ColorWHITE, accent_, 0.7f);
+     cc::PaintFlags flags;
+     flags.setAntiAlias(true);
+-
+-    // Rounded hexagon, pointy top.
+-    const SkPath cell = SkPathBuilder()
+-                            .moveTo(116, 14.9f)
+-                            .quadTo(128, 8, 140, 14.9f)
+-                            .lineTo(218.9f, 60.5f)
+-                            .quadTo(230.9f, 67.4f, 230.9f, 81.3f)
+-                            .lineTo(230.9f, 174.7f)
+-                            .quadTo(230.9f, 188.6f, 218.9f, 195.5f)
+-                            .lineTo(140, 241.1f)
+-                            .quadTo(128, 248, 116, 241.1f)
+-                            .lineTo(37.1f, 195.5f)
+-                            .quadTo(25.1f, 188.6f, 25.1f, 174.7f)
+-                            .lineTo(25.1f, 81.3f)
+-                            .quadTo(25.1f, 67.4f, 37.1f, 60.5f)
+-                            .close()
+-                            .detach();
+     flags.setColor(accent_);
+-    canvas->DrawPath(cell, flags);
+-
+-    // Orbit, tilted: the back half behind the globe, the front half over it.
+-    const SkMatrix tilt = SkMatrix::RotateDeg(-28, {128, 128});
+-    const SkRect orbit = SkRect::MakeLTRB(40, 98, 216, 158);
+-    flags.setStyle(cc::PaintFlags::kStroke_Style);
+-    flags.setStrokeCap(cc::PaintFlags::kRound_Cap);
+-    flags.setStrokeWidth(16);
+-    flags.setColor(SkColorSetA(dark, 0x59));
+-    canvas->DrawPath(SkPathBuilder().addArc(orbit, 180, 180).detach(&tilt),
+-                     flags);
+-
+-    flags.setStyle(cc::PaintFlags::kFill_Style);
+-    flags.setColor(dark);
+-    canvas->DrawCircle(gfx::PointF(128, 128), 62, flags);
+-
+-    flags.setStyle(cc::PaintFlags::kStroke_Style);
+-    flags.setStrokeWidth(12);
+-    flags.setColor(light);
+-    canvas->DrawPath(SkPathBuilder().addArc(orbit, 0, 180).detach(&tilt),
+-                     flags);
+-
+-    flags.setStyle(cc::PaintFlags::kFill_Style);
+-    flags.setColor(SkColorSetA(light, 0xe6));
+-    canvas->DrawCircle(gfx::PointF(106, 104), 12, flags);
++    canvas->DrawPath(builder.detach(), flags);
+   }
+ 
+  private:
+--- a/chrome/browser/hivey/hivey_app_icon.h
++++ b/chrome/browser/hivey/hivey_app_icon.h
+@@ -10,8 +10,9 @@
+ 
+ namespace hivey {
+ 
+-// The Hivey Browser logo (brand/logo.svg: a honeycomb cell holding a globe
+-// with its orbit) drawn in `accent`, the theme's accent color. Browser
++// The Hivey Browser logo (brand/logo.svg: the Hivey mark of the Hivey AI
++// sidebar, four rounded horizontal bars) drawn in `accent`, the theme's accent
++// color, pixel-snapped for `size` px so it stays crisp at 16 px. Browser
+ // windows use it as their icon (taskbar, window switcher, title bar), so the
+ // icon follows the theme the user picked.
+ gfx::ImageSkia HiveyThemedAppIcon(SkColor accent, int size = 256);
+--- a/chrome/browser/resources/hivey_studio/logo.js
++++ b/chrome/browser/resources/hivey_studio/logo.js
+@@ -2,14 +2,13 @@
+ // Use of this source code is governed by the MIT license that can be found in
+ // the LICENSE file of the Hivey Browser repository.
+ 
+-// The Hivey Browser logo (brand/logo.svg: a honeycomb cell holding a globe and
+-// its orbit) in the theme's accent color, the same drawing as the window icon
+-// (chrome/browser/hivey/hivey_app_icon.cc).
++// The Hivey Browser logo (brand/logo.svg: the Hivey mark of the Hivey AI
++// sidebar, four fully-rounded horizontal bars) in the theme's accent color,
++// the same drawing as the window icon (chrome/browser/hivey/hivey_app_icon.cc).
+ 
+ const NS = 'http://www.w3.org/2000/svg';
+-const CELL = 'M116 14.9 Q128 8 140 14.9 L218.9 60.5 Q230.9 67.4 230.9 81.3 L230.9 174.7 ' +
+-    'Q230.9 188.6 218.9 195.5 L140 241.1 Q128 248 116 241.1 L37.1 195.5 Q25.1 188.6 25.1 174.7 ' +
+-    'L25.1 81.3 Q25.1 67.4 37.1 60.5 Z';
++// [x, y, width] of each bar on the 96 x 96 canvas; all are 14 high.
++const BARS = [[17, 9, 62], [8, 30, 80], [12, 51, 72], [23, 72, 50]];
+ 
+ function node(tag, attributes) {
+   const element = document.createElementNS(NS, tag);
+@@ -20,23 +19,11 @@
+ }
+ 
+ export function hiveyLogo() {
+-  const svg = node('svg', {viewBox: '0 0 256 256', 'aria-hidden': 'true', class: 'hivey-logo'});
+-  svg.append(node('path', {d: CELL, fill: 'var(--accent)'}));
+-  const orbit = node('g', {transform: 'rotate(-28 128 128)', fill: 'none', 'stroke-linecap': 'round'});
+-  orbit.append(node('path', {
+-    d: 'M40 128 A88 30 0 0 1 216 128',
+-    stroke: 'color-mix(in srgb, black 80%, var(--accent))', 'stroke-width': '16', opacity: '0.35',
+-  }));
+-  svg.append(orbit);
+-  svg.append(node('circle', {cx: '128', cy: '128', r: '62', fill: 'color-mix(in srgb, black 80%, var(--accent))'}));
+-  const front = node('g', {transform: 'rotate(-28 128 128)', fill: 'none', 'stroke-linecap': 'round'});
+-  front.append(node('path', {
+-    d: 'M40 128 A88 30 0 0 0 216 128',
+-    stroke: 'color-mix(in srgb, white 70%, var(--accent))', 'stroke-width': '12',
+-  }));
+-  svg.append(front);
+-  svg.append(node('circle', {
+-    cx: '106', cy: '104', r: '12', fill: 'color-mix(in srgb, white 70%, var(--accent))', opacity: '0.9',
+-  }));
++  const svg = node('svg', {viewBox: '0 0 96 96', 'aria-hidden': 'true', class: 'hivey-logo'});
++  const bars = node('g', {fill: 'var(--accent)'});
++  for (const [x, y, width] of BARS) {
++    bars.append(node('rect', {x: `${x}`, y: `${y}`, width: `${width}`, height: '14', rx: '7'}));
++  }
++  svg.append(bars);
+   return svg;
+ }
