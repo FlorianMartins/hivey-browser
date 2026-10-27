@@ -102,6 +102,19 @@ try:
     studio(('applyPreset', ['material', '#10b981']))
     activate('chrome://hivey/')
     shot('6-material-studio')
+    if sys.platform == 'win32':
+        # The taskbar icon follows the accent after a short delay (icon file
+        # written, shortcuts updated): show what was done, for the record.
+        time.sleep(12)
+        shot('6b-material-taskbar-later')
+        print('themed icons:', sorted(f.name for f in profile.glob('Hivey Icon *.ico')), flush=True)
+        subprocess.run(['powershell', '-NoProfile', '-Command',
+                        '$s = New-Object -ComObject WScript.Shell; '
+                        'Get-ChildItem -Recurse -Filter *.lnk "$env:APPDATA\\Microsoft\\Windows\\Start Menu",'
+                        '"$env:USERPROFILE\\Desktop","$env:APPDATA\\Microsoft\\Internet Explorer\\Quick Launch" '
+                        '-ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*Hivey*" } | ForEach-Object { '
+                        '$l = $s.CreateShortcut($_.FullName); "{0} -> {1} icon={2}" -f $_.FullName, $l.TargetPath, '
+                        '$l.IconLocation }'])
     studio(('applyPreset', ['aura']))
     activate('https://example.com/')
     shot('7-aura-example')
