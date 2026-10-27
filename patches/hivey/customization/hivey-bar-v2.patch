@@ -153,7 +153,7 @@
  #include "extensions/browser/permissions_manager.h"
  #include "base/one_shot_event.h"
  #include "base/strings/utf_string_conversions.h"
-@@ -60,6 +63,41 @@
+@@ -60,6 +63,42 @@
  
  namespace {
  
@@ -171,8 +171,9 @@
 +    return;  // the user gave it every site
 +  }
 +  extensions::ScriptingPermissionsModifier modifier(profile, extension);
-+  const extensions::URLPatternSet& granted =
-+      extension->permissions_data()->active_permissions().explicit_hosts();
++  // A copy: each grant replaces the extension's permission set.
++  const extensions::URLPatternSet granted =
++      extension->permissions_data()->active_permissions().explicit_hosts().Clone();
 +  auto grant = [&](const URLPattern& pattern) {
 +    if (!granted.ContainsPattern(pattern)) {
 +      modifier.GrantHostPermission(pattern, base::DoNothing());
@@ -195,7 +196,7 @@
  // These values are persisted to logs. Entries should not be renumbered and
  // numeric values should never be reused.
  enum class DefaultPinnedExtensionState {
-@@ -165,21 +203,12 @@
+@@ -165,21 +204,12 @@
    // Hivey: the AI sidebar starts with its site access withheld: it reads a
    // page only when the user invokes it on that tab (activeTab) or allows the
    // site, so a malicious page cannot reach it by itself (prompt injection).
@@ -220,7 +221,7 @@
    }
  
    // Hivey: bundled extensions marked "pinned" (the content blocker and its
-@@ -233,6 +262,11 @@
+@@ -233,6 +263,11 @@
  void ToolbarActionsModel::OnExtensionLoaded(
      content::BrowserContext* browser_context,
      const extensions::Extension* extension) {
@@ -716,7 +717,7 @@
 -  chrome::ExecuteCommand(browser_view_->browser(), IDC_HIVEY_STUDIO);
 +void HiveyBarView::RunCommand(int command, int fallback_command) {
 +  // History and Bookmarks open in the side panel when the browser offers it.
-+  Browser* browser = browser_view_->browser();
++  BrowserWindowInterface* browser = browser_view_->browser();
 +  chrome::ExecuteCommand(
 +      browser, chrome::IsCommandEnabled(browser, command) ? command
 +                                                          : fallback_command);

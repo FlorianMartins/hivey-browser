@@ -3,6 +3,29 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4705 — 27 octobre 2026
+
+### Barre Hivey
+- Les onglets de la sidebar s'affichent **dès l'ouverture** de la fenêtre.
+- **Nouvelles icônes** plus modernes (style duotone), dans la **couleur du
+  thème en plus clair** (violet clair avec Aura).
+- Les onglets de la sidebar sont **centrés verticalement** ; en bas :
+  **Hivey Cyber, Performances, Historique, Favoris et Paramètres**.
+- La **molette** sur la barre passe à l'onglet suivant ou précédent quand le
+  panneau est ouvert.
+- Hivey Shield (uBlock Origin Lite) n'est plus dans la barre : il reste dans
+  la barre d'outils, avec son compteur.
+- Ouverture et fermeture du panneau **plus vives et plus douces**.
+
+### Hivey Tools
+- **Les chats web fonctionnent** (Gemini, Claude, ChatGPT, Copilot, Mistral,
+  DeepSeek…) : la sidebar a accès à ces sites, et seulement à eux, en plus
+  des API des fournisseurs.
+
+### Paramètres
+- **Hivey Studio devient « Paramètres »** (menu ⋮ : « Paramètres Hivey »),
+  avec une icône d'engrenage dans la barre Hivey.
+
 ## 156.0.8078.4704 — 27 octobre 2026
 
 ### Barre Hivey
