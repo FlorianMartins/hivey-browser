@@ -1102,10 +1102,37 @@ def gn_args():
     if TARGET == 'win':
         lines += parse(UGW / 'flags.windows.gn', WINDOWS_HOST_ONLY_FLAGS)
     lines += parse(ROOT / 'flags.hivey.gn') + parse(ROOT / f'flags.hivey.{TARGET}.gn')
+    if ccache := _ccache():
+        lines.append(f'cc_wrapper="{ccache}"')
     merged = {}
     for line in lines:  # later files override earlier ones
         merged[line.split('=')[0].strip()] = line
     return '\n'.join(merged.values()) + '\n'
+
+
+# One compiler cache for every build tree of this host (the manual one and
+# autoupdate's): a rebuild after a change, or a fresh tree of the same
+# Chromium, recompiles only what really changed. HB_CCACHE=0 turns it off.
+CCACHE_DIR = Path(os.environ.get('HB_CCACHE_DIR', '/root/projects/hivey-ccache'))
+
+
+def _ccache():
+    if os.environ.get('HB_CCACHE', '1') == '0':
+        return None
+    return shutil.which('ccache')
+
+
+def _ccache_env():
+    return {
+        'CCACHE_DIR': str(CCACHE_DIR),
+        'CCACHE_MAXSIZE': os.environ.get('HB_CCACHE_SIZE', '150G'),
+        # Paths inside the tree are hashed relative to it: two trees share hits.
+        'CCACHE_BASEDIR': str(SRC),
+        # Each tree has its own copy of clang: compare its contents, not its path.
+        'CCACHE_COMPILERCHECK': 'content',
+        'CCACHE_SLOPPINESS': 'include_file_mtime,include_file_ctime,time_macros,file_macro,pch_defines',
+        'CCACHE_NOHASHDIR': '1',
+    }
 
 
 def _build_env():
@@ -1116,6 +1143,8 @@ def _build_env():
     if TARGET == 'win':
         ensure_winsysroot()
         env['DEPOT_TOOLS_WIN_TOOLCHAIN'] = '1'
+    if _ccache():
+        env.update(_ccache_env())
     return env
 
 
@@ -1127,22 +1156,38 @@ def step_configure(args):
     mark_done('configure')
 
 
-def args_jobs():
-    """Parallel compile jobs: HB_JOBS, else what the machine can afford now:
-    one per CPU, and about 3 GB of memory available per job (the host also
-    runs other services, whose memory use changes; compilers starved of
-    memory crash at random)."""
-    if os.environ.get('HB_JOBS'):
-        return int(os.environ['HB_JOBS'])
-    available_gb = 8.0
+def _available_gb():
     try:
         for line in Path('/proc/meminfo').read_text().splitlines():
             if line.startswith('MemAvailable:'):
-                available_gb = int(line.split()[1]) / (1 << 20)
+                return int(line.split()[1]) / (1 << 20)
     except OSError:
         pass
-    # The build's own memory cap (step_build's systemd scope) bounds it too.
-    mem_max = os.environ.get('HB_MEM_MAX', '26G')
+    return 8.0
+
+
+# Memory left to the host's other services (the LLM server loads a model on
+# demand) while a build runs.
+MEM_HEADROOM_GB = 16
+
+
+def build_mem_max():
+    """The build's memory cap (its systemd scope): HB_MEM_MAX ("26G",
+    "none"), else what is available now minus MEM_HEADROOM_GB, at least 16G.
+    Past it the kernel kills the build, never a service."""
+    if os.environ.get('HB_MEM_MAX'):
+        return os.environ['HB_MEM_MAX']
+    return f'{max(16, int(_available_gb() - MEM_HEADROOM_GB))}G'
+
+
+def args_jobs():
+    """Parallel compile jobs: HB_JOBS, else what the machine can afford now:
+    one per CPU, and about 3 GB of the build's memory cap per job (compilers
+    starved of memory crash at random)."""
+    if os.environ.get('HB_JOBS'):
+        return int(os.environ['HB_JOBS'])
+    available_gb = _available_gb()
+    mem_max = build_mem_max()
     if mem_max.endswith('G') and mem_max[:-1].isdigit():
         available_gb = min(available_gb, float(mem_max[:-1]))
     return max(2, min(os.cpu_count() or 2, int(available_gb // 3)))
@@ -1157,12 +1202,13 @@ def step_build(args):
         cmd[1:1] = ['-k', os.environ['HB_KEEP_GOING']]
     # Run inside a transient systemd scope with a memory cap: if a ThinLTO link
     # outgrows it, the kernel kills the build, never a production service.
-    mem_max = os.environ.get('HB_MEM_MAX', '26G')
+    mem_max = build_mem_max()
     if shutil.which('systemd-run') and mem_max != 'none':
         cmd = ['systemd-run', '--scope', '--quiet', '--collect', '-p', f'MemoryMax={mem_max}',
                '-p', 'MemorySwapMax=0', '-p', 'CPUWeight=10', '-p', 'IOWeight=10', '--'] + cmd
     _stage_bundled_extensions()
-    log(f'building with {jobs} jobs')
+    log(f'building with {jobs} jobs, memory cap {mem_max}'
+        + (f', ccache in {CCACHE_DIR}' if _ccache() else ''))
     try:
         run(cmd, cwd=SRC, env=env)
     except subprocess.CalledProcessError:

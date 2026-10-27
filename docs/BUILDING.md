@@ -120,11 +120,21 @@ The build host may also run production services. By default:
 
 - every step runs at the lowest CPU priority (`nice 19`) and idle I/O
   priority (`ionice -c3`);
-- ninja runs with `-j 8` (`HB_JOBS` to change; `HB_KEEP_GOING=0` keeps going past failures to collect them all);
-- the build runs inside a transient systemd scope with
-  `MemoryMax=26G`, `CPUWeight=10`, `IOWeight=10` (`HB_MEM_MAX` to change,
-  `none` to disable). If a link outgrows the cap, the kernel kills the build,
-  never another service;
+- the build runs inside a transient systemd scope with `CPUWeight=10`,
+  `IOWeight=10` and a memory cap: the memory available when it starts minus
+  16 GB left to the other services, at least 16 GB (`HB_MEM_MAX=26G` to fix
+  it, `none` to disable). If a link outgrows the cap, the kernel kills the
+  build, never another service;
+- ninja runs one job per CPU and per 3 GB of that cap (`HB_JOBS` to change;
+  `HB_KEEP_GOING=0` keeps going past failures to collect them all); a build
+  that crashes is resumed once with half the jobs;
+- compiles go through [ccache](https://ccache.dev) when it is installed
+  (`cc_wrapper` in `args.gn`), with one cache for every build tree of the host
+  (`/root/projects/hivey-ccache`, 150 GB; `HB_CCACHE_DIR`, `HB_CCACHE_SIZE`,
+  `HB_CCACHE=0` to turn it off): a fresh tree of the same Chromium, or a
+  rebuild after a change, recompiles only what changed. Changing a header
+  that most of Chromium includes (`chrome_color_id.h`...) still rebuilds
+  almost everything: Hivey patches avoid it;
 - ThinLTO links use 4 threads instead of all hardware threads, on Windows
   and Linux (`hivey_thin_lto_jobs` in `flags.hivey.gn`, added by
   `patches/hivey/build/thin-lto-jobs-*.patch`).
