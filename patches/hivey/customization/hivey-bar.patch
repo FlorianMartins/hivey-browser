@@ -432,7 +432,7 @@
 +}  // namespace hivey
 --- a/chrome/browser/hivey/hivey_taskbar_icon_win.cc
 +++ b/chrome/browser/hivey/hivey_taskbar_icon_win.cc
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,279 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
@@ -463,6 +463,7 @@
 +#include "base/win/shortcut.h"
 +#include "chrome/browser/hivey/hivey_taskbar_icon.h"
 +#include "chrome/common/chrome_paths.h"
++#include "chrome/common/chrome_paths_internal.h"
 +#include "chrome/common/chrome_switches.h"
 +#include "chrome/installer/util/install_util.h"
 +#include "chrome/installer/util/shell_util.h"
@@ -638,7 +639,15 @@
 +                   nullptr);
 +  }
 +
-+  if (UpdateShortcutIcons(icon_path)) {
++  // Shortcuts launch the default user data dir: a browser started with
++  // another one (--user-data-dir) must not point them at its own icon.
++  base::FilePath default_dir;
++  const bool default_profile_dir =
++      chrome::GetDefaultUserDataDirectory(&default_dir) &&
++      base::FilePath::CompareEqualIgnoreCase(
++          base::MakeLongFilePath(default_dir).value(),
++          base::MakeLongFilePath(user_data_dir).value());
++  if (default_profile_dir && UpdateShortcutIcons(icon_path)) {
 +    // Nothing points to the older icons anymore (open windows switch to the
 +    // new one when the reply runs).
 +    DeleteOtherIcons(user_data_dir, icon_path);
@@ -970,7 +979,7 @@
  }
  
  BrowserWindowPropertyManager::~BrowserWindowPropertyManager() {
-@@ -104,6 +112,16 @@
+@@ -104,6 +112,23 @@
                                              &pinned_name, &icon_path);
      command_line_string = command_line.GetCommandLineString();
    }
@@ -984,25 +993,35 @@
 +    hivey::GetThemedRelaunchDetails(&icon_path, &command_line_string,
 +                                    &pinned_name);
 +  }
++  // Hivey: the taskbar only reads a window's icon when its properties appear:
++  // clear them first when the themed icon changed, so the open window's
++  // button takes the new color now (not after an Explorer restart).
++  if (!hivey_applied_icon_.empty() && icon_path != hivey_applied_icon_) {
++    ui::win::ClearWindowPropertyStore(hwnd_);
++  }
++  hivey_applied_icon_ = icon_path;
    ui::win::SetAppDetailsForWindow(app_id, icon_path, 0, command_line_string,
                                    pinned_name, hwnd_);
  }
 --- a/chrome/browser/ui/views/frame/browser_window_property_manager_win.h
 +++ b/chrome/browser/ui/views/frame/browser_window_property_manager_win.h
-@@ -7,6 +7,7 @@
+@@ -7,6 +7,8 @@
  
  #include <memory>
  
 +#include "base/callback_list.h"
++#include "base/files/file_path.h"
  #include "base/memory/raw_ptr.h"
  #include "components/prefs/pref_change_registrar.h"
  
-@@ -33,6 +34,8 @@
+@@ -33,6 +35,10 @@
    PrefChangeRegistrar profile_pref_registrar_;
    raw_ptr<const BrowserView> view_;
    const HWND hwnd_;
 +  // Hivey: refreshes the relaunch icon when the themed app icon changes.
 +  base::CallbackListSubscription hivey_taskbar_icon_subscription_;
++  // Hivey: the relaunch icon last given to the window.
++  base::FilePath hivey_applied_icon_;
  };
  
  #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_WINDOW_PROPERTY_MANAGER_WIN_H_
