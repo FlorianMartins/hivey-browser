@@ -277,9 +277,13 @@ def linux_smoke(version):
     run(['xvfb-run', '-a', sys.executable, AUTO_DIR / 'tests/startup_requests.py', browser,
          '--keep', test_dir / 'out'])
     profile = test_dir / 'cdp-profile'
-    proc = subprocess.Popen(['xvfb-run', '-a', browser, f'--user-data-dir={profile}', '--remote-debugging-port=9333',
-                             '--no-first-run', '--password-store=basic', 'about:blank'],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    args = [browser, f'--user-data-dir={profile}', '--remote-debugging-port=9333', '--no-first-run',
+            '--password-store=basic', 'about:blank']
+    if os.geteuid() == 0:
+        # The service runs as root, which Chromium refuses without this (as
+        # tests/startup_requests.py does).
+        args[1:1] = ['--no-sandbox', '--test-type']
+    proc = subprocess.Popen(['xvfb-run', '-a', *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(20)
         run([sys.executable, AUTO_DIR / 'tests/cdp_checks.py', 'http://127.0.0.1:9333', '--shots',
