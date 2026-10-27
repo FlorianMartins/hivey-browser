@@ -956,7 +956,15 @@
  
 --- a/chrome/browser/ui/views/frame/browser_window_property_manager_win.cc
 +++ b/chrome/browser/ui/views/frame/browser_window_property_manager_win.cc
-@@ -9,7 +9,9 @@
+@@ -4,12 +4,17 @@
+ 
+ #include "chrome/browser/ui/views/frame/browser_window_property_manager_win.h"
+ 
++#include <shobjidl.h>
++#include <wrl/client.h>
++
+ #include "base/command_line.h"
+ #include "base/functional/bind.h"
  #include "base/strings/utf_string_conversions.h"
  #include "base/win/windows_version.h"
  #include "chrome/browser/browser_process.h"
@@ -966,7 +974,7 @@
  #include "chrome/browser/profiles/profile_manager.h"
  #include "chrome/browser/profiles/profile_shortcut_manager_win.h"
  #include "chrome/browser/shell_integration_win.h"
-@@ -42,6 +44,12 @@
+@@ -42,6 +47,12 @@
        base::BindRepeating(
            &BrowserWindowPropertyManager::OnProfileIconVersionChange,
            base::Unretained(this)));
@@ -979,7 +987,7 @@
  }
  
  BrowserWindowPropertyManager::~BrowserWindowPropertyManager() {
-@@ -104,6 +112,23 @@
+@@ -104,8 +115,34 @@
                                              &pinned_name, &icon_path);
      command_line_string = command_line.GetCommandLineString();
    }
@@ -993,16 +1001,27 @@
 +    hivey::GetThemedRelaunchDetails(&icon_path, &command_line_string,
 +                                    &pinned_name);
 +  }
-+  // Hivey: the taskbar only reads a window's icon when its properties appear:
-+  // clear them first when the themed icon changed, so the open window's
-+  // button takes the new color now (not after an Explorer restart).
-+  if (!hivey_applied_icon_.empty() && icon_path != hivey_applied_icon_) {
-+    ui::win::ClearWindowPropertyStore(hwnd_);
-+  }
++  const bool hivey_icon_changed =
++      !hivey_applied_icon_.empty() && icon_path != hivey_applied_icon_;
 +  hivey_applied_icon_ = icon_path;
    ui::win::SetAppDetailsForWindow(app_id, icon_path, 0, command_line_string,
                                    pinned_name, hwnd_);
++  // Hivey: the taskbar reads a window's icon only when it creates its button:
++  // recreate the button so an open window takes the new themed icon now (not
++  // after an Explorer restart).
++  if (hivey_icon_changed) {
++    Microsoft::WRL::ComPtr<ITaskbarList> taskbar;
++    if (SUCCEEDED(::CoCreateInstance(CLSID_TaskbarList, nullptr,
++                                     CLSCTX_INPROC_SERVER,
++                                     IID_PPV_ARGS(&taskbar))) &&
++        SUCCEEDED(taskbar->HrInit())) {
++      taskbar->DeleteTab(hwnd_);
++      taskbar->AddTab(hwnd_);
++    }
++  }
  }
+ 
+ // static
 --- a/chrome/browser/ui/views/frame/browser_window_property_manager_win.h
 +++ b/chrome/browser/ui/views/frame/browser_window_property_manager_win.h
 @@ -7,6 +7,8 @@
