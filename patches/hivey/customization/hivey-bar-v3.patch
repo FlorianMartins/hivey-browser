@@ -1304,7 +1304,7 @@
        .Set("ai", base::DictValue()
                       .Set("id", HIVEY_BUNDLED_AI_ID)
                       .Set("enabled", extensions::ExtensionRegistry::Get(GetProfile())
-@@ -719,6 +738,117 @@
+@@ -719,6 +738,119 @@
    }
  }
  
@@ -1319,12 +1319,14 @@
 +    base::DictValue item;
 +    item.Set("id", id);
 +    if (const base::DictValue* app = hivey::FindHiveyBarApp(prefs, id)) {
-+      item.Set("kind", "app").Merge(app->Clone()).Set("id", id);
++      item.Merge(app->Clone());
++      item.Set("kind", "app");
++      item.Set("id", id);
 +    } else {
 +      for (const HiveyBarWorkspace& workspace : kHiveyBarWorkspaces) {
 +        if (id == workspace.mode) {
-+          item.Set("kind", "workspace")
-+              .Set("title", french ? workspace.title_fr : workspace.title_en);
++          item.Set("kind", "workspace");
++          item.Set("title", french ? workspace.title_fr : workspace.title_en);
 +        }
 +      }
 +    }
