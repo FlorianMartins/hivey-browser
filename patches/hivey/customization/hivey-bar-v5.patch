@@ -1,4 +1,4 @@
-# Hivey bar v5: Back/Forward/Reload back in the toolbar, flush with the vertical tab strip (no grab-handle gap without caption buttons, no leading margin); modern icons are color tiles drawn at build time (Hivey Tools' workspaces by default), the bottom buttons have their own icon style (theme color by default); tab strip flat buttons (Search tabs) tinted with the theme; Hivey Settings opens at the first start after installing; the new tab page is the default search engine's home page; profiles still on DuckDuckGo move to Google once.
+# Hivey bar v5: Back/Forward/Reload back in the toolbar, flush with the vertical tab strip (no grab-handle gap without caption buttons, no leading margin); modern icons are color tiles drawn at build time (Hivey Tools' workspaces by default), the bottom buttons have their own icon style (theme color by default); tab strip flat buttons (Search tabs, new tab) tinted with the theme; Hivey Settings opens at the first start after installing; the new tab page is the default search engine's home page; profiles still on DuckDuckGo move to Google once.
 --- a/chrome/app/generated_resources.grd
 +++ b/chrome/app/generated_resources.grd
 @@ -1972,7 +1972,10 @@
@@ -132,7 +132,7 @@
  }
  
  void AddHiveyColorMixer(ui::ColorProvider* provider,
-@@ -232,6 +233,12 @@
+@@ -232,6 +233,16 @@
    // Vertical tabs look like the horizontal ones unless given their own color.
    mixer[kColorHiveyVerticalTabBackground] = {
        kColorTabBackgroundInactiveFrameActive};
@@ -141,6 +141,10 @@
 +  mixer[kColorNewTabButtonCRBackgroundFrameActive] =
 +      ui::AlphaBlend(ui::kColorSysPrimary, kColorToolbar, 0x33);
 +  mixer[kColorNewTabButtonCRBackgroundFrameInactive] =
++      ui::AlphaBlend(ui::kColorSysPrimary, kColorToolbar, 0x26);
++  mixer[kColorNewTabButtonBackgroundFrameActive] =
++      ui::AlphaBlend(ui::kColorSysPrimary, kColorToolbar, 0x33);
++  mixer[kColorNewTabButtonBackgroundFrameInactive] =
 +      ui::AlphaBlend(ui::kColorSysPrimary, kColorToolbar, 0x26);
    const base::DictValue colors = GetHiveyEffectiveColors(local_state);
    if (colors.empty()) {
