@@ -3,6 +3,36 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4709 — 28 octobre 2026
+
+### Barre Hivey
+- **Chaque bouton peut aller en haut, au centre ou en bas** de la barre :
+  glissez-le où vous voulez (Paramètres compris).
+- **Icônes modernes plus lisibles** : une tuile translucide et le
+  pictogramme en couleur pleine. Elles existent en **multicolore** ou en
+  **couleur du thème**, pour les onglets de la sidebar IA comme pour les
+  boutons du bas (clic droit > Icônes / Boutons du bas).
+- Par défaut, **Hivey Cyber est en haut**, au niveau de la barre de
+  navigation, et le bas suit l'ordre **Performances, Favoris, Historique,
+  Paramètres**.
+- Les icônes sont **bien centrées**.
+- **L'historique s'ouvre dans le panneau latéral**, comme les favoris ; un
+  clic sur une entrée l'ouvre dans l'onglet courant.
+- Un **second clic referme** ce que le bouton a ouvert (historique,
+  favoris, Performances, Hivey Cyber).
+
+### Panneau latéral
+- Il s'ouvre **toujours du côté de la barre Hivey** et **glisse depuis
+  elle** sans passer par-dessus ; son contenu apparaît en fondu.
+- Plus de **bordure** entre la barre et le panneau.
+- Les **coins arrondis** de la page sont remplis de la couleur de la barre
+  (on ne voit plus le site derrière).
+
+### Favoris
+- **Importer des favoris** (Paramètres > Disposition) depuis **Chrome, Edge,
+  Brave, Vivaldi, Opera ou Chromium** installés sur l'ordinateur ; Firefox et
+  les fichiers HTML passent par la page d'import du navigateur.
+
 ## 156.0.8078.4708 — 28 octobre 2026
 
 ### Barre Hivey
