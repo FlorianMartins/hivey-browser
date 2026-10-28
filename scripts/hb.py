@@ -846,7 +846,34 @@ WORKSPACE_ICONS = {
 TOOL_ICONS = {
     'Cyber': 'detective', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
     'Bookmarks': 'bookmark-simple', 'Settings': 'gear-six', 'App': 'app-window',
+    'Back': 'arrow-left', 'Forward': 'arrow-right', 'Reload': 'arrow-clockwise',
 }
+# "Modern" icons: Microsoft's Fluent Emoji (MIT), 3D, at a pinned commit;
+# each file is checked against its sha256.
+FLUENT_SHA = '1ffb34c752ecf5d402f04cfb4b392c77f57c54bc'
+FLUENT_EMOJI = {
+    'chat': ('Speech balloon/3D/speech_balloon_3d.png', 'b9bdb19ef2e550923bc4f541de049f1633883619564b2aa140a968eaf1d69a0d'),
+    'web': ('Globe with meridians/3D/globe_with_meridians_3d.png', '4a9f820aa69194995d91c6a23432814d67ea6740acc9939eadcc8d6ad1b90546'),
+    'agent': ('Robot/3D/robot_3d.png', '3f9b5a00b53c8bddda36b6a3f68d00718d9d7d8c04f986a3248e55ae93a7961b'),
+    'mcp': ('Puzzle piece/3D/puzzle_piece_3d.png', 'c0f47e02e87bd61118985d8ab7b5f40fe302c82e6bb7ae6a7b7add2eefc6de7a'),
+    'translate': ('Input latin letters/3D/input_latin_letters_3d.png', 'b527994c9d8d3f5537b244548e3179cdbcda8a7d8b68e875e0f94f94da3c9a81'),
+    'improve': ('Sparkles/3D/sparkles_3d.png', 'e4490c9ff74a3fd73a8f99c760d65b6ed51b8a3e4ad28da137fec050b77e1058'),
+    'image': ('Framed picture/3D/framed_picture_3d.png', 'e70eeb3cd3b5c8bd6633a9ddf0c5f0bb7e0c4be45c89b9b2aad689276aad35bc'),
+    'pdf': ('Bookmark tabs/3D/bookmark_tabs_3d.png', '4cc582223682c9f9fa752603eb0ab9e4a789f8d00ac90b107d170241d828ae7c'),
+    'security': ('Shield/3D/shield_3d.png', '3c1cc1b14f8dd43e8532f9fb751769cd68382a9f25c012b0549e352a8d953a94'),
+    'wisebase': ('Books/3D/books_3d.png', '36f75eaa1e1a849fc950f43962b447c206d96244858468240a6a81beaa97f7be'),
+    'benchmark': ('Bar chart/3D/bar_chart_3d.png', '0d83833e992b128aa00b85220fc2f777516bbdeb92e9e1e019a7b715ecc6ef97'),
+    'Cyber': ('Detective/Default/3D/detective_3d_default.png', '5d5457e74d826d1981eb510bc34c8f1755aacfb7be2d9e28512b0e8a9aeecb68'),
+    'Performance': ('High voltage/3D/high_voltage_3d.png', 'f8f9d3ed8a6f350f1e3f009fb8b3f3bcc20276c008b2ce391bef057ea062ca71'),
+    'History': ('Hourglass not done/3D/hourglass_not_done_3d.png', 'ab4183328a0ec7a0440a6fb48113fdb9145f51235e960c7f17097ebb9f13af97'),
+    'Bookmarks': ('Star/3D/star_3d.png', 'b935cdf502b69054bc2b08e7ba4e4eaba6499564a2041dd77d6291e21bf8cfe8'),
+    'Settings': ('Gear/3D/gear_3d.png', '415296d4fadabc2e0f6593143ea632948fef20a1cd73fbbc3dbda571f0421988'),
+    'App': ('Window/3D/window_3d.png', '6826ed43d4c2ec8071f7384048eee5c0bc9080ee85f46947002681dc3eb225c4'),
+    'Back': ('Left arrow/3D/left_arrow_3d.png', '67a377760bb0dbc7b4a25fe5298125c59a11c43167d21052cb3d64c6701badd4'),
+    'Forward': ('Right arrow/3D/right_arrow_3d.png', '499ad6a8d1327d60c756134fff21fc879cebd43e478a1b1d99fc07e83adca2d6'),
+    'Reload': ('Counterclockwise arrows button/3D/counterclockwise_arrows_button_3d.png', 'f43c7b042dfef8a3a288e9ee54119caaca68f3b3a85493bfaf53abfa436d471c'),
+}
+FLUENT_URL = 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/{sha}/assets/{path}'
 # The bar's default order (the sidebar's own order for the others, after).
 WORKSPACE_ORDER = ['chat', 'web', 'agent', 'mcp', 'translate', 'improve', 'image', 'pdf', 'security',
                    'wisebase', 'benchmark']
@@ -899,6 +926,38 @@ def _phosphor_duotone_dir():
     with tarfile.open(tgz) as t:
         t.extractall(cache, filter='data')
     return icons
+
+
+def _fluent_png(key):
+    """The Fluent Emoji for `key` at ICON_PX (bytes), or None."""
+    if key not in FLUENT_EMOJI:
+        return None
+    import io
+    import urllib.parse
+    from PIL import Image
+    path, sha256 = FLUENT_EMOJI[key]
+    cache = BUILD / 'downloads' / f'fluent-emoji-{FLUENT_SHA[:12]}' / f'{sha256}.png'
+    if not cache.exists():
+        url = FLUENT_URL.format(sha=FLUENT_SHA, path=urllib.parse.quote(path))
+        with urllib.request.urlopen(url, timeout=120) as r:
+            data = r.read()
+        if hashlib.sha256(data).hexdigest() != sha256:
+            raise SystemExit(f'Fluent Emoji {path}: checksum mismatch')
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_bytes(data)
+    image = Image.open(cache).convert('RGBA').resize((ICON_PX, ICON_PX), Image.LANCZOS)
+    out = io.BytesIO()
+    image.save(out, 'PNG', optimize=True)
+    return out.getvalue()
+
+
+def _modern(arrays, name, key):
+    """C++ (pointer, size) of the modern icon for `key`, adding its array."""
+    png = _fluent_png(key)
+    if png is None:
+        return 'nullptr, 0'
+    arrays.append(_c_bytes(name, png))
+    return f'{name}, sizeof({name})'
 
 
 def _white_png(svg):
@@ -978,16 +1037,19 @@ def _write_bar_assets(src):
         arrays.append(_c_bytes(f'kHiveyBarWorkspacePng{i}', _white_png(svg)))
         workspaces.append(f'    {{{_c_string(tab["mode"])}, {_c_string(tab["title"]["en"])}, '
                           f'{_c_string(tab["title"]["fr"])}, kHiveyBarWorkspacePng{i}, '
-                          f'sizeof(kHiveyBarWorkspacePng{i}), {_icon_colors(tab["mode"])}}},')
+                          f'sizeof(kHiveyBarWorkspacePng{i}), {_icon_colors(tab["mode"])}, '
+                          f'{_modern(arrays, f"kHiveyBarWorkspaceModernPng{i}", tab["mode"])}}},')
     for tool, name in TOOL_ICONS.items():
         arrays.append(_c_bytes(f'kHiveyBar{tool}Png', _white_png((phosphor / f'{name}-duotone.svg').read_text())))
         tools.append(f'inline constexpr HiveyBarIcon kHiveyBar{tool}Icon = {{kHiveyBar{tool}Png, '
-                     f'sizeof(kHiveyBar{tool}Png), {_icon_colors(tool)}}};')
+                     f'sizeof(kHiveyBar{tool}Png), {_icon_colors(tool)}, '
+                     f'{_modern(arrays, f"kHiveyBar{tool}ModernPng", tool)}}};')
     hosts = _sidebar_frame_hosts(src)
     header = SRC / 'chrome/browser/hivey/hivey_bar_assets.h'
     header.write_text(
         '// Generated by scripts/hb.py (step "bundle"). Do not edit.\n'
         '// Icons: Phosphor Icons (MIT), duotone, white; the browser tints them.\n'
+        '// Modern icons: Fluent Emoji (MIT, Microsoft), 3D, drawn as they are.\n'
         '#ifndef CHROME_BROWSER_HIVEY_HIVEY_BAR_ASSETS_H_\n'
         '#define CHROME_BROWSER_HIVEY_HIVEY_BAR_ASSETS_H_\n\n'
         '#include <stddef.h>\n\n'
@@ -995,11 +1057,13 @@ def _write_bar_assets(src):
         '// Multicolor icons: 0xRRGGBB on a dark / a light toolbar (has_color is\n'
         '// false for an item without its own color).\n'
         'struct HiveyBarIcon {\n  const unsigned char* png;\n  size_t size;\n'
-        '  unsigned int color_on_dark;\n  unsigned int color_on_light;\n  bool has_color;\n};\n\n'
+        '  unsigned int color_on_dark;\n  unsigned int color_on_light;\n  bool has_color;\n'
+        '  const unsigned char* modern_png;\n  size_t modern_size;\n};\n\n'
         '// Hivey Tools\' workspaces (the sidebar\'s rail), in its order.\n'
         'struct HiveyBarWorkspace {\n  const char* mode;\n  const char* title_en;\n'
         '  const char* title_fr;\n  const unsigned char* png;\n  size_t png_size;\n'
-        '  unsigned int color_on_dark;\n  unsigned int color_on_light;\n  bool has_color;\n};\n'
+        '  unsigned int color_on_dark;\n  unsigned int color_on_light;\n  bool has_color;\n'
+        '  const unsigned char* modern_png;\n  size_t modern_size;\n};\n'
         'inline constexpr HiveyBarWorkspace kHiveyBarWorkspaces[] = {\n' + '\n'.join(workspaces) + '\n};\n\n'
         + '\n'.join(tools) + '\n\n'
         '// Sites Hivey Tools shows in frames (its web chats).\n'
@@ -1238,6 +1302,9 @@ LINUX_LAUNCHER = """#!/bin/sh
 # Hivey Browser launcher: runs the browser from wherever this folder lives.
 HERE="$(dirname "$(readlink -f "$0")")"
 export CHROME_WRAPPER="$(readlink -f "$0")"
+# The window's class (WM_CLASS / Wayland app id): hivey-browser, as in the
+# desktop entry, so docks show its icon.
+export CHROME_DESKTOP=hivey-browser.desktop
 exec "$HERE/chrome" "$@"
 """
 

@@ -46,7 +46,7 @@ Hivey Browser build flags additionally keep crash/usage reporting
 | Global Privacy Control (`Sec-GPC: 1`, `navigator.globalPrivacyControl`) | **On** | `chrome://flags/#enable-global-privacy-control` | `privacy/hardened-defaults` |
 | Always use secure connections (strict HTTPS-only) | **On** | Hivey Settings > Privacy, or Settings > Security | `privacy/hardened-defaults` |
 | Encrypted DNS (DNS-over-HTTPS, secure mode) through Quad9, which also refuses known malicious domains | **On** | Settings > Privacy and security > Security | `privacy/secure-dns-quad9` |
-| DuckDuckGo as default search engine; its remote new tab page is removed | **On** | Settings > Search engine | `privacy/duckduckgo-default-search` |
+| Default search engine: Google (user's choice, 2026-10); its remote new tab page is removed. DuckDuckGo, Brave, Startpage, Qwant... one click away | **On** | Hivey Settings > Layout, Settings > Search engine | `customization/google-default-search` |
 | Web pages see the upstream Chromium version, not Hivey's | **On** | — | `build/hivey-updater` |
 | USB, serial, HID and Bluetooth devices: sites cannot even ask for them (a common way to fingerprint and to attack hardware) | **Blocked** | Hivey Settings > Privacy, or per site in the address bar | `privacy/block-device-apis` |
 | Hardened mode: no JavaScript optimizer (JIT) on any site, which removes the code most browser exploits target, at some speed cost | Off | Hivey Settings > Privacy | `customization/hivey-studio-themes` |

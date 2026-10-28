@@ -33,7 +33,8 @@ status, checks on demand, and turns automatic updates off.
   for a site.
 - **Third-party cookies blocked**, **secure connections only** (a warning
   before any plain-HTTP page), **encrypted DNS** through Quad9, **Global
-  Privacy Control**, and **DuckDuckGo** for searches.
+  Privacy Control**, and **Google** for searches (Hivey Settings > Layout
+  changes it: DuckDuckGo, Brave, Startpage...).
 - **Fingerprinting protection.** Sites cannot recognize your computer from
   how it draws, measures text, plays audio, which fonts it has or which GPU it
   uses. If a site that draws or processes sound misbehaves, turn
@@ -60,18 +61,24 @@ Right-click it to move it or hide it; right-click the tab strip (or use Hivey
 Settings > Layout) to show it again. The same tab strip menu puts vertical tabs
 on the left or the right.
 
-Hivey Settings > Layout > **Hivey bar** customizes it: the order of its
-buttons (arrows or drag and drop), which ones show (also: right-click a button
-> *Hide this button*), icons in the theme's color or **multicolor** (a color
-per tool), and **your own sites**: each gets a button with its initial and
-opens in the side panel, signed in like in a tab; links to other windows open
-in tabs.
+Everything is set from the bar itself: **drag a button** to move it (a line
+shows where it lands); **right-click** to hide a button, show hidden ones
+again, pick the **icons** (modern full-color images, or classic line icons,
+multicolor or in the theme's color; colors are kept for Hivey Tools'
+workspaces), move the bar or hide it. **Back, Forward and Reload** sit at its
+top, out of the toolbar; **Settings** closes its tab when it is the current
+one. Hivey Settings > Layout > **Hivey bar** has the same choices, plus **your
+own sites**: each gets a button with its initial and opens in the side panel,
+signed in like in a tab; links to other windows open in tabs. Without the bar,
+Hivey Tools is the full extension again (its own tabs menu and side).
 
 ## Server info
 
-The chip in the address bar shows the country of the site's server (flag and
-code; the code only on Windows). Click it for the IP address, the country and
-the connection, and WHOIS or IP details links. The lookup uses a database
+The chip at the right end of the address bar shows the country of the site's
+server (flag and code; the code only on Windows). Click it for the IP address,
+the country and the connection, WHOIS or IP details links, **Analyze with
+Hivey Cyber** (its security tools for the site) and **Translate this page**
+(Hivey Tools' translation, in the side panel). The lookup uses a database
 shipped with the browser: nothing is sent anywhere.
 
 ## Hivey AI

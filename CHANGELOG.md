@@ -3,6 +3,39 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4707 — 28 octobre 2026
+
+### Barre Hivey, entièrement personnalisable depuis la barre
+- **Glissez un bouton** pour le déplacer (une ligne montre où il arrive).
+- **Clic droit** : masquer ce bouton, **réafficher les boutons masqués**,
+  style des **icônes**, côté gauche/droite, masquer la barre.
+- **Icônes modernes** (images en couleur, style emoji) ou **classiques**
+  (multicolores ou couleur du thème) ; en classique, les couleurs restent
+  réservées aux onglets de la sidebar IA.
+- **Retour, Avancer, Actualiser** passent en haut de la barre Hivey : la
+  barre d'adresse commence au bord.
+- Le bouton **Paramètres referme** l'onglet Paramètres s'il est ouvert.
+- La zone du site a un **coin arrondi** du côté de la barre Hivey.
+
+### Barre d'adresse
+- Le **drapeau du serveur** est tout à droite, comme dans Firefox ; sa
+  bulle propose **Analyser avec Hivey Cyber** et **Traduire cette page**.
+- **Google** devient le moteur de recherche par défaut ; le choix du moteur
+  est dans Paramètres > Disposition.
+
+### Fenêtre
+- Le **menu du clic droit sur la barre de titre** (Windows) prend les
+  couleurs du thème et contient « Afficher la barre Hivey ».
+- **Icône de l'application** : le logo Hivey (aux couleurs du thème)
+  remplace enfin l'ancien dans la barre des tâches, sur le bureau et dans le
+  menu Démarrer ; sous Linux, la fenêtre est reconnue comme « Hivey
+  Browser » et son icône s'affiche dans le dock.
+
+### Sidebar sans la barre Hivey
+- Barre Hivey masquée, la sidebar redevient l'**extension complète** (son
+  menu d'onglets, son côté gauche/droite) et son logo n'a plus de **fond
+  blanc**.
+
 ## 156.0.8078.4706 — 27 octobre 2026
 
 ### Barre Hivey personnalisable
