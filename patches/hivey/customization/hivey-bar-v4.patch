@@ -1,4 +1,4 @@
-# Hivey bar v4: drag a button to move it; right-click for the icon style (modern Fluent Emoji, classic multicolor or theme color; colors only on Hivey Tools' workspaces), hidden buttons, side; Back/Forward/Reload in the bar; Settings closes its tab; the page's corner next to the bar is rounded; the server chip at the right end with Hivey Cyber and translation; Windows window menu in the browser's colors; Hivey Tools runs as the full extension without the bar (no white disc behind its icon); app icon refreshed (Windows file name, Linux desktop entry); search engine choice in Hivey Settings.
+# Hivey bar v4: drag a button to move it; right-click for the icon style (modern Fluent Emoji, classic multicolor or theme color; colors only on Hivey Tools' workspaces), hidden buttons, side; Back/Forward/Reload in the bar; Settings closes its tab; the page's corner next to the bar is rounded; the server chip at the right end with Hivey Cyber and translation; Windows window menu in the browser's colors; Hivey Tools runs as the full extension without the bar (its button opens its panel, no white disc behind its icon); app icon refreshed (Windows file name, Linux desktop entry); search engine choice in Hivey Settings.
 --- a/chrome/app/generated_resources.grd
 +++ b/chrome/app/generated_resources.grd
 @@ -1963,6 +1963,24 @@
@@ -56,6 +56,35 @@
  <translation id="8776060692590616279">Afficher la barre Hivey</translation>
  <translation id="6713024601744425595">Onglets à gauche</translation>
  <translation id="8964168382003186981">Onglets à droite</translation>
+--- a/chrome/browser/extensions/extension_action_runner.cc
++++ b/chrome/browser/extensions/extension_action_runner.cc
+@@ -17,6 +17,7 @@
+ #include "base/task/single_thread_task_runner.h"
+ #include "chrome/browser/extensions/api/side_panel/side_panel_service.h"
+ #include "chrome/browser/extensions/extension_action_dispatcher.h"
++#include "chrome/browser/hivey/bundled_extensions.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
+ #include "chrome/browser/extensions/tab_helper.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -97,6 +98,18 @@
+     bool grant_tab_permissions) {
+   int tab_id = sessions::SessionTabHelper::IdForTab(web_contents()).id();
+ 
++  // Hivey: Hivey Tools' button toggles its side panel, as the Hivey bar does.
++  // Its site access is withheld on purpose: its scripts always count as
++  // "blocked", and running them first would only ask to reload the page.
++  if (extension->id() == HIVEY_BUNDLED_AI_ID) {
++    if (SidePanelService* side_panel_service =
++            SidePanelService::Get(browser_context_);
++        side_panel_service &&
++        side_panel_service->HasSidePanelActionForTab(*extension, tab_id)) {
++      return ExtensionAction::ShowAction::kToggleSidePanel;
++    }
++  }
++
+   if (grant_tab_permissions && GetBlockedActions(extension->id())) {
+     // If the extension had blocked actions before granting tab permissions,
+     // granting active tab will have run the extension. Don't execute further
 --- a/chrome/browser/hivey/hivey_bar_prefs.cc
 +++ b/chrome/browser/hivey/hivey_bar_prefs.cc
 @@ -20,7 +20,7 @@
@@ -1793,6 +1822,36 @@
    for (ContentSettingImageView* view :
         std::views::reverse(content_setting_views_)) {
      int intra_item_padding = kContentSettingIntraItemPadding;
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
+ 
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
++
+ #include <algorithm>
+ #include <memory>
+ #include <utility>
+@@ -723,6 +725,18 @@
+     glic_split_button_controller_->SetVerticalTabsDelegate(this);
+   }
+ 
++  // Hivey: Back, Forward and Reload are in the Hivey bar while it shows
++  // (HiveyBarView keeps this up to date afterwards).
++  if (prefs->GetBoolean(hivey::kHiveyBarVisible)) {
++    for (views::View* button :
++         {static_cast<views::View*>(back_), static_cast<views::View*>(forward_),
++          static_cast<views::View*>(reload_)}) {
++      if (button) {
++        button->SetVisible(false);
++      }
++    }
++  }
++
+   initialized_ = true;
+ }
+ 
 --- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
 +++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
 @@ -29,6 +29,7 @@
