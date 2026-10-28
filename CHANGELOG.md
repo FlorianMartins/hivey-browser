@@ -28,6 +28,11 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
 - Les **coins arrondis** de la page sont remplis de la couleur de la barre
   (on ne voit plus le site derrière).
 
+### Hivey Tools
+- **Chats web** : ils s'affichent dès la première ouverture, même juste
+  après le démarrage (avant, il fallait attendre une erreur et changer de
+  fournisseur).
+
 ### Favoris
 - **Importer des favoris** (Paramètres > Disposition) depuis **Chrome, Edge,
   Brave, Vivaldi, Opera ou Chromium** installés sur l'ordinateur ; Firefox et
