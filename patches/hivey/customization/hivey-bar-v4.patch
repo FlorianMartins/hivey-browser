@@ -539,7 +539,7 @@
  
  namespace {
  
-@@ -82,8 +100,32 @@
+@@ -82,8 +100,33 @@
    kCommandHide,
    kCommandHideItem,
    kCommandCustomize,
@@ -559,10 +559,11 @@
 +
 +// A dragged button: its id after this prefix, as the drag's text.
 +constexpr char kDragPrefix[] = "hivey-bar:";
++constexpr char16_t kDragPrefix16[] = u"hivey-bar:";
 +
 +std::optional<std::string> DraggedId(const ui::OSExchangeData& data) {
 +  const std::optional<std::u16string> text = data.GetString();
-+  const std::u16string prefix = base::UTF8ToUTF16(kDragPrefix);
++  const std::u16string prefix(kDragPrefix16);
 +  if (!text || !text->starts_with(prefix)) {
 +    return std::nullopt;
 +  }
@@ -572,7 +573,7 @@
  SidePanelEntryKey HiveyToolsKey() {
    return SidePanelEntryKey(SidePanelEntryId::kExtension, HIVEY_BUNDLED_AI_ID);
  }
-@@ -122,6 +164,13 @@
+@@ -122,6 +165,13 @@
                           : gfx::ImageSkia::CreateFromBitmap(bitmap, 2.0f);
  }
  
@@ -586,7 +587,7 @@
  // A user's site: the first letter of its name in a rounded square, white at
  // 40 px for 20 DIP like the built-in icons.
  gfx::ImageSkia MonogramIcon(const std::u16string& title) {
-@@ -246,11 +295,27 @@
+@@ -246,11 +296,27 @@
    prefs_.Add(hivey::kHiveyBarIconStyle,
               base::BindRepeating(&HiveyBarView::UpdateColors,
                                   base::Unretained(this)));
@@ -615,7 +616,7 @@
  
  bool HiveyBarView::ShouldShow() const {
    return prefs_.prefs()->GetBoolean(hivey::kHiveyBarVisible);
-@@ -275,6 +340,12 @@
+@@ -275,6 +341,12 @@
    UpdateColors();
  }
  
@@ -628,7 +629,7 @@
  void HiveyBarView::OnVisibilityChanged() {
    // Without the bar, Hivey Tools and Hivey Cyber go back to the toolbar with
    // the other extensions; with it, they live in the bar.
-@@ -286,6 +357,7 @@
+@@ -286,6 +358,7 @@
        }
      }
    }
@@ -636,7 +637,7 @@
    OnPrefsChanged();
  }
  
-@@ -295,6 +367,46 @@
+@@ -295,6 +368,46 @@
    UpdateActive();
  }
  
@@ -663,7 +664,7 @@
 +}
 +
 +void HiveyBarView::UpdateNavigationEnabled() {
-+  Browser* browser = browser_view_->browser();
++  BrowserWindowInterface* browser = browser_view_->browser();
 +  if (back_button_) {
 +    back_button_->SetEnabled(chrome::IsCommandEnabled(browser, IDC_BACK));
 +  }
@@ -683,7 +684,7 @@
  void HiveyBarView::OnExtensionReady(content::BrowserContext* browser_context,
                                      const extensions::Extension* extension) {
    if (extension->id() == HIVEY_BUNDLED_AI_ID ||
-@@ -314,9 +426,20 @@
+@@ -314,9 +427,20 @@
    RemoveAllChildViews();
    workspaces_.clear();
    icons_.clear();
@@ -705,7 +706,7 @@
  
    // Built-in extensions the user turned off leave the bar (before they load
    // at startup they are neither enabled nor disabled: they stay).
-@@ -326,14 +449,33 @@
+@@ -326,14 +450,33 @@
      return extension_prefs->IsExtensionDisabled(id);
    };
  
@@ -744,7 +745,7 @@
    const bool french =
        base::StartsWith(g_browser_process->GetApplicationLocale(), "fr");
    const bool tools_off = turned_off(HIVEY_BUNDLED_AI_ID);
-@@ -346,8 +488,8 @@
+@@ -346,8 +489,8 @@
        const std::u16string name = base::UTF8ToUTF16(title ? *title : "");
        const auto& [on_dark, on_light] =
            kAppColors[base::PersistentHash(id) % std::size(kAppColors)];
@@ -755,7 +756,7 @@
                  base::BindRepeating(&HiveyBarView::OnAppPressed,
                                      base::Unretained(this), id));
        continue;
-@@ -359,64 +501,68 @@
+@@ -359,64 +502,68 @@
        continue;
      }
      ToolbarButton* button = AddButton(
@@ -868,7 +869,7 @@
    UpdateColors();
    InvalidateLayout();
  }
-@@ -426,7 +572,9 @@
+@@ -426,7 +573,9 @@
      std::string id,
      std::u16string tooltip,
      gfx::ImageSkia image,
@@ -878,7 +879,7 @@
      base::RepeatingClosure callback) {
    auto button = std::make_unique<ToolbarButton>(base::BindRepeating(
        [](base::RepeatingClosure callback, const ui::Event&) { callback.Run(); },
-@@ -434,8 +582,12 @@
+@@ -434,8 +583,12 @@
    button->SetTooltipText(tooltip);
    button->GetViewAccessibility().SetName(tooltip);
    button->set_context_menu_controller(this);
@@ -892,7 +893,7 @@
    return added;
  }
  
-@@ -443,28 +595,89 @@
+@@ -443,28 +596,89 @@
    return hivey::IsHiveyBarItemHidden(*prefs_.prefs(), id);
  }
  
@@ -992,7 +993,7 @@
    }
    UpdateActive();
  }
-@@ -504,6 +717,158 @@
+@@ -504,6 +718,158 @@
                      : views::BubbleBorder::RIGHT_TOP;
  }
  
@@ -1151,7 +1152,7 @@
  void HiveyBarView::OnWorkspacePressed(std::string mode) {
    SidePanelUI* side_panel = SidePanelUI::From(browser_view_->browser());
    if (side_panel && side_panel->IsSidePanelEntryShowing(HiveyToolsKey()) &&
-@@ -596,6 +961,24 @@
+@@ -596,6 +962,24 @@
    }
  }
  
@@ -1176,7 +1177,7 @@
  void HiveyBarView::OnAppPressed(std::string id) {
    BrowserWindowInterface* browser = browser_view_->browser();
    SidePanelUI* side_panel = SidePanelUI::From(browser);
-@@ -651,26 +1034,57 @@
+@@ -651,26 +1035,57 @@
                                                            : fallback_command);
  }
  
@@ -1242,7 +1243,7 @@
    menu_model_->AddSeparator(ui::NORMAL_SEPARATOR);
    menu_model_->AddItemWithStringId(kCommandHide, IDS_HIVEY_BAR_HIDE);
    menu_runner_ = std::make_unique<views::MenuRunner>(
-@@ -680,13 +1094,46 @@
+@@ -680,13 +1095,46 @@
  }
  
  bool HiveyBarView::IsCommandIdChecked(int command_id) const {
@@ -1292,7 +1293,7 @@
    switch (command_id) {
      case kCommandLeft:
      case kCommandRight: {
-@@ -702,12 +1149,22 @@
+@@ -702,12 +1150,22 @@
        prefs->SetBoolean(hivey::kHiveyBarVisible, false);
        break;
      case kCommandHideItem:
@@ -1867,7 +1868,7 @@
        {"cyber", u"Hivey Cyber"},
        {"performance", l10n_util::GetStringUTF16(IDS_HIVEY_BAR_PERFORMANCE)},
        {"history", l10n_util::GetStringUTF16(IDS_HIVEY_BAR_HISTORY)},
-@@ -777,6 +794,43 @@
+@@ -777,6 +794,44 @@
        .Set("tools", std::move(tools));
  }
  
@@ -1889,9 +1890,10 @@
 +    }
 +  }
 +  const TemplateURL* current = search->GetDefaultSearchProvider();
-+  return state.Set("engines", std::move(engines))
-+      .Set("current", current ? current->sync_guid() : std::string())
-+      .Set("managed", search->is_default_search_managed());
++  state.Set("engines", std::move(engines));
++  state.Set("current", current ? current->sync_guid() : std::string());
++  state.Set("managed", search->is_default_search_managed());
++  return state;
 +}
 +
 +void HiveyStudioHandler::HandleSetSearchEngine(const base::ListValue& args) {
