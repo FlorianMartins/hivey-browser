@@ -1,4 +1,4 @@
-# Hivey bar v5: Back/Forward/Reload back in the toolbar; modern icons are color tiles drawn at build time (Hivey Tools' workspaces by default), the bottom buttons have their own icon style (theme color by default); tab strip flat buttons (Search tabs) tinted with the theme; Hivey Settings opens at the first start after installing; the new tab page is the default search engine's home page; profiles still on DuckDuckGo move to Google once.
+# Hivey bar v5: Back/Forward/Reload back in the toolbar, flush with the vertical tab strip (no grab-handle gap without caption buttons, no leading margin); modern icons are color tiles drawn at build time (Hivey Tools' workspaces by default), the bottom buttons have their own icon style (theme color by default); tab strip flat buttons (Search tabs) tinted with the theme; Hivey Settings opens at the first start after installing; the new tab page is the default search engine's home page; profiles still on DuckDuckGo move to Google once.
 --- a/chrome/app/generated_resources.grd
 +++ b/chrome/app/generated_resources.grd
 @@ -1972,7 +1972,10 @@
@@ -250,15 +250,15 @@
  #include "chrome/browser/ui/browser_tabstrip.h"
  #include "chrome/browser/ui/color/chrome_color_id.h"
  #include "chrome/browser/ui/extensions/extension_popup_types.h"
-@@ -45,15 +45,14 @@
+@@ -45,7 +45,6 @@
  #include "chrome/browser/ui/views/extensions/extension_popup.h"
  #include "chrome/browser/ui/views/frame/browser_view.h"
  #include "chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h"
 -#include "chrome/browser/ui/views/toolbar/reload_button.h"
  #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
--#include "chrome/browser/ui/views/toolbar/toolbar_view.h"
+ #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
  #include "chrome/common/pref_names.h"
- #include "chrome/grit/generated_resources.h"
+@@ -53,7 +52,8 @@
  #include "components/input/native_web_keyboard_event.h"
  #include "components/prefs/pref_service.h"
  #include "components/prefs/scoped_user_pref_update.h"
@@ -268,7 +268,7 @@
  #include "components/tabs/public/tab_interface.h"
  #include "content/public/common/url_constants.h"
  #include "content/public/browser/navigation_controller.h"
-@@ -87,7 +86,6 @@
+@@ -87,7 +87,6 @@
  #include "ui/views/controls/webview/webview.h"
  #include "ui/views/layout/box_layout.h"
  #include "ui/views/paint_info.h"
@@ -276,7 +276,7 @@
  
  namespace {
  
-@@ -106,6 +104,9 @@
+@@ -106,6 +105,9 @@
    kCommandIconsModern,
    kCommandIconsMulticolor,
    kCommandIconsTheme,
@@ -286,7 +286,7 @@
    // One per hidden button ("Hidden buttons" submenu).
    kCommandShowHiddenFirst = 100,
  };
-@@ -113,6 +114,7 @@
+@@ -113,6 +115,7 @@
  // Radio groups of the context menu.
  constexpr int kSideGroup = 1;
  constexpr int kIconsGroup = 2;
@@ -294,7 +294,7 @@
  
  // A dragged button: its id after this prefix, as the drag's text.
  constexpr char kDragPrefix[] = "hivey-bar:";
-@@ -296,28 +298,46 @@
+@@ -296,28 +299,46 @@
    prefs_.Add(hivey::kHiveyBarIconStyle,
               base::BindRepeating(&HiveyBarView::UpdateColors,
                                   base::Unretained(this)));
@@ -358,7 +358,7 @@
  bool HiveyBarView::ShouldShow() const {
    return prefs_.prefs()->GetBoolean(hivey::kHiveyBarVisible);
  }
-@@ -341,12 +361,6 @@
+@@ -341,12 +362,6 @@
    UpdateColors();
  }
  
@@ -371,7 +371,7 @@
  void HiveyBarView::OnVisibilityChanged() {
    // Without the bar, Hivey Tools and Hivey Cyber go back to the toolbar with
    // the other extensions; with it, they live in the bar.
-@@ -358,7 +372,6 @@
+@@ -358,54 +373,17 @@
        }
      }
    }
@@ -379,10 +379,14 @@
    OnPrefsChanged();
  }
  
-@@ -368,46 +381,6 @@
-   UpdateActive();
- }
- 
+ void HiveyBarView::OnPrefsChanged() {
+-  // The layout reads ShouldShow() and IsOnLeft().
++  // The layout reads ShouldShow() and IsOnLeft(); the toolbar's leading
++  // margin follows the vertical tabs' side.
+   browser_view_->InvalidateLayout();
+-  UpdateActive();
+-}
+-
 -void HiveyBarView::UpdateToolbarNavigation() {
 -  ToolbarView* toolbar = browser_view_->toolbar();
 -  if (!toolbar) {
@@ -420,13 +424,14 @@
 -    back_button_->SetEnabled(enabled);
 -  } else if (id == IDC_FORWARD && forward_button_) {
 -    forward_button_->SetEnabled(enabled);
--  }
--}
--
++  if (ToolbarView* toolbar = browser_view_->toolbar()) {
++    toolbar->InvalidateLayout();
+   }
++  UpdateActive();
+ }
+ 
  void HiveyBarView::OnExtensionReady(content::BrowserContext* browser_context,
-                                     const extensions::Extension* extension) {
-   if (extension->id() == HIVEY_BUNDLED_AI_ID ||
-@@ -428,8 +401,7 @@
+@@ -428,8 +406,7 @@
    workspaces_.clear();
    icons_.clear();
    items_group_ = tools_group_ = nullptr;
@@ -436,7 +441,7 @@
    const PrefService& prefs = *prefs_.prefs();
    auto* layout = static_cast<views::BoxLayout*>(GetLayoutManager());
    auto add_group = [&](int spacing) {
-@@ -450,29 +422,6 @@
+@@ -450,29 +427,6 @@
      return extension_prefs->IsExtensionDisabled(id);
    };
  
@@ -466,7 +471,7 @@
    // Hivey Tools' workspaces and the user's sites, in the user's order,
    // centered in the column.
    layout->SetFlexForView(AddChildView(std::make_unique<views::View>()), 1);
-@@ -518,9 +467,12 @@
+@@ -518,9 +472,12 @@
    auto add_tool = [&](const char* id, std::u16string tooltip,
                        const HiveyBarIcon& icon,
                        base::RepeatingClosure callback) -> ToolbarButton* {
@@ -482,7 +487,7 @@
    };
    for (const std::string& id : hivey::GetHiveyBarToolsOrder(prefs)) {
      if (IsHidden(id)) {
-@@ -564,6 +516,7 @@
+@@ -564,6 +521,7 @@
              /*movable=*/false,
              base::BindRepeating(&HiveyBarView::OnSettingsPressed,
                                  base::Unretained(this)));
@@ -490,7 +495,7 @@
    UpdateColors();
    InvalidateLayout();
  }
-@@ -597,15 +550,6 @@
+@@ -597,15 +555,6 @@
  }
  
  std::u16string HiveyBarView::ItemTitle(std::string_view id) const {
@@ -506,7 +511,7 @@
    if (id == "cyber") {
      return u"Hivey Cyber";
    }
-@@ -650,10 +594,19 @@
+@@ -650,10 +599,19 @@
      return;
    }
    const SkColor theme_color = IconColor(*colors);
@@ -527,7 +532,7 @@
      gfx::ImageSkia image;
      if (style == hivey::HiveyBarIconStyle::kModern && !icon.modern.isNull()) {
        image = icon.modern;
-@@ -1080,6 +1033,14 @@
+@@ -1080,6 +1038,14 @@
        kCommandIconsTheme, IDS_HIVEY_BAR_ICONS_THEME, kIconsGroup);
    menu_model_->AddSubMenuWithStringId(kCommandIconsMenu, IDS_HIVEY_BAR_ICONS,
                                        icons_menu_model_.get());
@@ -542,7 +547,7 @@
    menu_model_->AddItemWithStringId(kCommandCustomize, IDS_HIVEY_BAR_CUSTOMIZE);
    menu_model_->AddSeparator(ui::NORMAL_SEPARATOR);
    menu_model_->AddRadioItemWithStringId(kCommandLeft, IDS_HIVEY_BAR_LEFT,
-@@ -1108,6 +1069,11 @@
+@@ -1108,6 +1074,11 @@
        return style == hivey::HiveyBarIconStyle::kMulticolor;
      case kCommandIconsTheme:
        return style == hivey::HiveyBarIconStyle::kTheme;
@@ -554,7 +559,7 @@
    }
    return false;
  }
-@@ -1166,6 +1132,13 @@
+@@ -1166,6 +1137,13 @@
      case kCommandIconsTheme:
        set_style(hivey::HiveyBarIconStyle::kTheme);
        break;
@@ -666,18 +671,29 @@
    base::WeakPtrFactory<HiveyBarView> weak_factory_{this};
  };
  
+--- a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
++++ b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
+@@ -102,11 +102,16 @@
+     params.trailing_exclusion.horizontal_padding =
+         std::max(params.trailing_exclusion.horizontal_padding,
+                  static_cast<float>(minimum));
+-  } else {
++  } else if (params.leading_exclusion.content.width() > 0.0) {
+     params.leading_exclusion.horizontal_padding =
+         std::max(params.leading_exclusion.horizontal_padding,
+                  static_cast<float>(minimum));
+   }
++  // Hivey: with no caption buttons on either side (system title bar, no
++  // window manager buttons) there is nothing to keep a grab handle next to:
++  // the empty leading exclusion was never used up by the vertical strip and
++  // pushed the toolbar 34 DIP away from it. The toolbar's empty space is
++  // caption area anyway.
+ }
+ 
+ // Gets the sum of leading and trailing exclusions in `params` for minimum-size
 --- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
 +++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
-@@ -4,8 +4,6 @@
- 
- #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
- 
--#include "chrome/browser/hivey/hivey_bar_prefs.h"
--
- #include <algorithm>
- #include <memory>
- #include <utility>
-@@ -725,18 +723,6 @@
+@@ -725,18 +725,6 @@
      glic_split_button_controller_->SetVerticalTabsDelegate(this);
    }
  
@@ -696,6 +712,18 @@
    initialized_ = true;
  }
  
+@@ -1751,6 +1739,11 @@
+     if (is_trailing_contextual_tasks_visible) {
+       interior_margin.set_right(0);
+     }
++  } else if (!browser_->GetProfile()->GetPrefs()->GetBoolean(
++                 hivey::kHiveyVerticalTabsRight)) {
++    // Hivey: the vertical strip and the toolbar are one surface; the strip's
++    // own padding already separates its buttons from the toolbar's.
++    interior_margin.set_left(0);
+   }
+ 
+   if (app_menu_button_) {
 --- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
 +++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
 @@ -29,7 +29,6 @@
