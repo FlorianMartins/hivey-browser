@@ -99,7 +99,7 @@ unmodified except for its default rulesets
 ([source](https://github.com/uBlockOrigin/uBOL-home)). The server country in
 the location bar uses [IP to Country Lite by DB-IP](https://db-ip.com),
 licensed under CC BY 4.0. The Hivey bar's icons are
-[Phosphor Icons](https://phosphoricons.com) (MIT) and, in the modern style,
-Microsoft's [Fluent Emoji](https://github.com/microsoft/fluentui-emoji) (MIT).
+[Phosphor Icons](https://phosphoricons.com) (MIT); the modern style puts them on
+color tiles drawn at build time.
 
 Hivey Browser is not affiliated with Google or the Chromium project.
