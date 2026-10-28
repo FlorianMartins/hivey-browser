@@ -1,4 +1,28 @@
-# Google as the default search engine (its remote new tab page left out); the others stay in Settings > Search engine and Hivey Settings.
+# Google as the default search engine (its remote new tab page left out, no AI Mode eligibility request at startup); the others stay in Settings > Search engine and Hivey Settings.
+--- a/components/omnibox/browser/aim_eligibility_service.cc
++++ b/components/omnibox/browser/aim_eligibility_service.cc
+@@ -430,7 +430,9 @@
+ }
+ 
+ bool AimEligibilityService::IsServerEligibilityEnabled() const {
+-  return base::FeatureList::IsEnabled(omnibox::kAimServerEligibilityEnabled);
++  // Hivey: never asks Google whether its AI Mode is offered (it would run at
++  // startup whenever Google is the default search engine).
++  return false;
+ }
+ 
+ bool AimEligibilityService::IsAimAllowedByDse() const {
+@@ -1102,6 +1104,10 @@
+ void AimEligibilityService::StartServerEligibilityRequest(
+     RequestSource request_source,
+     const std::string& locale) {
++  // Hivey: no eligibility request to Google (see IsServerEligibilityEnabled).
++  if (!IsServerEligibilityEnabled()) {
++    return;
++  }
+   if (IsManualOverrideActive() && request_source != RequestSource::kUser) {
+     return;
+   }
 --- a/components/search_engines/template_url_prepopulate_data.cc
 +++ b/components/search_engines/template_url_prepopulate_data.cc
 @@ -317,14 +317,16 @@
