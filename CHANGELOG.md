@@ -3,6 +3,29 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4708 — 28 octobre 2026
+
+### Barre Hivey
+- **Nouvelles icônes modernes**, dessinées pour Hivey : tuiles en dégradé
+  de la couleur de chaque onglet, reflet léger, pictogramme blanc (fini les
+  emojis). Elles s'appliquent par défaut aux **onglets de la sidebar IA**.
+- Les **boutons du bas** (Hivey Cyber, Performances, Historique, Favoris,
+  Paramètres) ont **leur propre style** : couleur du thème par défaut, ou
+  modernes (clic droit > Boutons du bas, ou Paramètres > Disposition).
+- **Retour, Avancer, Actualiser** reviennent dans la barre de navigation,
+  avec leurs icônes habituelles.
+
+### Navigateur
+- Le bouton **Rechercher dans les onglets** (et les autres boutons plats de
+  la bande d'onglets) prend la **couleur du thème** au lieu du gris.
+- Le **premier démarrage après l'installation** ouvre directement les
+  **Paramètres**.
+- Un **nouvel onglet** ouvre la page d'accueil de votre **moteur de
+  recherche** (Google par défaut) ; une adresse de votre choix reste
+  possible dans Paramètres > Disposition.
+- Les profils restés sur **DuckDuckGo** passent sur **Google**, le moteur
+  par défaut (une seule fois ; le choix reste dans Paramètres > Disposition).
+
 ## 156.0.8078.4707 — 28 octobre 2026
 
 ### Barre Hivey, entièrement personnalisable depuis la barre

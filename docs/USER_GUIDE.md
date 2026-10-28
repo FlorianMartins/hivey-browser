@@ -63,11 +63,10 @@ on the left or the right.
 
 Everything is set from the bar itself: **drag a button** to move it (a line
 shows where it lands); **right-click** to hide a button, show hidden ones
-again, pick the **icons** (modern full-color images, or classic line icons,
-multicolor or in the theme's color; colors are kept for Hivey Tools'
-workspaces), move the bar or hide it. **Back, Forward and Reload** sit at its
-top, out of the toolbar; **Settings** closes its tab when it is the current
-one. Hivey Settings > Layout > **Hivey bar** has the same choices, plus **your
+again, pick the **icons** of Hivey Tools' workspaces (modern color tiles, or
+classic line icons, multicolor or in the theme's color) and, separately, of
+the **bottom buttons** (theme color by default, or modern), move the bar or
+hide it. **Settings** closes its tab when it is the current one. Hivey Settings > Layout > **Hivey bar** has the same choices, plus **your
 own sites**: each gets a button with its initial and opens in the side panel,
 signed in like in a tab; links to other windows open in tabs. Without the bar,
 Hivey Tools is the full extension again (its own tabs menu and side).
