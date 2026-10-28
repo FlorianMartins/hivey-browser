@@ -314,6 +314,10 @@ def rebrand_icons(src):
     # WebUI pages (profile picker, first run...): the vector logo itself.
     for name in ('product_logo.svg', 'product_logo_animation.svg'):
         (chromium / name).write_text(LOGO.read_text())
+    for size in (16, 32):
+        linux_logo = theme / 'default_100_percent/chromium/linux' / f'product_logo_{size}.png'
+        if linux_logo.exists():
+            _png(size, linux_logo)
     for scale, folder in ((1, 'default_100_percent'), (2, 'default_200_percent')):
         for size in (16, 32):
             _png(size * scale, theme / folder / 'chromium' / f'product_logo_{size}.png')

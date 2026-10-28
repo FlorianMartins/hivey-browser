@@ -37,3 +37,5 @@ hivey/privacy/location-bar-server-info.patch
 hivey/customization/hivey-bar-v2.patch
 hivey/customization/hivey-bar-v3.patch
 hivey/branding/hivey-logo.patch
+hivey/customization/hivey-bar-v4.patch
+hivey/customization/google-default-search.patch

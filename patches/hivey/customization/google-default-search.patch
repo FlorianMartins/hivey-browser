@@ -1,0 +1,67 @@
+# Google as the default search engine (its remote new tab page left out, no AI Mode eligibility request at startup); the others stay in Settings > Search engine and Hivey Settings.
+--- a/components/omnibox/browser/aim_eligibility_service.cc
++++ b/components/omnibox/browser/aim_eligibility_service.cc
+@@ -430,7 +430,9 @@
+ }
+ 
+ bool AimEligibilityService::IsServerEligibilityEnabled() const {
+-  return base::FeatureList::IsEnabled(omnibox::kAimServerEligibilityEnabled);
++  // Hivey: never asks Google whether its AI Mode is offered (it would run at
++  // startup whenever Google is the default search engine).
++  return false;
+ }
+ 
+ bool AimEligibilityService::IsAimAllowedByDse() const {
+@@ -1102,6 +1104,10 @@
+ void AimEligibilityService::StartServerEligibilityRequest(
+     RequestSource request_source,
+     const std::string& locale) {
++  // Hivey: no eligibility request to Google (see IsServerEligibilityEnabled).
++  if (!IsServerEligibilityEnabled()) {
++    return;
++  }
+   if (IsManualOverrideActive() && request_source != RequestSource::kUser) {
+     return;
+   }
+--- a/components/search_engines/template_url_prepopulate_data.cc
++++ b/components/search_engines/template_url_prepopulate_data.cc
+@@ -317,14 +317,16 @@
+     PrefService& prefs,
+     const std::vector<raw_ptr<const PrepopulatedEngine>>&
+         regional_prepopulated_engines) {
+-  // Hivey: DuckDuckGo is the default search engine in every country (other
+-  // engines stay one click away in Settings > Search engine).
++  // Hivey: Google is the default search engine in every country (Hivey
++  // Settings > Layout and Settings > Search engine change it; DuckDuckGo,
++  // Brave, Startpage... stay in the list). Its remote new tab page is left
++  // out: the new tab page stays local.
+   if (std::unique_ptr<TemplateURLData> engine = FindPrepopulatedEngineInternal(
+-          prefs, regional_prepopulated_engines, duckduckgo.id,
++          prefs, regional_prepopulated_engines, google.id,
+           /*use_first_as_fallback=*/false)) {
+     return engine;
+   }
+-  return PrepopulatedEngineToTemplateURLData(&duckduckgo);
++  return PrepopulatedEngineToTemplateURLData(&google);
+ }
+ 
+ }  // namespace TemplateURLPrepopulateData
+--- a/third_party/search_engines_data/resources/definitions/prepopulated_engines.json
++++ b/third_party/search_engines_data/resources/definitions/prepopulated_engines.json
+@@ -171,11 +171,11 @@
+     },
+ 
+     "google": {
+-      "name": "No Search",
+-      "keyword": "nosearch",
+-      "favicon_url": "about:blank",
+-      "search_url": "http://{searchTerms}",
+-      "new_tab_url": "about:blank",
++      "name": "Google",
++      "keyword": "google.com",
++      "favicon_url": "https://www.google.com/favicon.ico",
++      "search_url": "https://www.google.com/search?q={searchTerms}",
++      "suggest_url": "https://www.google.com/complete/search?client=chrome&q={searchTerms}",
+       "type": "SEARCH_ENGINE_GOOGLE",
+       "preconnect_to_search_url" : "ALLOWED",
+       "prefetch_likely_navigations" : "ALLOWED",

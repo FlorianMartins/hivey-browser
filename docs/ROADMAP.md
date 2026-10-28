@@ -26,7 +26,7 @@ ticked: Linux on the build host, Windows on a GitHub Actions runner.
 - [x] No Topics, Attribution Reporting, fenced frames
 - [x] Global Privacy Control, HTTPS-only (strict), encrypted DNS (Quad9)
 - [x] Hardened defaults from ungoogled-chromium: third-party cookies blocked, no hyperlink auditing, no prefetch, WebRTC without non-proxied UDP
-- [x] DuckDuckGo as default search engine (local new tab page)
+- [x] Google as default search engine, chosen in Hivey Settings (local new tab page)
 - [x] Zero requests at startup, checked on a fresh profile (`tests/startup_requests.py`)
 - [ ] Per-site "forget when closed"
 

@@ -61,7 +61,7 @@ Hivey's patches, by area:
 | Area | Patches |
 | --- | --- |
 | `build/` | ThinLTO thread cap, 7-Zip on a Linux host, the updater |
-| `privacy/` | content blocker loader, referrer cap and ad APIs off, fingerprinting (canvas, text, rects, audio, CPU count, fonts, WebGL), GPC + HTTPS-only, Quad9, DuckDuckGo |
+| `privacy/` | content blocker loader, referrer cap and ad APIs off, fingerprinting (canvas, text, rects, audio, CPU count, fonts, WebGL), GPC + HTTPS-only, Quad9 |
 | `resources/` | Memory Saver, RAM limiter (+ settings), CPU and network limiters |
 | `customization/` | default color, overlay scrollbars, compact mode, Hivey Settings |
 
