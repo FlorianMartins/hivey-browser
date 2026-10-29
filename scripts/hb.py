@@ -844,15 +844,17 @@ WORKSPACE_ICONS = {
     'security': 'shield-check', 'wisebase': 'books', 'benchmark': 'chart-bar', 'mcp': 'plugs-connected',
 }
 TOOL_ICONS = {
-    'Cyber': 'detective', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
+    'Cyber': 'fingerprint', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
     'Bookmarks': 'bookmark-simple', 'Settings': 'gear-six', 'App': 'app-window',
 }
-# "Modern" icons: the Phosphor glyph (fill weight), white, 24 px in a 40 px
-# square; the browser draws it in a translucent tile of the item's (or the
-# theme's) color.
-MODERN_GLYPH_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-<g transform="translate(8 8) scale(0.09375)" fill="#ffffff">{glyph}</g>
+# "Modern" icons: the Phosphor glyph (fill weight), white, 30 px in a 52 px
+# square; the browser cuts it out of a gradient tile of the item's (or the
+# theme's) colors.
+MODERN_GLYPH_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
+<g transform="translate(11 11) scale(0.1171875)" fill="#ffffff">{glyph}</g>
 </svg>"""
+# 26 DIP at 2x: modern tiles are larger than the 20 DIP line icons.
+MODERN_PX = 52
 # The bar's default order (the sidebar's own order for the others, after).
 WORKSPACE_ORDER = ['chat', 'web', 'agent', 'mcp', 'translate', 'improve', 'image', 'pdf', 'security',
                    'wisebase', 'benchmark']
@@ -916,7 +918,7 @@ def _modern_png(phosphor, key, name):
     glyph = (phosphor.parent / 'fill' / f'{name}-fill.svg').read_text()
     glyph = re.sub(r'^.*?<svg[^>]*>|</svg>\s*$', '', glyph, flags=re.S).replace('currentColor', '#ffffff')
     return cairosvg.svg2png(bytestring=MODERN_GLYPH_SVG.format(glyph=glyph).encode(),
-                            output_width=ICON_PX, output_height=ICON_PX)
+                            output_width=MODERN_PX, output_height=MODERN_PX)
 
 
 def _modern(arrays, phosphor, name, key, glyph):

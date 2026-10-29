@@ -3,6 +3,23 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4710 — 29 octobre 2026
+
+### Barre Hivey
+- **Icônes modernes repensées** : des tuiles en dégradé plus grandes, avec
+  le pictogramme **découpé en transparence** ; multicolores ou couleur du
+  thème.
+- **Hivey Cyber** a une nouvelle icône (empreinte digitale), dans la même
+  couleur que les boutons de la barre de navigation, à part des autres
+  réglages d'icônes.
+- Le **survol** a la même forme arrondie que le bouton ouvert.
+- La barre **garde sa largeur** quand un onglet de la sidebar s'ouvre (plus
+  de marge du côté de la barre).
+
+### Application
+- Le **logo Hivey est plus grand** dans la barre des tâches, sur le bureau
+  et dans les menus.
+
 ## 156.0.8078.4709 — 28 octobre 2026
 
 ### Barre Hivey

@@ -1,0 +1,221 @@
+# Hivey bar v7: modern icons are gradient tiles (26 DIP) with the glyph cut out, multicolor or in the theme color; Hivey Cyber (fingerprint) stays classic, in the toolbar buttons' color; hover and press share the open item's rounded square; no side panel margin on the Hivey bar's side (the bar keeps its width); a larger app icon (taskbar, desktop).
+--- a/chrome/browser/hivey/hivey_app_icon.cc
++++ b/chrome/browser/hivey/hivey_app_icon.cc
+@@ -27,6 +27,10 @@
+ constexpr float kBarHeight = 14;
+ constexpr float kBarGap = 7;
+ constexpr float kBarWidths[] = {62, 80, 72, 50};
++// The icon shows the mark this much larger than the logo's canvas (its bars
++// stay within the icon): it reads better in the taskbar and on the desktop.
++// Same factor as LOGO_ICON_SCALE in scripts/branding.py.
++constexpr float kIconScale = 1.15f;
+ 
+ // Draws the mark in the accent color with every bar edge on a whole pixel
+ // (whole height, gap and top, and a width of the image's parity so each bar
+@@ -39,7 +43,7 @@
+ 
+   void Draw(gfx::Canvas* canvas) override {
+     const int size = this->size().width();
+-    const float scale = size / kLogoUnits;
++    const float scale = size / kLogoUnits * kIconScale;
+     const int height = std::max(3, base::ClampRound(kBarHeight * scale));
+     const int gap = std::max(1, base::ClampRound(kBarGap * scale));
+     const int bars = static_cast<int>(std::size(kBarWidths));
+--- a/chrome/browser/hivey/hivey_taskbar_icon_win.cc
++++ b/chrome/browser/hivey/hivey_taskbar_icon_win.cc
+@@ -67,10 +67,11 @@
+ 
+ // One file name per accent and per drawing: Explorer caches icons by path, a
+ // new path makes it read the new one. Bump the drawing number whenever
+-// hivey_app_icon.cc draws something else (2: the Hivey AI sidebar's mark).
++// hivey_app_icon.cc draws something else (2: the Hivey AI sidebar's mark;
++// 3: larger).
+ std::wstring GetIconFileName(SkColor accent) {
+   return base::StrCat(
+-      {L"Hivey Icon 2 ",
++      {L"Hivey Icon 3 ",
+        base::ASCIIToWide(base::StringPrintf("%06X", accent & 0xFFFFFF)),
+        L".ico"});
+ }
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
+@@ -80,6 +80,8 @@
+ #include "ui/compositor/paint_recorder.h"
+ #include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
+ #include "ui/events/event.h"
++#include "cc/paint/paint_shader.h"
++#include "third_party/skia/include/core/SkRRect.h"
+ #include "ui/gfx/canvas.h"
+ #include "ui/gfx/codec/png_codec.h"
+ #include "ui/gfx/color_utils.h"
+@@ -88,6 +90,7 @@
+ #include "ui/gfx/image/image_skia_rep.h"
+ #include "ui/views/background.h"
+ #include "ui/views/bubble/bubble_anchor.h"
++#include "ui/views/controls/highlight_path_generator.h"
+ #include "ui/views/controls/menu/menu_runner.h"
+ #include "ui/views/controls/webview/webview.h"
+ #include "ui/views/layout/box_layout.h"
+@@ -205,25 +208,41 @@
+   return gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f);
+ }
+ 
+-// A modern icon: a translucent rounded tile in `color`, a hairline rim, and
+-// the glyph (`mask`, white, 40 px for 20 DIP) in full `color`.
+-gfx::ImageSkia GlassTile(const gfx::ImageSkia& mask,
+-                         SkColor color,
+-                         bool dark_toolbar) {
+-  constexpr int kSize = 40;
++// A modern icon: a rounded tile in a diagonal gradient from `light` to `deep`
++// with a soft sheen and rim, the glyph (`mask`, white, 52 px for 26 DIP) cut
++// out of it (transparent: the bar shows through).
++gfx::ImageSkia ModernTile(const gfx::ImageSkia& mask,
++                          SkColor light,
++                          SkColor deep) {
++  constexpr int kSize = 52;
+   gfx::Canvas canvas(gfx::Size(kSize, kSize), 1.0f, /*is_opaque=*/false);
++  const SkRRect tile =
++      SkRRect::MakeRectXY(SkRect::MakeXYWH(1, 1, 50, 50), 14, 14);
+   cc::PaintFlags flags;
+   flags.setAntiAlias(true);
+-  flags.setColor(SkColorSetA(color, dark_toolbar ? 0x33 : 0x24));
+-  canvas.DrawRoundRect(gfx::RectF(1, 1, 38, 38), 11, flags);
++  const SkPoint diagonal[] = {{0, 0}, {kSize, kSize}};
++  const SkColor4f gradient[] = {SkColor4f::FromColor(light),
++                                SkColor4f::FromColor(deep)};
++  flags.setShader(cc::PaintShader::MakeLinearGradient(
++      diagonal, gradient, nullptr, 2, SkTileMode::kClamp));
++  canvas.sk_canvas()->drawRRect(tile, flags);
++  const SkPoint vertical[] = {{0, 0}, {0, kSize / 2}};
++  const SkColor4f sheen[] = {{1, 1, 1, 0.30f}, {1, 1, 1, 0}};
++  flags.setShader(cc::PaintShader::MakeLinearGradient(
++      vertical, sheen, nullptr, 2, SkTileMode::kClamp));
++  canvas.sk_canvas()->drawRRect(tile, flags);
++  flags.setShader(nullptr);
+   flags.setStyle(cc::PaintFlags::kStroke_Style);
+   flags.setStrokeWidth(1);
+-  flags.setColor(SkColorSetA(color, 0x73));
+-  canvas.DrawRoundRect(gfx::RectF(1.5f, 1.5f, 37, 37), 10.5f, flags);
+-  const gfx::ImageSkia glyph = gfx::ImageSkia::CreateFrom1xBitmap(
+-      mask.GetRepresentation(2.0f).GetBitmap());
+-  canvas.DrawImageInt(gfx::ImageSkiaOperations::CreateColorMask(glyph, color),
+-                      0, 0);
++  flags.setColor(SkColorSetA(SK_ColorWHITE, 0x40));
++  canvas.sk_canvas()->drawRRect(
++      SkRRect::MakeRectXY(SkRect::MakeXYWH(1.5f, 1.5f, 49, 49), 13.5f, 13.5f),
++      flags);
++  cc::PaintFlags knock_out;
++  knock_out.setBlendMode(SkBlendMode::kDstOut);
++  canvas.DrawImageInt(gfx::ImageSkia::CreateFrom1xBitmap(
++                          mask.GetRepresentation(2.0f).GetBitmap()),
++                      0, 0, knock_out);
+   return gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f);
+ }
+ 
+@@ -598,6 +617,10 @@
+   // Only an icon: centered, no room kept for a label.
+   button->SetHorizontalAlignment(gfx::ALIGN_CENTER);
+   button->SetImageLabelSpacing(0);
++  // Hover and press: the same rounded square as an open item's background.
++  views::HighlightPathGenerator::Install(
++      button.get(), std::make_unique<views::RoundRectHighlightPathGenerator>(
++                        gfx::Insets(), 8));
+   button->GetViewAccessibility().SetName(tooltip);
+   button->set_context_menu_controller(this);
+   if (movable) {
+@@ -670,8 +693,11 @@
+     // The bottom buttons (and Hivey Cyber) have their own style.
+     const hivey::HiveyBarIconStyle style = icon.bottom ? tools_style
+                                                        : items_style;
+-    const bool modern = style == hivey::HiveyBarIconStyle::kModern ||
+-                        style == hivey::HiveyBarIconStyle::kModernTheme;
++    // Hivey Cyber stays apart: classic, in the toolbar buttons' color.
++    const bool cyber = icon.id == "cyber";
++    const bool modern = !cyber &&
++                        (style == hivey::HiveyBarIconStyle::kModern ||
++                         style == hivey::HiveyBarIconStyle::kModernTheme);
+     // Own colors: multicolor styles (the user's sites: the modern one).
+     const bool site = icon.id.starts_with(hivey::kHiveyBarAppPrefix);
+     const bool own_color =
+@@ -679,11 +705,22 @@
+                         (style == hivey::HiveyBarIconStyle::kMulticolor &&
+                          !site));
+     const SkColor color =
+-        own_color ? (dark_toolbar ? icon.colors->first : icon.colors->second)
+-                  : theme_color;
++        cyber ? colors->GetColor(kColorToolbarButtonIcon)
++        : own_color
++            ? (dark_toolbar ? icon.colors->first : icon.colors->second)
++            : theme_color;
+     gfx::ImageSkia image;
+     if (modern && !icon.modern.isNull()) {
+-      image = GlassTile(icon.modern, color, dark_toolbar);
++      // The tile's gradient: the item's colors, or the theme's accent.
++      const SkColor accent = colors->GetColor(ui::kColorSysPrimary);
++      const bool own_tile =
++          icon.colors && style == hivey::HiveyBarIconStyle::kModern;
++      image = ModernTile(
++          icon.modern,
++          own_tile ? icon.colors->first
++                   : color_utils::AlphaBlend(SK_ColorWHITE, accent, 0.35f),
++          own_tile ? icon.colors->second
++                   : color_utils::AlphaBlend(SK_ColorBLACK, accent, 0.25f));
+     } else if (!icon.image.isNull()) {
+       image = gfx::ImageSkiaOperations::CreateColorMask(icon.image, color);
+     }
+--- a/chrome/browser/ui/views/side_panel/side_panel.cc
++++ b/chrome/browser/ui/views/side_panel/side_panel.cc
+@@ -95,6 +95,22 @@
+                            border_thickness, border_thickness);
+ }
+ 
++// Hivey: the content's margins, none on the Hivey bar's side (the bar keeps
++// its width when the panel opens); `top` is the header's height, or 0.
++gfx::Insets HiveyContentBorder(PrefService* prefs,
++                               bool right_aligned,
++                               int top) {
++  gfx::Insets insets = GetBorderInsets().set_top(top);
++  if (prefs->GetBoolean(hivey::kHiveyBarVisible)) {
++    if (right_aligned) {
++      insets.set_right(0);
++    } else {
++      insets.set_left(0);
++    }
++  }
++  return insets;
++}
++
+ SidePanel::HorizontalAlignment GetHorizontalAlignment(
+     PrefService* pref_service,
+     std::optional<SidePanelEntryId> entry_id) {
+@@ -460,13 +476,14 @@
+   header_view_->DeprecatedLayoutImmediately();
+   // Update the border so that the insets include space for the header to be
+   // placed on top of the border area.
+-  int top_inset = header_view_->height() - GetBorderInsets().top();
+-  SetBorder(views::CreateEmptyBorder(GetBorderInsets() +
+-                                     gfx::Insets::TLBR(top_inset, 0, 0, 0)));
++  SetBorder(views::CreateEmptyBorder(
++      HiveyContentBorder(browser_view_->GetProfile()->GetPrefs(),
++                         IsRightAligned(), header_view_->height())));
+ }
+ 
+ void SidePanel::RemoveHeaderView() {
+-  SetBorder(views::CreateEmptyBorder(GetBorderInsets().set_top(0)));
++  SetBorder(views::CreateEmptyBorder(HiveyContentBorder(
++      browser_view_->GetProfile()->GetPrefs(), IsRightAligned(), 0)));
+   if (header_view_) {
+     auto header_view = RemoveChildViewT(header_view_);
+     header_view_ = nullptr;
+@@ -763,6 +780,11 @@
+ 
+   horizontal_alignment_ =
+       GetHorizontalAlignment(browser_view_->GetProfile()->GetPrefs(), entry_id);
++  // Hivey: the margins follow the side.
++  SetBorder(views::CreateEmptyBorder(
++      HiveyContentBorder(browser_view_->GetProfile()->GetPrefs(),
++                         IsRightAligned(),
++                         header_view_ ? header_view_->height() : 0)));
+ 
+   InvalidateLayout();
+ }
