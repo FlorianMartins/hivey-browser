@@ -1,4 +1,36 @@
-# Hivey bar v7: modern icons are gradient tiles (26 DIP) with the glyph cut out, multicolor or in the theme color; Hivey Cyber (fingerprint) stays classic, in the toolbar buttons' color; hover and press share the open item's rounded square; no side panel margin on the Hivey bar's side (the bar keeps its width); a larger app icon (taskbar, desktop).
+# Hivey bar v7: modern icons are gradient tiles (26 DIP) with the glyph cut out, multicolor or in the theme color; Hivey Cyber leaves the bar (in the server bubble); hover and press share the open item's rounded square; no side panel margin on the Hivey bar's side (the bar keeps its width); a larger app icon (taskbar, desktop). Server chip: just the real flag (image, no text, no separator), a globe for a CDN (named in the bubble, its country would mislead); a wider bubble with the IP first (copy), Shodan and SSL Labs lookups.
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -20678,7 +20678,16 @@
+       <message name="IDS_HIVEY_SERVER_INFO_TOOLTIP" desc="Tooltip and accessible name of the location bar chip that shows the country of the server of the current page.">
+         Server: <ph name="COUNTRY">$1<ex>United States</ex></ph> (<ph name="IP_ADDRESS">$2<ex>192.0.2.1</ex></ph>)
+       </message>
+-      <message name="IDS_HIVEY_SERVER_INFO_CYBER" desc="Button of the server info bubble (the flag in the address bar): open Hivey Cyber's security tools for this site">
++      <message name="IDS_HIVEY_SERVER_INFO_COPY_IP" desc="Button of the server info bubble: copy the site's IP address">
++          Copy IP
++        </message>
++        <message name="IDS_HIVEY_SERVER_INFO_CDN" desc="Row label in the server info bubble, before the name of the content delivery network serving the site (Cloudflare...)">
++          Content delivery network
++        </message>
++        <message name="IDS_HIVEY_SERVER_INFO_CDN_NOTE" desc="Note in the server info bubble when the site is served through a content delivery network">
++          The site goes through a content delivery network: its own server, and the country it is in, stay hidden.
++        </message>
++        <message name="IDS_HIVEY_SERVER_INFO_CYBER" desc="Button of the server info bubble (the flag in the address bar): open Hivey Cyber's security tools for this site">
+           Analyze with Hivey Cyber
+         </message>
+         <message name="IDS_HIVEY_SERVER_INFO_TRANSLATE" desc="Button of the server info bubble: translate the page with Hivey Tools (side panel)">
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10861,6 +10861,9 @@
+ <translation id="591809057160369339">Personnaliser la barre Hivey…</translation>
+ <translation id="8284413272344071587">Boutons du bas</translation>
+ <translation id="3023896536229511664">Analyser avec Hivey Cyber</translation>
++<translation id="6889740967681775558">Copier l’IP</translation>
++<translation id="5784172260477433367">Réseau de diffusion (CDN)</translation>
++<translation id="3502926586231545905">Le site passe par un réseau de diffusion de contenu (CDN) : son propre serveur, et le pays où il se trouve, restent masqués.</translation>
+ <translation id="6216607551793079364">Boutons masqués</translation>
+ <translation id="1110022065703191351">Icônes</translation>
+ <translation id="1770381781020763085">Modernes, multicolores</translation>
 --- a/chrome/browser/hivey/hivey_app_icon.cc
 +++ b/chrome/browser/hivey/hivey_app_icon.cc
 @@ -27,6 +27,10 @@
@@ -21,6 +53,18 @@
      const int height = std::max(3, base::ClampRound(kBarHeight * scale));
      const int gap = std::max(1, base::ClampRound(kBarGap * scale));
      const int bars = static_cast<int>(std::size(kBarWidths));
+--- a/chrome/browser/hivey/hivey_bar_prefs.cc
++++ b/chrome/browser/hivey/hivey_bar_prefs.cc
+@@ -89,7 +89,8 @@
+ 
+ HiveyBarLayout GetHiveyBarLayout(const PrefService& prefs) {
+   // Every button in its default zone and order.
+-  std::vector<std::pair<std::string, int>> known = {{"cyber", 0}};
++  // (Hivey Cyber is in the location bar's server bubble, not the bar.)
++  std::vector<std::pair<std::string, int>> known;
+   for (const std::string& id : GetHiveyBarOrder(prefs)) {
+     known.emplace_back(id, 1);
+   }
 --- a/chrome/browser/hivey/hivey_taskbar_icon_win.cc
 +++ b/chrome/browser/hivey/hivey_taskbar_icon_win.cc
 @@ -67,10 +67,11 @@
@@ -163,6 +207,229 @@
      } else if (!icon.image.isNull()) {
        image = gfx::ImageSkiaOperations::CreateColorMask(icon.image, color);
      }
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "chrome/browser/ui/views/location_bar/hivey_server_info_view.h"
+ 
++#include <algorithm>
+ #include <memory>
+ #include <utility>
+ #include <vector>
+@@ -21,6 +22,12 @@
+ #include "chrome/browser/extensions/extension_view_host_factory.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
+ #include "chrome/browser/hivey/hivey_server_info.h"
++#include "base/containers/span.h"
++#include "ui/gfx/image/image_skia.h"
++#include "ui/gfx/codec/png_codec.h"
++#include "ui/base/clipboard/scoped_clipboard_writer.h"
++#include "net/base/ip_address.h"
++#include "chrome/browser/hivey/hivey_flags.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+@@ -71,9 +78,67 @@
+ // Lookups on these sites only happen when the user clicks their link.
+ constexpr char kWhoisUrl[] = "https://www.whois.com/whois/";
+ constexpr char kIpDetailsUrl[] = "https://ipinfo.io/";
++constexpr char kShodanUrl[] = "https://www.shodan.io/host/";
++constexpr char kSslLabsUrl[] =
++    "https://www.ssllabs.com/ssltest/analyze.html?d=";
+ // Attribution required by the license (CC BY 4.0) of the database.
+ constexpr char kDbIpUrl[] = "https://db-ip.com/";
+ 
++// Content delivery networks: their addresses are shared, anycast edges near
++// the user, so their country says nothing about the site (the site's own
++// server stays hidden behind them). Published ranges.
++struct Cdn {
++  const char* name;
++  const char* ranges[24];
++};
++constexpr Cdn kCdns[] = {
++    {"Cloudflare",
++     {"173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
++      "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20",
++      "188.114.96.0/20", "197.234.240.0/22", "198.41.128.0/17",
++      "162.158.0.0/15", "104.16.0.0/13", "104.24.0.0/14", "172.64.0.0/13",
++      "131.0.72.0/22", "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32",
++      "2405:b500::/32", "2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32"}},
++    {"Fastly",
++     {"151.101.0.0/16", "199.232.0.0/16", "146.75.0.0/17", "23.235.32.0/20",
++      "43.249.72.0/22", "103.244.50.0/24", "103.245.222.0/23",
++      "103.245.224.0/24", "104.156.80.0/20", "140.248.64.0/18",
++      "140.248.128.0/17", "157.52.64.0/18", "167.82.0.0/17",
++      "172.111.64.0/18", "185.31.16.0/22", "2a04:4e40::/32",
++      "2a04:4e42::/32"}},
++};
++
++// The CDN serving `address`, or null.
++const char* CdnName(const net::IPAddress& address) {
++  for (const Cdn& cdn : kCdns) {
++    for (const char* range : cdn.ranges) {
++      if (!range) {
++        break;
++      }
++      net::IPAddress prefix;
++      size_t bits = 0;
++      if (net::ParseCIDRBlock(range, &prefix, &bits) &&
++          net::IPAddressMatchesPrefix(address, prefix, bits)) {
++        return cdn.name;
++      }
++    }
++  }
++  return nullptr;
++}
++
++// The flag of a 2-letter country code, 16 x 12 DIP, or empty.
++gfx::ImageSkia FlagImage(const std::string& code) {
++  const auto* flag = std::ranges::find_if(
++      kHiveyFlags, [&](const HiveyFlag& f) { return code == f.code; });
++  if (flag == std::end(kHiveyFlags)) {
++    return gfx::ImageSkia();
++  }
++  const SkBitmap bitmap =
++      gfx::PNGCodec::Decode(base::span(flag->png, flag->size));
++  return bitmap.isNull() ? gfx::ImageSkia()
++                         : gfx::ImageSkia::CreateFromBitmap(bitmap, 2.0f);
++}
++
+ std::u16string CountryName(const hivey::ServerInfo& info) {
+   if (info.via_proxy) {
+     return l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_VIA_PROXY);
+@@ -124,15 +189,41 @@
+     SetCloseOnMainFrameOriginNavigation(true);
+ 
+     const views::LayoutProvider* provider = views::LayoutProvider::Get();
+-    set_fixed_width(
+-        provider->GetDistanceMetric(views::DISTANCE_BUBBLE_PREFERRED_WIDTH));
++    // Wide enough for its buttons on one line ("Translate this page").
++    set_fixed_width(std::max(
++        400, provider->GetDistanceMetric(views::DISTANCE_BUBBLE_PREFERRED_WIDTH)));
+     const int vertical_spacing = provider->GetDistanceMetric(
+         views::DISTANCE_UNRELATED_CONTROL_VERTICAL);
+     SetLayoutManager(std::make_unique<views::BoxLayout>(
+         views::BoxLayout::Orientation::kVertical, gfx::Insets(),
+         vertical_spacing));
+ 
+-    // IP address, country, connection.
++    // The site's IP address first, large, with a copy button.
++    const std::u16string ip = base::ASCIIToUTF16(info.address.ToString());
++    auto* ip_row = AddChildView(std::make_unique<views::View>());
++    ip_row->SetLayoutManager(std::make_unique<views::BoxLayout>(
++                                 views::BoxLayout::Orientation::kHorizontal,
++                                 gfx::Insets(),
++                                 provider->GetDistanceMetric(
++                                     views::DISTANCE_RELATED_CONTROL_HORIZONTAL)))
++        ->set_cross_axis_alignment(
++            views::BoxLayout::CrossAxisAlignment::kCenter);
++    auto* ip_label = ip_row->AddChildView(std::make_unique<views::Label>(
++        ip, views::style::CONTEXT_DIALOG_TITLE));
++    ip_label->SetSelectable(true);
++    ip_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
++    static_cast<views::BoxLayout*>(ip_row->GetLayoutManager())
++        ->SetFlexForView(ip_label, 1);
++    ip_row->AddChildView(std::make_unique<views::MdTextButton>(
++        base::BindRepeating(
++            [](std::u16string ip) {
++              ui::ScopedClipboardWriter(ui::ClipboardBuffer::kCopyPaste)
++                  .WriteText(ip);
++            },
++            ip),
++        l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_COPY_IP)));
++
++    // Country, CDN, connection.
+     auto* table = AddChildView(std::make_unique<views::View>());
+     auto& layout = table->SetLayoutManager(std::make_unique<views::TableLayout>())
+                        ->AddColumn(views::LayoutAlignment::kStart,
+@@ -165,8 +256,11 @@
+       label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+       label->SetSelectable(selectable);
+     };
+-    add_row(IDS_HIVEY_SERVER_INFO_ADDRESS,
+-            base::ASCIIToUTF16(info.address.ToString()), /*selectable=*/true);
++    const char* cdn = CdnName(info.address);
++    if (cdn) {
++      add_row(IDS_HIVEY_SERVER_INFO_CDN, base::ASCIIToUTF16(cdn),
++              /*selectable=*/false);
++    }
+     std::u16string country = CountryName(info);
+     if (!info.via_proxy && !info.country_code.empty()) {
+       country = HiveyServerInfoView::FlagEmoji(info.country_code) + u" " +
+@@ -179,6 +273,9 @@
+     if (info.via_proxy) {
+       AddNote(IDS_HIVEY_SERVER_INFO_PROXY_NOTE);
+     }
++    if (cdn) {
++      AddNote(IDS_HIVEY_SERVER_INFO_CDN_NOTE);
++    }
+ 
+     // Links to lookup sites: nothing is sent unless the user clicks one.
+     auto* links = AddChildView(std::make_unique<views::View>());
+@@ -196,6 +293,8 @@
+             GURL(kWhoisUrl + domain));
+     AddLink(links, l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_IP_DETAILS),
+             GURL(kIpDetailsUrl + info.address.ToString()));
++    AddLink(links, u"Shodan", GURL(kShodanUrl + info.address.ToString()));
++    AddLink(links, u"SSL Labs", GURL(kSslLabsUrl + info.url.host()));
+     AddNote(IDS_HIVEY_SERVER_INFO_LINKS_NOTE);
+ 
+     // Hivey Cyber's tools for this site, and the page in another language
+@@ -337,6 +436,10 @@
+ 
+ HiveyServerInfoView::~HiveyServerInfoView() = default;
+ 
++bool HiveyServerInfoView::ShouldShowSeparator() const {
++  return false;
++}
++
+ // static
+ std::u16string HiveyServerInfoView::FlagEmoji(const std::string& country_code) {
+   std::u16string flag;
+@@ -403,17 +506,23 @@
+   // Wait for the lookup (a few milliseconds) rather than flash a globe.
+   const bool visible = !force_hidden_ && info && !info->lookup_pending;
+   if (visible) {
++    // Just the server's flag (a CDN's country would mislead: a globe; the
++    // bubble names the CDN); "Proxy" through one.
+     std::u16string text;
++    const gfx::ImageSkia flag =
++        info->via_proxy || CdnName(info->address)
++            ? gfx::ImageSkia()
++            : FlagImage(info->country_code);
+     if (info->via_proxy) {
+       text = l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_VIA_PROXY);
+-    } else if (!info->country_code.empty()) {
+-#if BUILDFLAG(IS_WIN)
+-      // Windows' emoji font has no flags: the letters would show in boxes.
+-      text = base::ASCIIToUTF16(info->country_code);
+-#else
+-      text = FlagEmoji(info->country_code) + u" " +
+-             base::ASCIIToUTF16(info->country_code);
+-#endif
++    }
++    if (!flag.isNull()) {
++      SetImageModel(ui::ImageModel::FromImageSkia(flag));
++    } else {
++      SetImageModel(ui::ImageModel::FromVectorIcon(
++          features::IsRoundedIconsEnabled() ? kGlobeIcon : kGlobeOldIcon,
++          kColorOmniboxResultsIcon,
++          GetLayoutConstant(LayoutConstant::kLocationBarTrailingIconSize)));
+     }
+     const std::u16string tooltip = Tooltip(*info);
+     if (text != label()->GetText() || tooltip != tooltip_) {
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
+@@ -48,6 +48,8 @@
+   // IconLabelBubbleView:
+   bool ShowBubble(const ui::Event& event) override;
+   bool IsBubbleShowing() const override;
++  // Hivey: just the flag, no separator after it.
++  bool ShouldShowSeparator() const override;
+ 
+  private:
+   // Updates the chip from the info of `web_contents_`.
 --- a/chrome/browser/ui/views/side_panel/side_panel.cc
 +++ b/chrome/browser/ui/views/side_panel/side_panel.cc
 @@ -95,6 +95,22 @@
@@ -219,3 +486,13 @@
  
    InvalidateLayout();
  }
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -902,7 +902,6 @@
+   }
+   base::ListValue tools;
+   const std::pair<const char*, std::u16string> kTools[] = {
+-      {"cyber", u"Hivey Cyber"},
+       {"performance", l10n_util::GetStringUTF16(IDS_HIVEY_BAR_PERFORMANCE)},
+       {"history", l10n_util::GetStringUTF16(IDS_HIVEY_BAR_HISTORY)},
+       {"bookmarks", l10n_util::GetStringUTF16(IDS_HIVEY_BAR_BOOKMARKS)},
