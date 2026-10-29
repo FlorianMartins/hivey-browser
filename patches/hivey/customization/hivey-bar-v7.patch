@@ -1,4 +1,4 @@
-# Hivey bar v7: modern icons are gradient tiles (26 DIP) with the glyph cut out, multicolor or in the theme color; Hivey Cyber leaves the bar (in the server bubble); hover and press share the open item's rounded square; no side panel margin on the Hivey bar's side (the bar keeps its width); a larger app icon (taskbar, desktop). Server chip: just the real flag (image, no text, no separator), a globe for a CDN (named in the bubble, its country would mislead); a wider bubble with the IP first (copy), Shodan and SSL Labs lookups.
+# Hivey bar v7: with the bar shown, the toolbar row spans the window above it (Back over the bar), the bar and the vertical tab strip start below; modern icons are gradient tiles (26 DIP) with the glyph cut out, multicolor or in the theme color; Hivey Cyber leaves the bar (in the server bubble); hover and press share the open item's rounded square; no side panel margin on the Hivey bar's side (the bar keeps its width); a larger app icon (taskbar, desktop). Server chip: just the real flag (image, no text, no separator), a globe for a CDN (named in the bubble, its country would mislead); a wider bubble with the IP first (copy), Shodan and SSL Labs lookups.
 --- a/chrome/app/generated_resources.grd
 +++ b/chrome/app/generated_resources.grd
 @@ -20678,7 +20678,16 @@
@@ -207,6 +207,125 @@
      } else if (!icon.image.isNull()) {
        image = gfx::ImageSkiaOperations::CreateColorMask(icon.image, color);
      }
+--- a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
++++ b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
+@@ -221,6 +221,11 @@
+   // page); the panel never draws outside it, also while it slides in.
+   gfx::Rect side_panel_slot;
+ 
++  // Hivey: the Hivey bar is shown, so the top container (toolbar, bookmarks
++  // bar) spans the whole window width above it (and above the vertical tab
++  // strip), the toolbar's Back button right above the bar.
++  bool hivey_toolbar_spans_window = false;
++
+   // These parameters should be used by the layout function and may include
+   // additional padding, etc. They are generated
+   BrowserLayoutParams revised_params;
+@@ -415,6 +420,10 @@
+       views().side_panel->GetCurrentEntryType() == SidePanelType::kContent) {
+     layout.force_top_container_to_top = true;
+   }
++  // Hivey: the toolbar row spans the window above the Hivey bar.
++  if (layout_data_->hivey_toolbar_spans_window) {
++    layout.force_top_container_to_top = true;
++  }
+ 
+   layout.min_content_width = kContentsContainerMinimumWidth;
+ 
+@@ -601,8 +610,11 @@
+         break;
+       case WindowState::kNormal:
+       case WindowState::kMaximized:
+-        if (layout_data_->revised_params.leading_exclusion.ContentWithPadding()
+-                .height() > 0) {
++        // Hivey: not when the toolbar row spans the window (the strip is
++        // below the toolbar and the bookmarks bar, never next to them).
++        if (!layout_data_->hivey_toolbar_spans_window &&
++            layout_data_->revised_params.leading_exclusion.ContentWithPadding()
++                    .height() > 0) {
+           top_corner_collapsed_state =
+               delegate().IsBookmarkBarVisible() || !would_have_separator
+                   ? -1.0
+@@ -705,6 +717,11 @@
+     return 0;
+   }
+ 
++  // Hivey: the strip starts below the toolbar row, which spans the window.
++  if (layout_data_->hivey_toolbar_spans_window) {
++    return 0;
++  }
++
+   const auto& params = layout_data_->revised_params;
+ 
+   // If there is no leading exclusion, the tabstrip goes all the way to the top.
+@@ -834,9 +851,24 @@
+   bool clip_content_for_animation = false;
+   gfx::Rect unclipped_contents_region = params.visual_client_area;
+ 
++  // Hivey: with the Hivey bar shown, the top container (toolbar, bookmarks
++  // bar) spans the whole window width, below the horizontal tab strip if any;
++  // with vertical tabs it is the title-bar row (caption button exclusions).
++  // The Hivey bar and the vertical tab strip start below it.
++  if (layout_data_->hivey_toolbar_spans_window) {
++    auto& top_container_layout =
++        layout.AddChild(views().top_container, gfx::Rect());
++    const gfx::Rect top_container_local_bounds = CalculateTopContainerLayout(
++        top_container_layout,
++        params.InLocalCoordinates(params.visual_client_area), needs_exclusion);
++    top_container_layout.bounds =
++        GetTopContainerBoundsInParent(top_container_local_bounds, params);
++    params.SetTop(top_container_layout.bounds.bottom());
++  }
++
+   // Hivey: the Hivey bar takes the left or right edge of the window, below
+-  // the horizontal tab strip (or full height with vertical tabs, which it
+-  // sits next to), beside the toolbar and the side panel.
++  // the toolbar row (above), beside the vertical tab strip and the side
++  // panel.
+   if (views().hivey_bar &&
+       IsParentedTo(views().hivey_bar, views().browser_view)) {
+     const bool show = views().hivey_bar->ShouldShow() &&
+@@ -1004,6 +1036,7 @@
+   // When the tabstrip isn't at the top or in constrained widths, the top
+   // container is laid out before all side panels.
+   if (horizontal_layout.force_top_container_to_top &&
++      !layout_data_->hivey_toolbar_spans_window &&
+       IsParentedTo(views().top_container, views().browser_view)) {
+     auto& top_container_layout =
+         layout.AddChild(views().top_container, gfx::Rect());
+@@ -1359,7 +1392,8 @@
+     int caption_button_width = 0;
+ 
+     // If the toolbar is not in the browser, then the exclusion isn't either.
+-    if (toolbar_bounds) {
++    // Hivey: neither when the toolbar row spans the window above the strip.
++    if (toolbar_bounds && !layout_data_->hivey_toolbar_spans_window) {
+       // Calculate the toolbar height adjacent to the tabstrip. This will be
+       // zero if the toolbar is in e.g. an immersive mode overlay, or is not
+       // aligned with the tabstrip (which can happen in collapsed mode with
+@@ -1585,6 +1619,12 @@
+   layout_data_ = std::make_unique<TransientLayoutData>(params);
+   layout_data_->window_state = delegate().GetBrowserWindowState();
+   layout_data_->tab_strip_type = delegate().GetTabStripType();
++  layout_data_->hivey_toolbar_spans_window =
++      views().hivey_bar &&
++      IsParentedTo(views().hivey_bar, views().browser_view) &&
++      views().hivey_bar->ShouldShow() &&
++      !is_fullscreen(layout_data_->window_state) &&
++      IsParentedTo(views().top_container, views().browser_view);
+   layout_data_->horizontal_layout =
+       CalculateHorizontalLayout(layout_data_->revised_params);
+   layout_data_->organizer_panel_animation = CalculateOrganizerPanelAnimation();
+@@ -1661,7 +1701,8 @@
+                       : CornerOrientation::kBottomLeading;
+     CustomCornersBackground::Corners vertical_tabs_corners;
+     if (layout_data_->window_state == WindowState::kNormal) {
+-      if (animation.top_offset == 0) {
++      if (animation.top_offset == 0 &&
++          !layout_data_->hivey_toolbar_spans_window) {
+         vertical_tabs_corners[outer_top] =
+             vertical_tabs_background->GetWindowCorner(/*upper=*/true);
+       }
 --- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
 +++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
 @@ -4,6 +4,7 @@
@@ -486,6 +605,21 @@
  
    InvalidateLayout();
  }
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -1740,7 +1740,11 @@
+       interior_margin.set_right(0);
+     }
+   } else if (!browser_->GetProfile()->GetPrefs()->GetBoolean(
+-                 hivey::kHiveyVerticalTabsRight)) {
++                 hivey::kHiveyVerticalTabsRight) &&
++             (!browser_->GetProfile()->GetPrefs()->GetBoolean(
++                  hivey::kHiveyBarVisible) ||
++              (browser_->GetWindow() &&
++               browser_->GetWindow()->IsFullscreen()))) {
+     // Hivey: the vertical strip and the toolbar are one surface; the strip's
+     // own padding already separates its buttons from the toolbar's.
+     interior_margin.set_left(0);
 --- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
 +++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
 @@ -902,7 +902,6 @@

@@ -9,12 +9,20 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
 - **Icônes modernes repensées** : des tuiles en dégradé plus grandes, avec
   le pictogramme **découpé en transparence** ; multicolores ou couleur du
   thème.
-- **Hivey Cyber** a une nouvelle icône (empreinte digitale), dans la même
-  couleur que les boutons de la barre de navigation, à part des autres
-  réglages d'icônes.
+- **Hivey Cyber quitte la barre Hivey** : il est dans la bulle du drapeau de
+  la barre d'adresse (« Analyser avec Hivey Cyber »).
 - Le **survol** a la même forme arrondie que le bouton ouvert.
 - La barre **garde sa largeur** quand un onglet de la sidebar s'ouvre (plus
   de marge du côté de la barre).
+
+### Barre d'adresse
+- Le bouton du serveur affiche le **vrai drapeau** du pays (image, aussi sous
+  Windows), sans texte ni barre de séparation.
+- Un site servi par un **réseau de diffusion** (Cloudflare, Fastly…) affiche
+  un globe : son pays n'était pas le vrai (souvent « CA »), le serveur du site
+  étant masqué derrière ce réseau ; la bulle le dit.
+- La bulle est plus large et commence par l'**adresse IP** (bouton
+  « Copier l'IP ») ; nouveaux liens **Shodan** et **SSL Labs**.
 
 ### Application
 - Le **logo Hivey est plus grand** dans la barre des tâches, sur le bureau
