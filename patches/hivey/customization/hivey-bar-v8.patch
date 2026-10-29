@@ -1,0 +1,842 @@
+# Hivey 4711: modern icons are the duotone glyph itself in a gradient (no tile, 20 DIP); the app icon in a gradient of the accent; tab dividers in the theme's accent; location bar: Translate (Hivey Tools) and Open as an app buttons beside the server flag, evenly spaced from the page actions; Gaming mode (Resources): every limiter takes the stricter of its setting and a gaming one, Memory Saver aggressive while it is on.
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -20681,6 +20681,9 @@
+       <message name="IDS_HIVEY_SERVER_INFO_COPY_IP" desc="Button of the server info bubble: copy the site's IP address">
+           Copy IP
+         </message>
++        <message name="IDS_HIVEY_OPEN_AS_APP" desc="Tooltip of the location bar button that opens the page as an app, in its own window with its own taskbar icon">
++          Open as an app, in its own window
++        </message>
+         <message name="IDS_HIVEY_SERVER_INFO_CDN" desc="Row label in the server info bubble, before the name of the content delivery network serving the site (Cloudflare...)">
+           Content delivery network
+         </message>
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10886,4 +10886,5 @@
+ <translation id="6771994669958079942">Détails de l'adresse IP</translation>
+ <translation id="963583333837971347">Ces liens ouvrent un site web dans un nouvel onglet, qui apprend alors le domaine ou l'adresse.</translation>
+ <translation id="1198436571127508047">Géolocalisation IP par DB-IP</translation>
++<translation id="2810925360372147318">Ouvrir comme application, dans sa propre fenêtre</translation>
+ </translationbundle>
+\ No newline at end of file
+--- a/chrome/browser/hivey/hivey_app_icon.cc
++++ b/chrome/browser/hivey/hivey_app_icon.cc
+@@ -9,11 +9,13 @@
+ 
+ #include "base/numerics/safe_conversions.h"
+ #include "cc/paint/paint_flags.h"
++#include "cc/paint/paint_shader.h"
+ #include "third_party/skia/include/core/SkPath.h"
+ #include "third_party/skia/include/core/SkPathBuilder.h"
+ #include "third_party/skia/include/core/SkRRect.h"
+ #include "third_party/skia/include/core/SkRect.h"
+ #include "ui/gfx/canvas.h"
++#include "ui/gfx/color_utils.h"
+ #include "ui/gfx/image/canvas_image_source.h"
+ 
+ namespace hivey {
+@@ -32,7 +34,8 @@
+ // Same factor as LOGO_ICON_SCALE in scripts/branding.py.
+ constexpr float kIconScale = 1.15f;
+ 
+-// Draws the mark in the accent color with every bar edge on a whole pixel
++// Draws the mark in a diagonal gradient of the accent color (lighter at the
++// top left, deeper at the bottom right) with every bar edge on a whole pixel
+ // (whole height, gap and top, and a width of the image's parity so each bar
+ // stays centered), so it is crisp down to 16 px. Same rules as
+ // scripts/branding.py, which renders the static icons.
+@@ -65,7 +68,16 @@
+ 
+     cc::PaintFlags flags;
+     flags.setAntiAlias(true);
+-    flags.setColor(accent_);
++    const SkPoint diagonal[] = {{0, 0}, {static_cast<float>(size),
++                                         static_cast<float>(size)}};
++    const SkColor4f gradient[] = {
++        SkColor4f::FromColor(
++            color_utils::AlphaBlend(SK_ColorWHITE, accent_, 0.35f)),
++        SkColor4f::FromColor(accent_),
++        SkColor4f::FromColor(
++            color_utils::AlphaBlend(SK_ColorBLACK, accent_, 0.3f))};
++    flags.setShader(cc::PaintShader::MakeLinearGradient(
++        diagonal, gradient, nullptr, 3, SkTileMode::kClamp));
+     canvas->DrawPath(builder.detach(), flags);
+   }
+ 
+--- a/chrome/browser/hivey/hivey_colors.cc
++++ b/chrome/browser/hivey/hivey_colors.cc
+@@ -252,9 +252,12 @@
+          ui::kColorSysHeaderInactive},
+         *frame);
+     const SkColor text = get("tab_text").value_or(SK_ColorWHITE);
+-    set({kColorTabDividerFrameActive, kColorTabDividerFrameInactive,
+-         kColorTabStrokeFrameActive, kColorTabStrokeFrameInactive},
++    set({kColorTabStrokeFrameActive, kColorTabStrokeFrameInactive},
+         Mix(text, *frame, 0.14f));
++    // The lines between inactive tabs take the theme's accent, not a gray.
++    const SkColor accent = get("accent").value_or(text);
++    set({kColorTabDividerFrameActive}, Mix(accent, *frame, 0.45f));
++    set({kColorTabDividerFrameInactive}, Mix(accent, *frame, 0.3f));
+   }
+   if (auto toolbar = get("toolbar")) {
+     // The active tab, the bookmarks bar, the vertical tab strip and the bars
+--- a/chrome/browser/hivey/hivey_resource_limits.cc
++++ b/chrome/browser/hivey/hivey_resource_limits.cc
+@@ -15,6 +15,7 @@
+ #include "chrome/browser/hivey/hivey_updater.h"
+ #include "chrome/browser/net/system_network_context_manager.h"
+ #include "components/prefs/pref_registry_simple.h"
++#include "components/performance_manager/public/user_tuning/prefs.h"
+ #include "components/prefs/pref_service.h"
+ #include "content/public/browser/child_process_termination_info.h"
+ #include "content/public/browser/render_process_host.h"
+@@ -38,8 +39,16 @@
+ 
+ #if BUILDFLAG(IS_WIN)
+ int CpuLimitPercent() {
++  namespace prefs = performance_manager::user_tuning::prefs;
+   PrefService* local_state = g_browser_process->local_state();
+-  return local_state ? local_state->GetInteger(kCpuLimitPercent) : 0;
++  if (!local_state) {
++    return 0;
++  }
++  const int percent = local_state->GetInteger(kCpuLimitPercent);
++  return local_state->GetBoolean(prefs::kHiveyGamingMode)
++             ? prefs::HiveyGamingLimit(percent,
++                                       prefs::kHiveyGamingCpuLimitPercent)
++             : percent;
+ }
+ 
+ // Sets (percent > 0) or removes the hard CPU-rate cap of a job object.
+@@ -78,7 +87,11 @@
+   if (!local_state || !manager) {
+     return;
+   }
+-  const int kbps = local_state->GetInteger(kNetworkLimitKbps);
++  namespace prefs = performance_manager::user_tuning::prefs;
++  int kbps = local_state->GetInteger(kNetworkLimitKbps);
++  if (local_state->GetBoolean(prefs::kHiveyGamingMode)) {
++    kbps = prefs::HiveyGamingLimit(kbps, prefs::kHiveyGamingNetworkLimitKbps);
++  }
+   std::vector<network::mojom::MatchedNetworkConditionsPtr> conditions;
+   if (kbps > 0) {
+     auto limit = network::mojom::NetworkConditions::New();
+@@ -104,6 +117,10 @@
+                                               base::Unretained(this)));
+     local_state_registrar_.Add(kNetworkLimitKbps,
+                                base::BindRepeating(&ApplyNetworkLimit));
++    local_state_registrar_.Add(
++        performance_manager::user_tuning::prefs::kHiveyGamingMode,
++        base::BindRepeating(&ResourceLimits::OnGamingModeChanged,
++                            base::Unretained(this)));
+   }
+   ApplyNetworkLimit();
+   // Tabs opened before this point (session restore) get the CPU limit too.
+@@ -145,6 +162,36 @@
+   observed_hosts_.RemoveObservation(host);
+ }
+ 
++void ResourceLimits::OnGamingModeChanged() {
++  namespace prefs = performance_manager::user_tuning::prefs;
++  PrefService* local_state = g_browser_process->local_state();
++  if (!local_state) {
++    return;
++  }
++  // Inactive tabs sleep sooner while gaming (Memory Saver, which never
++  // discards a tab playing sound or video), then as before.
++  const int saved = local_state->GetInteger(
++      prefs::kHiveyGamingSavedAggressiveness);
++  if (local_state->GetBoolean(prefs::kHiveyGamingMode)) {
++    if (saved < 0) {
++      local_state->SetInteger(
++          prefs::kHiveyGamingSavedAggressiveness,
++          local_state->GetInteger(prefs::kMemorySaverModeAggressiveness));
++    }
++    local_state->SetInteger(
++        prefs::kMemorySaverModeAggressiveness,
++        static_cast<int>(prefs::MemorySaverModeAggressiveness::kAggressive));
++    local_state->SetInteger(
++        prefs::kMemorySaverModeState,
++        static_cast<int>(prefs::MemorySaverModeState::kEnabled));
++  } else if (saved >= 0) {
++    local_state->SetInteger(prefs::kMemorySaverModeAggressiveness, saved);
++    local_state->ClearPref(prefs::kHiveyGamingSavedAggressiveness);
++  }
++  OnCpuLimitChanged();
++  ApplyNetworkLimit();
++}
++
+ void ResourceLimits::OnCpuLimitChanged() {
+   for (auto it = content::RenderProcessHost::AllHostsIterator(); !it.IsAtEnd();
+        it.Advance()) {
+--- a/chrome/browser/hivey/hivey_resource_limits.h
++++ b/chrome/browser/hivey/hivey_resource_limits.h
+@@ -38,8 +38,9 @@
+ // Whether this platform supports the CPU limiter (Windows: job objects).
+ bool IsCpuLimiterSupported();
+ 
+-// Applies the network limit from Local State to the network service. Called
+-// when the pref changes and after the network service (re)starts.
++// Applies the network limit from Local State (and Gaming mode) to the
++// network service. Called when the prefs change and after the network
++// service (re)starts.
+ void ApplyNetworkLimit();
+ 
+ // Hivey's GX-style resource limiters. The RAM limiter is a performance
+@@ -68,6 +69,8 @@
+ 
+  private:
+   void OnCpuLimitChanged();
++  // Gaming mode on or off: the limits, and Memory Saver's aggressiveness.
++  void OnGamingModeChanged();
+   void ApplyCpuLimit(content::RenderProcessHost* host);
+ 
+   PrefChangeRegistrar local_state_registrar_;
+--- a/chrome/browser/hivey/hivey_taskbar_icon_win.cc
++++ b/chrome/browser/hivey/hivey_taskbar_icon_win.cc
+@@ -71,7 +71,7 @@
+ // 3: larger).
+ std::wstring GetIconFileName(SkColor accent) {
+   return base::StrCat(
+-      {L"Hivey Icon 3 ",
++      {L"Hivey Icon 4 ",
+        base::ASCIIToWide(base::StringPrintf("%06X", accent & 0xFFFFFF)),
+        L".ico"});
+ }
+--- a/chrome/browser/performance_manager/policies/hivey_memory_limit_policy.cc
++++ b/chrome/browser/performance_manager/policies/hivey_memory_limit_policy.cc
+@@ -65,6 +65,10 @@
+   int limit_mb = 0;
+   if (PrefService* local_state = g_browser_process->local_state()) {
+     limit_mb = local_state->GetInteger(user_tuning::prefs::kHiveyMemoryLimitMb);
++    if (local_state->GetBoolean(user_tuning::prefs::kHiveyGamingMode)) {
++      limit_mb = user_tuning::prefs::HiveyGamingLimit(
++          limit_mb, user_tuning::prefs::kHiveyGamingMemoryLimitMb);
++    }
+   }
+   if (limit_mb <= 0 && base::FeatureList::IsEnabled(kHiveyMemoryLimit)) {
+     limit_mb = kHiveyMemoryLimitMb.Get();
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -199,6 +199,8 @@
+     ram: 'Memory',
+     network: 'Network',
+     ofMachine: 'of the machine',
++    gamingMode: 'Gaming mode',
++    gamingModeHint: 'Leaves your game the machine: at most $1 of RAM, $2 of processor per tab and $3. Inactive tabs go to sleep sooner; videos and music keep playing.',
+     ramLimiter: 'RAM limiter',
+     ramLimiterHint: 'Above this, tabs you have not used for a while go to sleep.',
+     cpuLimiter: 'CPU limiter',
+@@ -451,6 +453,8 @@
+     ram: 'Mémoire',
+     network: 'Réseau',
+     ofMachine: 'de la machine',
++    gamingMode: 'Mode Gaming',
++    gamingModeHint: 'Laisse la machine à votre jeu : au plus $1 de RAM, $2 de processeur par onglet et $3. Les onglets inactifs se mettent en veille plus tôt ; vidéos et musique continuent.',
+     ramLimiter: 'Limiteur de RAM',
+     ramLimiterHint: 'Au-delà, les onglets inutilisés depuis un moment se mettent en veille.',
+     cpuLimiter: 'Limiteur de processeur',
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -727,6 +727,13 @@
+   return el('div', {},
+             sectionHeader('resourcesTitle', 'resourcesHint'),
+             el('div', {class: 'gauges'}, gauge('gauge-cpu', 'cpu'), gauge('gauge-ram', 'ram'), gauge('gauge-net', 'network')),
++            hasPref('hivey.gaming_mode') ? card(null, toggleRow({
++              label: t('gamingMode'), checked: pref('hivey.gaming_mode'),
++              hint: t('gamingModeHint').replace('$1', formatMb(state.gaming.memoryMb))
++                        .replace('$2', `${state.gaming.cpuPercent} %`)
++                        .replace('$3', formatRate(state.gaming.networkKbps)),
++              onChange: v => setPref('hivey.gaming_mode', v),
++            })) : null,
+             card(null,
+                  hasPref('hivey.memory_limit_mb') ? selectRow({
+                    label: t('ramLimiter'), hint: t('ramLimiterHint'), value: pref('hivey.memory_limit_mb'),
+@@ -766,10 +773,13 @@
+   const cores = Math.max(1, usage.cores);
+   const cpuShare = usage.cpu / cores;
+   setGauge('gauge-cpu', cpuShare / 100, `${Math.round(cpuShare)} %`, t('ofMachine'));
+-  const limitMb = pref('hivey.memory_limit_mb') || 0;
++  // Gaming mode: the stricter of each limit and the gaming one.
++  const gaming = pref('hivey.gaming_mode') && state.gaming;
++  const effective = (limit, gamingLimit) => !gaming ? limit : limit > 0 ? Math.min(limit, gamingLimit) : gamingLimit;
++  const limitMb = effective(pref('hivey.memory_limit_mb') || 0, gaming && gaming.memoryMb);
+   setGauge('gauge-ram', limitMb ? usage.memoryMb / limitMb : Math.min(1, usage.memoryMb / 8192),
+            formatMb(usage.memoryMb), limitMb ? `/ ${formatMb(limitMb)}` : '');
+-  const limitKbps = pref('hivey.network_limit_kbps') || 0;
++  const limitKbps = effective(pref('hivey.network_limit_kbps') || 0, gaming && gaming.networkKbps);
+   setGauge('gauge-net', limitKbps ? usage.networkKbps / limitKbps : Math.min(1, usage.networkKbps / 50000),
+            formatRate(usage.networkKbps), limitKbps ? `/ ${formatRate(limitKbps)}` : '');
+ 
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
+@@ -178,13 +178,6 @@
+                          : gfx::ImageSkia::CreateFromBitmap(bitmap, 2.0f);
+ }
+ 
+-// The full color (modern) icon of a built-in item, if it has one.
+-template <typename T>
+-gfx::ImageSkia ModernIcon(const T& item) {
+-  return item.modern_png ? DecodeIcon(item.modern_png, item.modern_size)
+-                         : gfx::ImageSkia();
+-}
+-
+ // A user's site: the first letter of its name in a rounded square, white at
+ // 40 px for 20 DIP like the built-in icons.
+ gfx::ImageSkia MonogramIcon(const std::u16string& title) {
+@@ -208,41 +201,27 @@
+   return gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f);
+ }
+ 
+-// A modern icon: a rounded tile in a diagonal gradient from `light` to `deep`
+-// with a soft sheen and rim, the glyph (`mask`, white, 52 px for 26 DIP) cut
+-// out of it (transparent: the bar shows through).
+-gfx::ImageSkia ModernTile(const gfx::ImageSkia& mask,
+-                          SkColor light,
+-                          SkColor deep) {
+-  constexpr int kSize = 52;
+-  gfx::Canvas canvas(gfx::Size(kSize, kSize), 1.0f, /*is_opaque=*/false);
+-  const SkRRect tile =
+-      SkRRect::MakeRectXY(SkRect::MakeXYWH(1, 1, 50, 50), 14, 14);
++// A modern icon: the glyph itself (`mask`, white, 40 px for 20 DIP), no tile,
++// filled with a diagonal gradient from `from` to `to`; its duotone fill keeps
++// its own lighter alpha.
++gfx::ImageSkia ModernGlyph(const gfx::ImageSkia& mask,
++                           SkColor from,
++                           SkColor to) {
++  const SkBitmap glyph = mask.GetRepresentation(2.0f).GetBitmap();
++  const int size = glyph.width();
++  gfx::Canvas canvas(gfx::Size(size, size), 1.0f, /*is_opaque=*/false);
+   cc::PaintFlags flags;
+   flags.setAntiAlias(true);
+-  const SkPoint diagonal[] = {{0, 0}, {kSize, kSize}};
+-  const SkColor4f gradient[] = {SkColor4f::FromColor(light),
+-                                SkColor4f::FromColor(deep)};
++  const SkPoint diagonal[] = {{0, 0}, {static_cast<float>(size),
++                                       static_cast<float>(size)}};
++  const SkColor4f gradient[] = {SkColor4f::FromColor(from),
++                                SkColor4f::FromColor(to)};
+   flags.setShader(cc::PaintShader::MakeLinearGradient(
+       diagonal, gradient, nullptr, 2, SkTileMode::kClamp));
+-  canvas.sk_canvas()->drawRRect(tile, flags);
+-  const SkPoint vertical[] = {{0, 0}, {0, kSize / 2}};
+-  const SkColor4f sheen[] = {{1, 1, 1, 0.30f}, {1, 1, 1, 0}};
+-  flags.setShader(cc::PaintShader::MakeLinearGradient(
+-      vertical, sheen, nullptr, 2, SkTileMode::kClamp));
+-  canvas.sk_canvas()->drawRRect(tile, flags);
+-  flags.setShader(nullptr);
+-  flags.setStyle(cc::PaintFlags::kStroke_Style);
+-  flags.setStrokeWidth(1);
+-  flags.setColor(SkColorSetA(SK_ColorWHITE, 0x40));
+-  canvas.sk_canvas()->drawRRect(
+-      SkRRect::MakeRectXY(SkRect::MakeXYWH(1.5f, 1.5f, 49, 49), 13.5f, 13.5f),
+-      flags);
+-  cc::PaintFlags knock_out;
+-  knock_out.setBlendMode(SkBlendMode::kDstOut);
+-  canvas.DrawImageInt(gfx::ImageSkia::CreateFrom1xBitmap(
+-                          mask.GetRepresentation(2.0f).GetBitmap()),
+-                      0, 0, knock_out);
++  canvas.sk_canvas()->drawRect(SkRect::MakeWH(size, size), flags);
++  cc::PaintFlags keep;
++  keep.setBlendMode(SkBlendMode::kDstIn);
++  canvas.DrawImageInt(gfx::ImageSkia::CreateFrom1xBitmap(glyph), 0, 0, keep);
+   return gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f);
+ }
+ 
+@@ -537,7 +516,7 @@
+                       base::RepeatingClosure callback) -> ToolbarButton* {
+     ToolbarButton* button = AddButton(
+         group, id, ItemTitle(id), DecodeIcon(icon.png, icon.size),
+-        ModernIcon(icon), OwnColors(icon), /*movable=*/true,
++        OwnColors(icon), /*movable=*/true,
+         std::move(callback));
+     icons_.back().bottom = true;
+     return button;
+@@ -580,7 +559,7 @@
+     const std::u16string name = base::UTF8ToUTF16(title ? *title : "");
+     const auto& [on_dark, on_light] =
+         kAppColors[base::PersistentHash(id) % std::size(kAppColors)];
+-    AddButton(group, id, name, MonogramIcon(name), gfx::ImageSkia(),
++    AddButton(group, id, name, MonogramIcon(name),
+               OwnColors(on_dark, on_light, true), /*movable=*/true,
+               base::BindRepeating(&HiveyBarView::OnAppPressed,
+                                   base::Unretained(this), id));
+@@ -593,8 +572,8 @@
+     }
+     ToolbarButton* button = AddButton(
+         group, id, ItemTitle(id),
+-        DecodeIcon(workspace->png, workspace->png_size), ModernIcon(*workspace),
+-        OwnColors(*workspace), /*movable=*/true,
++        DecodeIcon(workspace->png, workspace->png_size), OwnColors(*workspace),
++        /*movable=*/true,
+         base::BindRepeating(&HiveyBarView::OnWorkspacePressed,
+                             base::Unretained(this), id));
+     workspaces_.push_back({id, button});
+@@ -606,7 +585,6 @@
+     std::string id,
+     std::u16string tooltip,
+     gfx::ImageSkia image,
+-    gfx::ImageSkia modern,
+     std::optional<std::pair<SkColor, SkColor>> colors,
+     bool movable,
+     base::RepeatingClosure callback) {
+@@ -627,8 +605,7 @@
+     button->set_drag_controller(this);
+   }
+   ToolbarButton* added = parent->AddChildView(std::move(button));
+-  icons_.push_back({added, std::move(id), std::move(image), std::move(modern),
+-                    colors, movable});
++  icons_.push_back({added, std::move(id), std::move(image), colors, movable});
+   return added;
+ }
+ 
+@@ -710,18 +687,25 @@
+             ? (dark_toolbar ? icon.colors->first : icon.colors->second)
+             : theme_color;
+     gfx::ImageSkia image;
+-    if (modern && !icon.modern.isNull()) {
+-      // The tile's gradient: the item's colors, or the theme's accent.
++    if (icon.image.isNull()) {
++      continue;
++    }
++    if (modern) {
++      // The glyph's gradient: the item's colors, or the theme's accent;
++      // lighter to deeper, kept legible on the toolbar.
+       const SkColor accent = colors->GetColor(ui::kColorSysPrimary);
+-      const bool own_tile =
+-          icon.colors && style == hivey::HiveyBarIconStyle::kModern;
+-      image = ModernTile(
+-          icon.modern,
+-          own_tile ? icon.colors->first
+-                   : color_utils::AlphaBlend(SK_ColorWHITE, accent, 0.35f),
+-          own_tile ? icon.colors->second
+-                   : color_utils::AlphaBlend(SK_ColorBLACK, accent, 0.25f));
+-    } else if (!icon.image.isNull()) {
++      const bool own = icon.colors && style == hivey::HiveyBarIconStyle::kModern;
++      const SkColor light = own ? icon.colors->first
++                                : color_utils::AlphaBlend(SK_ColorWHITE, accent,
++                                                          0.5f);
++      const SkColor deep = own ? icon.colors->second : accent;
++      image = dark_toolbar
++                  ? ModernGlyph(icon.image, light,
++                                color_utils::AlphaBlend(deep, light, 0.55f))
++                  : ModernGlyph(icon.image, deep,
++                                color_utils::AlphaBlend(SK_ColorBLACK, deep,
++                                                        0.3f));
++    } else {
+       image = gfx::ImageSkiaOperations::CreateColorMask(icon.image, color);
+     }
+     if (image.isNull()) {
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.h
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.h
+@@ -133,10 +133,9 @@
+     raw_ptr<ToolbarButton> button = nullptr;
+     // The button's id in the bar's prefs (empty for Settings).
+     std::string id;
+-    // White, tinted by UpdateColors().
++    // White, tinted (classic) or filled with a gradient (modern) by
++    // UpdateColors().
+     gfx::ImageSkia image;
+-    // Full color, for the modern style (empty: the classic one, tinted).
+-    gfx::ImageSkia modern;
+     // Its own color on a dark and on a light toolbar (Hivey Tools'
+     // workspaces, multicolor style; the user's sites, modern style).
+     std::optional<std::pair<SkColor, SkColor>> colors;
+@@ -158,12 +157,11 @@
+   void Rebuild();
+   void UpdateColors();
+   void UpdateActive();
+-  // A button with a white (classic) and a full color (modern) icon.
++  // A button with a white icon (`image`), drawn in the bar's style.
+   ToolbarButton* AddButton(views::View* parent,
+                            std::string id,
+                            std::u16string tooltip,
+                            gfx::ImageSkia image,
+-                           gfx::ImageSkia modern,
+                            std::optional<std::pair<SkColor, SkColor>> colors,
+                            bool movable,
+                            base::RepeatingClosure callback);
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
+@@ -15,6 +15,7 @@
+ #include "base/strings/utf_string_conversion_utils.h"
+ #include "base/strings/utf_string_conversions.h"
+ #include "build/build_config.h"
++#include "chrome/app/chrome_command_ids.h"
+ #include "chrome/app/vector_icons/vector_icons.h"
+ #include "chrome/browser/browser_process.h"
+ #include "base/functional/callback_helpers.h"
+@@ -30,6 +31,7 @@
+ #include "net/base/ip_address.h"
+ #include "chrome/browser/hivey/hivey_flags.h"
+ #include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/ui/browser_commands.h"
+ #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+ #include "chrome/browser/ui/extensions/extension_popup_types.h"
+@@ -45,12 +47,15 @@
+ #include "extensions/browser/extension_registry.h"
+ #include "extensions/browser/permissions/active_tab_permission_granter.h"
+ #include "extensions/common/extension.h"
++#include "ui/accessibility/ax_enums.mojom.h"
++#include "ui/views/accessibility/view_accessibility.h"
+ #include "ui/views/bubble/bubble_anchor.h"
+ #include "ui/views/controls/button/md_text_button.h"
+ #include "chrome/browser/ui/color/chrome_color_id.h"
+ #include "chrome/browser/ui/layout_constants.h"
+ #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
+ #include "chrome/grit/generated_resources.h"
++#include "components/vector_icons/vector_icons.h"
+ #include "content/public/browser/page_navigator.h"
+ #include "content/public/browser/web_contents.h"
+ #include "content/public/common/referrer.h"
+@@ -174,6 +179,32 @@
+                                     base::ASCIIToUTF16(info.address.ToString()));
+ }
+ 
++// Hivey Tools on its translation workspace, in the side panel of `browser`.
++void ShowHiveyTranslation(BrowserWindowInterface* browser) {
++  if (!browser) {
++    return;
++  }
++  extensions::ExtensionSidePanelManager* manager =
++      extensions::ExtensionSidePanelManager::From(browser);
++  extensions::ExtensionSidePanelCoordinator* coordinator =
++      manager ? manager->GetCoordinator(HIVEY_BUNDLED_AI_ID) : nullptr;
++  SidePanelUI* side_panel = SidePanelUI::From(browser);
++  if (!coordinator || !side_panel) {
++    return;
++  }
++  coordinator->ShowHiveyMode("translate");
++  side_panel->Show(
++      SidePanelEntryKey(SidePanelEntryId::kExtension, HIVEY_BUNDLED_AI_ID),
++      SidePanelOpenTrigger::kExtension);
++}
++
++BrowserWindowInterface* BrowserWithTab(content::WebContents* contents) {
++  return contents
++             ? GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(
++                   contents)
++             : nullptr;
++}
++
+ // The bubble shown when the chip is clicked.
+ class HiveyServerInfoBubbleView : public LocationBarBubbleDelegateView {
+   METADATA_HEADER(HiveyServerInfoBubbleView, LocationBarBubbleDelegateView)
+@@ -324,10 +355,7 @@
+ 
+  private:
+   BrowserWindowInterface* GetBrowser() {
+-    return web_contents()
+-               ? GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(
+-                     web_contents())
+-               : nullptr;
++    return BrowserWithTab(web_contents());
+   }
+ 
+   // Hivey Cyber's popup, as from its button: it may read this tab.
+@@ -366,22 +394,7 @@
+ 
+   // Hivey Tools on its translation workspace, in the side panel.
+   void Translate() {
+-    BrowserWindowInterface* browser = GetBrowser();
+-    if (!browser) {
+-      return;
+-    }
+-    extensions::ExtensionSidePanelManager* manager =
+-        extensions::ExtensionSidePanelManager::From(browser);
+-    extensions::ExtensionSidePanelCoordinator* coordinator =
+-        manager ? manager->GetCoordinator(HIVEY_BUNDLED_AI_ID) : nullptr;
+-    SidePanelUI* side_panel = SidePanelUI::From(browser);
+-    if (!coordinator || !side_panel) {
+-      return;
+-    }
+-    coordinator->ShowHiveyMode("translate");
+-    side_panel->Show(
+-        SidePanelEntryKey(SidePanelEntryId::kExtension, HIVEY_BUNDLED_AI_ID),
+-        SidePanelOpenTrigger::kExtension);
++    ShowHiveyTranslation(GetBrowser());
+     GetWidget()->Close();
+   }
+ 
+@@ -541,3 +554,72 @@
+ 
+ BEGIN_METADATA(HiveyServerInfoView)
+ END_METADATA
++
++HiveyPageButtonView::HiveyPageButtonView(
++    Kind kind,
++    IconLabelBubbleView::Delegate* parent_delegate,
++    const gfx::FontList& font_list)
++    : IconLabelBubbleView(font_list, parent_delegate), kind_(kind) {
++  SetVisible(false);
++  SetImageModel(ui::ImageModel::FromVectorIcon(
++      kind == Kind::kTranslate
++          ? vector_icons::kGTranslateIcon
++          : (features::IsRoundedIconsEnabled()
++                 ? vector_icons::kInstallDesktopIcon
++                 : kInstallDesktopChromeRefreshOldIcon),
++      kColorOmniboxResultsIcon,
++      GetLayoutConstant(LayoutConstant::kLocationBarTrailingIconSize)));
++  const std::u16string tooltip = l10n_util::GetStringUTF16(
++      kind == Kind::kTranslate ? IDS_HIVEY_SERVER_INFO_TRANSLATE
++                               : IDS_HIVEY_OPEN_AS_APP);
++  SetTooltipText(tooltip);
++  GetViewAccessibility().SetName(tooltip);
++}
++
++HiveyPageButtonView::~HiveyPageButtonView() = default;
++
++void HiveyPageButtonView::Update(content::WebContents* web_contents,
++                                 bool force_hidden) {
++  web_contents_ = web_contents ? web_contents->GetWeakPtr() : nullptr;
++  bool visible = !force_hidden && web_contents &&
++                 web_contents->GetLastCommittedURL().SchemeIsHTTPOrHTTPS();
++  if (visible && kind_ == Kind::kTranslate) {
++    // Translation is Hivey Tools': not when it is turned off.
++    visible = extensions::ExtensionRegistry::Get(
++                  web_contents->GetBrowserContext())
++                  ->enabled_extensions()
++                  .Contains(HIVEY_BUNDLED_AI_ID);
++  }
++  if (visible != GetVisible()) {
++    SetVisible(visible);
++    PreferredSizeChanged();
++  }
++}
++
++bool HiveyPageButtonView::ShowBubble(const ui::Event& event) {
++  BrowserWindowInterface* browser = BrowserWithTab(web_contents_.get());
++  if (!browser) {
++    return false;
++  }
++  if (kind_ == Kind::kTranslate) {
++    ShowHiveyTranslation(browser);
++  } else {
++    // "Install page as app": any site, in its own window and taskbar icon;
++    // a shortcut where that is not offered.
++    if (!chrome::ExecuteCommand(browser, IDC_INSTALL_PWA)) {
++      chrome::ExecuteCommand(browser, IDC_CREATE_SHORTCUT);
++    }
++  }
++  return false;
++}
++
++bool HiveyPageButtonView::IsBubbleShowing() const {
++  return false;
++}
++
++bool HiveyPageButtonView::ShouldShowSeparator() const {
++  return false;
++}
++
++BEGIN_METADATA(HiveyPageButtonView)
++END_METADATA
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
+@@ -62,4 +62,35 @@
+   views::ViewTracker bubble_tracker_;
+ };
+ 
++// A location bar button for the page, beside the server chip: Hivey Tools'
++// translation in the side panel, or the page as an app in its own window
++// (with its own taskbar icon). Shown on web pages only.
++class HiveyPageButtonView : public IconLabelBubbleView {
++  METADATA_HEADER(HiveyPageButtonView, IconLabelBubbleView)
++
++ public:
++  enum class Kind { kTranslate, kApp };
++
++  HiveyPageButtonView(Kind kind,
++                      IconLabelBubbleView::Delegate* parent_delegate,
++                      const gfx::FontList& font_list);
++  HiveyPageButtonView(const HiveyPageButtonView&) = delete;
++  HiveyPageButtonView& operator=(const HiveyPageButtonView&) = delete;
++  ~HiveyPageButtonView() override;
++
++  // Follows `web_contents`, the active tab (may be null); hidden while
++  // `force_hidden` (the user edits the location bar).
++  void Update(content::WebContents* web_contents, bool force_hidden);
++
++ protected:
++  // IconLabelBubbleView:
++  bool ShowBubble(const ui::Event& event) override;
++  bool IsBubbleShowing() const override;
++  bool ShouldShowSeparator() const override;
++
++ private:
++  const Kind kind_;
++  base::WeakPtr<content::WebContents> web_contents_;
++};
++
+ #endif  // CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_HIVEY_SERVER_INFO_VIEW_H_
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -180,6 +180,9 @@
+ 
+ // The padding between the content setting icons and other trailing decorations.
+ constexpr int kContentSettingIntraItemPadding = 8;
++// Hivey: between the server chip, its buttons and the page actions, the gap
++// two page action icons have between them (theirs is inside their insets).
++constexpr int kHiveyTrailingGap = 6;
+ 
+ // Capsule dimensions and padding for the elevated page action toolbar.
+ constexpr int kPageActionCapsuleEdgePadding = 2;
+@@ -478,6 +481,10 @@
+   // Hivey: country of the server of the page, from the bundled database.
+   hivey_server_info_view_ = AddChildView(
+       std::make_unique<HiveyServerInfoView>(this, page_action_font_list));
++  hivey_translate_view_ = AddChildView(std::make_unique<HiveyPageButtonView>(
++      HiveyPageButtonView::Kind::kTranslate, this, page_action_font_list));
++  hivey_app_view_ = AddChildView(std::make_unique<HiveyPageButtonView>(
++      HiveyPageButtonView::Kind::kApp, this, page_action_font_list));
+ 
+   std::vector<actions::ActionItem*> page_action_items = {};
+   if (browser_) {
+@@ -904,6 +911,18 @@
+   add_trailing_decoration(hivey_server_info_view_,
+                           kContentSettingIntraItemPadding,
+                           /*edge_padding=*/trailing_decorations_edge_padding);
++  // Then translation and "open as an app", evenly spaced.
++  add_trailing_decoration(hivey_translate_view_, kHiveyTrailingGap,
++                          /*edge_padding=*/trailing_decorations_edge_padding);
++  add_trailing_decoration(hivey_app_view_, kHiveyTrailingGap,
++                          /*edge_padding=*/trailing_decorations_edge_padding);
++  // The page actions keep that gap from the chip and its buttons.
++  const int hivey_page_action_gap =
++      hivey_server_info_view_->GetVisible() ||
++              hivey_translate_view_->GetVisible() ||
++              hivey_app_view_->GetVisible()
++          ? kHiveyTrailingGap
++          : 0;
+ 
+   if (features::IsPageActionsElevatedToolbarEnabled()) {
+     if (page_action_container_ && page_action_container_->GetVisible()) {
+@@ -920,7 +939,8 @@
+                             : vertical_padding,
+           is_capsule_active ? capsule_height : location_height,
+           /*auto_collapse=*/false, /*max_fraction=*/0,
+-          /*intra_item_padding=*/0, edge_padding, page_action_container_);
++          /*intra_item_padding=*/hivey_page_action_gap, edge_padding,
++          page_action_container_);
+     }
+   } else {
+     // When the AIM page action is shown as the right-most page action in the
+@@ -928,7 +948,7 @@
+     // location bar.
+     constexpr int kTrailingEdgePaddingForAim = 5;
+     add_trailing_decoration(page_action_container_,
+-                            /*intra_item_padding=*/0,
++                            /*intra_item_padding=*/hivey_page_action_gap,
+                             /*edge_padding=*/
+                             GetPageActionInfo().is_aim_last_visible_page_action
+                                 ? kTrailingEdgePaddingForAim
+@@ -2056,6 +2076,9 @@
+   if (hivey_server_info_view_) {
+     hivey_server_info_view_->Update(GetWebContents(),
+                                     ShouldHidePageActionIcons());
++    hivey_translate_view_->Update(GetWebContents(),
++                                  ShouldHidePageActionIcons());
++    hivey_app_view_->Update(GetWebContents(), ShouldHidePageActionIcons());
+   }
+ 
+   InvalidateLayout();
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.h
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.h
+@@ -55,6 +55,7 @@
+ class BrowserWindowInterface;
+ class CommandUpdater;
+ class ContentSettingBubbleModelDelegate;
++class HiveyPageButtonView;
+ class HiveyServerInfoView;
+ class OmniboxController;
+ class OmniboxContextMenu;
+@@ -591,6 +592,9 @@
+ 
+   // Hivey: the country of the server of the page (offline lookup).
+   raw_ptr<HiveyServerInfoView> hivey_server_info_view_ = nullptr;
++  // Hivey: translate the page, open it as an app (beside the chip).
++  raw_ptr<HiveyPageButtonView> hivey_translate_view_ = nullptr;
++  raw_ptr<HiveyPageButtonView> hivey_app_view_ = nullptr;
+ 
+   // The container for page action icons.
+   raw_ptr<page_actions::PageActionContainerView> page_action_container_ =
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -56,6 +56,7 @@
+ #include "chrome/browser/ui/webui/hivey/hivey_resources_ui.h"
+ #include "chrome/browser/ui/browser_commands.h"
+ #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
++#include "components/performance_manager/public/user_tuning/prefs.h"
+ #include "components/prefs/pref_service.h"
+ #include "components/version_info/version_info.h"
+ #include "components/webui/flags/flags_state.h"
+@@ -207,6 +208,7 @@
+     {"hivey.memory_limit_mb", true},
+     {hivey::kCpuLimitPercent, true},
+     {hivey::kNetworkLimitKbps, true},
++    {"hivey.gaming_mode", true},
+     {hivey::kAutoUpdateEnabled, true},
+ };
+ 
+@@ -590,6 +592,14 @@
+       .Set("platform", platform)
+       .Set("version", version_info::GetVersionNumber())
+       .Set("cpuLimiterSupported", hivey::IsCpuLimiterSupported())
++      .Set("gaming",
++           base::DictValue()
++               .Set("memoryMb", performance_manager::user_tuning::prefs::
++                                    kHiveyGamingMemoryLimitMb)
++               .Set("cpuPercent", performance_manager::user_tuning::prefs::
++                                      kHiveyGamingCpuLimitPercent)
++               .Set("networkKbps", performance_manager::user_tuning::prefs::
++                                       kHiveyGamingNetworkLimitKbps))
+       .Set("theme", BuildThemeState())
+       .Set("prefs", BuildPrefsState())
+       .Set("flags", BuildFlagsState())
+--- a/components/performance_manager/public/user_tuning/prefs.h
++++ b/components/performance_manager/public/user_tuning/prefs.h
+@@ -5,6 +5,7 @@
+ #ifndef COMPONENTS_PERFORMANCE_MANAGER_PUBLIC_USER_TUNING_PREFS_H_
+ #define COMPONENTS_PERFORMANCE_MANAGER_PUBLIC_USER_TUNING_PREFS_H_
+ 
++#include <algorithm>
+ #include <string>
+ #include <vector>
+ 
+@@ -53,6 +54,23 @@
+ // Hivey: RAM limiter. Memory limit for the whole browser, in MiB; 0 = off.
+ inline constexpr char kHiveyMemoryLimitMb[] = "hivey.memory_limit_mb";
+ 
++// Hivey: Gaming mode, for a game played beside the browser. Each limiter
++// (RAM, CPU, network) takes the stricter of its own setting and the gaming
++// one, and Memory Saver puts inactive tabs to sleep sooner (tabs playing
++// sound or video keep playing).
++inline constexpr char kHiveyGamingMode[] = "hivey.gaming_mode";
++// Memory Saver's aggressiveness before Gaming mode (-1: none saved).
++inline constexpr char kHiveyGamingSavedAggressiveness[] =
++    "hivey.gaming_mode.saved_aggressiveness";
++inline constexpr int kHiveyGamingMemoryLimitMb = 2048;
++inline constexpr int kHiveyGamingCpuLimitPercent = 20;
++inline constexpr int kHiveyGamingNetworkLimitKbps = 25000;  // 4K video.
++
++// A limit (0 = none) with Gaming mode on.
++inline int HiveyGamingLimit(int limit, int gaming_limit) {
++  return limit > 0 ? std::min(limit, gaming_limit) : gaming_limit;
++}
++
+ enum class BatterySaverModeState {
+   kDisabled = 0,
+   kEnabledBelowThreshold = 1,
+--- a/components/performance_manager/user_tuning/prefs.cc
++++ b/components/performance_manager/user_tuning/prefs.cc
+@@ -35,6 +35,8 @@
+   registry->RegisterIntegerPref(
+       kMemorySaverModeState, static_cast<int>(MemorySaverModeState::kEnabled));
+   registry->RegisterIntegerPref(kHiveyMemoryLimitMb, 0);
++  registry->RegisterBooleanPref(kHiveyGamingMode, false);
++  registry->RegisterIntegerPref(kHiveyGamingSavedAggressiveness, -1);
+   registry->RegisterIntegerPref(
+       kMemorySaverModeAggressiveness,
+       static_cast<int>(MemorySaverModeAggressiveness::kMedium));

@@ -3,6 +3,31 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4711 — 29 octobre 2026
+
+### Barre Hivey
+- **Icônes modernes plus sobres** : plus de cadre, le pictogramme seul, à la
+  taille des icônes classiques, rempli d'un dégradé (couleurs de l'outil ou du
+  thème), comme une favicon.
+
+### Barre d'adresse
+- Nouveaux boutons à côté du drapeau : **Traduire** la page (Hivey Tools) et
+  **Ouvrir comme application** (le site dans sa propre fenêtre, avec son
+  icône dans la barre des tâches).
+- Même espace entre le drapeau, les boutons et les icônes de la page
+  (favoris, cookies).
+
+### Performances
+- **Mode Gaming** (bouton Performances de la barre Hivey) : bride le
+  navigateur pendant que vous jouez (RAM, processeur par onglet, réseau) et
+  met les onglets inactifs en veille plus tôt ; vidéos et musique continuent
+  en fond. Vos réglages reviennent quand vous le coupez.
+
+### Apparence
+- Les **séparateurs entre les onglets** prennent la couleur du thème.
+- Le **logo** de l'application a un vrai dégradé de couleur (barre des
+  tâches, bureau, menu).
+
 ## 156.0.8078.4710 — 29 octobre 2026
 
 ### Barre Hivey
