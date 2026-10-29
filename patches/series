@@ -24,6 +24,7 @@ hivey/privacy/font-fingerprinting.patch
 hivey/customization/hivey-studio-more.patch
 hivey/privacy/font-fingerprinting-fallback.patch
 hivey/build/installer-snapshot-blob-dep.patch
+hivey/build/installer-custom-dir.patch
 hivey/privacy/bundled-extensions-list.patch
 hivey/customization/aura-color-engine.patch
 hivey/privacy/block-device-apis.patch
@@ -42,3 +43,4 @@ hivey/customization/google-default-search.patch
 hivey/customization/hivey-bar-v5.patch
 hivey/customization/hivey-bar-v6.patch
 hivey/customization/hivey-bar-v7.patch
+hivey/customization/hivey-bar-v8.patch

@@ -1,0 +1,128 @@
+# Setup wizard: a new per-user install can go to a folder of the user's choice (--hivey-install-dir / distribution.hivey_install_dir), refused under Program Files or Windows and in a non-empty folder; updates and uninstall find it in the registry.
+--- a/chrome/installer/util/helper.cc
++++ b/chrome/installer/util/helper.cc
+@@ -12,6 +12,7 @@
+ #include "base/containers/fixed_flat_map.h"
+ #include "base/containers/span.h"
+ #include "base/files/file_util.h"
++#include "base/logging.h"
+ #include "base/path_service.h"
+ #include "base/version.h"
+ #include "base/win/windows_version.h"
+@@ -58,6 +59,63 @@
+   return {};
+ }
+ 
++// Hivey: true if `path` is `dir` or inside it, ignoring case.
++bool IsSameOrInsideDir(const base::FilePath& path, const base::FilePath& dir) {
++  if (dir.empty()) {
++    return false;
++  }
++  const std::wstring root = dir.StripTrailingSeparators().value();
++  const std::wstring_view value = path.value();
++  return value.size() >= root.size() &&
++         base::FilePath::CompareEqualIgnoreCase(value.substr(0, root.size()),
++                                                root) &&
++         (value.size() == root.size() ||
++          base::FilePath::IsSeparator(value[root.size()]));
++}
++
++// Hivey: the folder chosen in the setup wizard for a new per-user install
++// (`distribution.hivey_install_dir`, or --hivey-install-dir), or an empty path
++// if there is none or it is unsuitable. It must be:
++// - absolute and not the root of a volume;
++// - outside Program Files and Windows: install_static treats a browser under
++//   Program Files as a system-level install (HKLM, no self-update);
++// - missing, empty or already holding chrome.exe: uninstall deletes
++//   everything in the install folder, which must never hold the user's files.
++base::FilePath GetHiveyInstallDirFromPrefs(
++    const installer::InitialPreferences& prefs,
++    bool system_install) {
++  base::FilePath dir;
++  if (system_install ||
++      !prefs.GetPath(installer::initial_preferences::kHiveyInstallDir, &dir) ||
++      dir.empty()) {
++    return {};
++  }
++  dir = dir.NormalizePathSeparators().StripTrailingSeparators();
++  if (!dir.IsAbsolute() || dir.ReferencesParent() || dir == dir.DirName()) {
++    LOG(ERROR) << "Install folder refused (not absolute): " << dir;
++    return {};
++  }
++  for (int key : {base::DIR_PROGRAM_FILES, base::DIR_PROGRAM_FILESX86,
++                  base::DIR_PROGRAM_FILES6432, base::DIR_WINDOWS}) {
++    base::FilePath system_dir;
++    if (key == base::DIR_WINDOWS) {
++      base::PathService::Get(key, &system_dir);
++    } else {
++      system_dir = GetPathWithEnvironmentFallback(key);
++    }
++    if (IsSameOrInsideDir(dir, system_dir)) {
++      LOG(ERROR) << "Install folder refused (system folder): " << dir;
++      return {};
++    }
++  }
++  if (base::DirectoryExists(dir) && !base::IsDirectoryEmpty(dir) &&
++      !base::PathExists(dir.Append(installer::kChromeExe))) {
++    LOG(ERROR) << "Install folder refused (not empty): " << dir;
++    return {};
++  }
++  return dir;
++}
++
+ // Returns a valid file path with the proper casing from the system if `prefs`
+ // has a `distribution.program_files_dir` value that is a valid target for the
+ // browser's installation and `system_install` is true. Returns an empty file
+@@ -184,6 +242,8 @@
+ 
+   install_path = GetInstallationDirFromPrefs(prefs, system_install);
+   if (install_path.empty())
++    install_path = GetHiveyInstallDirFromPrefs(prefs, system_install);
++  if (install_path.empty())
+     install_path = GetDefaultChromeInstallPathChecked(system_install);
+   return install_path;
+ }
+--- a/chrome/installer/util/initial_preferences.cc
++++ b/chrome/installer/util/initial_preferences.cc
+@@ -163,6 +163,15 @@
+     initial_dictionary_->SetByDottedPath(name, base::WideToUTF8(str_value));
+   }
+ 
++  // Hivey: the install folder chosen in the setup wizard.
++  str_value =
++      cmd_line.GetSwitchValueNative(installer::switches::kHiveyInstallDir);
++  if (!str_value.empty()) {
++    name.assign(installer::initial_preferences::kDistroDict);
++    name.append(".").append(installer::initial_preferences::kHiveyInstallDir);
++    initial_dictionary_->SetByDottedPath(name, base::WideToUTF8(str_value));
++  }
++
+   // Handle the special case of --system-level being implied by the presence of
+   // the kGoogleUpdateIsMachineEnvVar environment variable.
+   std::unique_ptr<base::Environment> env(base::Environment::Create());
+--- a/chrome/installer/util/initial_preferences_constants.h
++++ b/chrome/installer/util/initial_preferences_constants.h
+@@ -49,6 +49,9 @@
+ // install. Cmd line override present.
+ inline constexpr char kDoNotRegisterForUpdateLaunch[] =
+     "do_not_register_for_update_launch";
++// String. Hivey: the folder of a new per-user install (chrome.exe goes
++// there). Cmd line override present (--hivey-install-dir).
++inline constexpr char kHiveyInstallDir[] = "hivey_install_dir";
+ // String.  Specifies the file path to write logging info to.
+ inline constexpr char kLogFile[] = "log_file";
+ // Boolean. Register Chrome as default browser for the current user.
+--- a/chrome/installer/util/util_constants.h
++++ b/chrome/installer/util/util_constants.h
+@@ -273,6 +273,11 @@
+ // Specify the file path of Chrome initial preference file.
+ inline constexpr char kInstallerData[] = "installerdata";
+ 
++// Hivey: the folder of a new per-user install (the setup wizard's choice),
++// e.g. --hivey-install-dir="D:\Apps\Hivey Browser". Ignored when the browser
++// is already installed: updates and uninstall use the registered folder.
++inline constexpr char kHiveyInstallDir[] = "hivey-install-dir";
++
+ // What install level to create shortcuts for, if "create-shortcuts" is present.
+ inline constexpr char kInstallLevel[] = "install-level";
+ 
