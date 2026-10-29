@@ -816,7 +816,7 @@
 +inline constexpr char kHiveyGamingMode[] = "hivey.gaming_mode";
 +// Memory Saver's aggressiveness before Gaming mode (-1: none saved).
 +inline constexpr char kHiveyGamingSavedAggressiveness[] =
-+    "hivey.gaming_mode.saved_aggressiveness";
++    "hivey.gaming_saved_aggressiveness";
 +inline constexpr int kHiveyGamingMemoryLimitMb = 2048;
 +inline constexpr int kHiveyGamingCpuLimitPercent = 20;
 +inline constexpr int kHiveyGamingNetworkLimitKbps = 25000;  // 4K video.

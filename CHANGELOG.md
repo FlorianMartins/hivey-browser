@@ -23,6 +23,15 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
   met les onglets inactifs en veille plus tôt ; vidéos et musique continuent
   en fond. Vos réglages reviennent quand vous le coupez.
 
+### Installation (Windows)
+- **Un vrai assistant d'installation** : choix du dossier d'installation,
+  des modules intégrés (bloqueur de publicités, Hivey AI, Hivey Cyber),
+  d'un **mode confidentialité** (JavaScript sans JIT, cookies tiers bloqués,
+  WebRTC sans fuite d'IP, pas de suggestions de recherche, Do Not Track) et
+  des raccourcis (bureau, barre des tâches), en français ou en anglais.
+- Les mises à jour automatiques restent silencieuses et gardent le dossier
+  choisi.
+
 ### Apparence
 - Les **séparateurs entre les onglets** prennent la couleur du thème.
 - Le **logo** de l'application a un vrai dégradé de couleur (barre des
