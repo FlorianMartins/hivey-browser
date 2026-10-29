@@ -328,7 +328,7 @@
        }
 --- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
 +++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
-@@ -4,6 +4,7 @@
+@@ -4,11 +4,13 @@
  
  #include "chrome/browser/ui/views/location_bar/hivey_server_info_view.h"
  
@@ -336,7 +336,13 @@
  #include <memory>
  #include <utility>
  #include <vector>
-@@ -21,6 +22,12 @@
+ 
+ #include "base/functional/bind.h"
++#include "base/strings/strcat.h"
+ #include "base/strings/string_util.h"
+ #include "base/strings/utf_string_conversion_utils.h"
+ #include "base/strings/utf_string_conversions.h"
+@@ -21,6 +23,12 @@
  #include "chrome/browser/extensions/extension_view_host_factory.h"
  #include "chrome/browser/hivey/bundled_extensions.h"
  #include "chrome/browser/hivey/hivey_server_info.h"
@@ -349,7 +355,7 @@
  #include "chrome/browser/profiles/profile.h"
  #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
-@@ -71,9 +78,67 @@
+@@ -71,9 +79,67 @@
  // Lookups on these sites only happen when the user clicks their link.
  constexpr char kWhoisUrl[] = "https://www.whois.com/whois/";
  constexpr char kIpDetailsUrl[] = "https://ipinfo.io/";
@@ -417,7 +423,7 @@
  std::u16string CountryName(const hivey::ServerInfo& info) {
    if (info.via_proxy) {
      return l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_VIA_PROXY);
-@@ -124,15 +189,41 @@
+@@ -124,15 +190,41 @@
      SetCloseOnMainFrameOriginNavigation(true);
  
      const views::LayoutProvider* provider = views::LayoutProvider::Get();
@@ -462,7 +468,7 @@
      auto* table = AddChildView(std::make_unique<views::View>());
      auto& layout = table->SetLayoutManager(std::make_unique<views::TableLayout>())
                         ->AddColumn(views::LayoutAlignment::kStart,
-@@ -165,8 +256,11 @@
+@@ -165,8 +257,11 @@
        label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
        label->SetSelectable(selectable);
      };
@@ -476,7 +482,7 @@
      std::u16string country = CountryName(info);
      if (!info.via_proxy && !info.country_code.empty()) {
        country = HiveyServerInfoView::FlagEmoji(info.country_code) + u" " +
-@@ -179,6 +273,9 @@
+@@ -179,6 +274,9 @@
      if (info.via_proxy) {
        AddNote(IDS_HIVEY_SERVER_INFO_PROXY_NOTE);
      }
@@ -486,16 +492,16 @@
  
      // Links to lookup sites: nothing is sent unless the user clicks one.
      auto* links = AddChildView(std::make_unique<views::View>());
-@@ -196,6 +293,8 @@
+@@ -196,6 +294,8 @@
              GURL(kWhoisUrl + domain));
      AddLink(links, l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_IP_DETAILS),
              GURL(kIpDetailsUrl + info.address.ToString()));
 +    AddLink(links, u"Shodan", GURL(kShodanUrl + info.address.ToString()));
-+    AddLink(links, u"SSL Labs", GURL(kSslLabsUrl + info.url.host()));
++    AddLink(links, u"SSL Labs", GURL(base::StrCat({kSslLabsUrl, info.url.host()})));
      AddNote(IDS_HIVEY_SERVER_INFO_LINKS_NOTE);
  
      // Hivey Cyber's tools for this site, and the page in another language
-@@ -337,6 +436,10 @@
+@@ -337,6 +437,10 @@
  
  HiveyServerInfoView::~HiveyServerInfoView() = default;
  
@@ -506,7 +512,7 @@
  // static
  std::u16string HiveyServerInfoView::FlagEmoji(const std::string& country_code) {
    std::u16string flag;
-@@ -403,17 +506,23 @@
+@@ -403,17 +507,23 @@
    // Wait for the lookup (a few milliseconds) rather than flash a globe.
    const bool visible = !force_hidden_ && info && !info->lookup_pending;
    if (visible) {

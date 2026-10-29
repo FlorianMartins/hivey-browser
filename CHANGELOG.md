@@ -14,6 +14,9 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
 - Le **survol** a la même forme arrondie que le bouton ouvert.
 - La barre **garde sa largeur** quand un onglet de la sidebar s'ouvre (plus
   de marge du côté de la barre).
+- La **barre de navigation passe au-dessus** de la barre Hivey : Retour,
+  Avancer et Actualiser restent à leur place, Retour au-dessus de la barre,
+  sans vide à gauche.
 
 ### Barre d'adresse
 - Le bouton du serveur affiche le **vrai drapeau** du pays (image, aussi sous
