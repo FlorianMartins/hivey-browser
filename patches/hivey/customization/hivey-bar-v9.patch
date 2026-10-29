@@ -1,0 +1,1323 @@
+# Hivey 4712: modern icons in neon (solid glyph, two-hue gradient, glow); server bubble with the site's IPv4 and IPv6 and the flag image; Translate button: Google Translate in place (on demand); picture-in-picture: location bar button while a video plays, automatic when leaving its tab; bookmarks import: its own Studio section, Flatpak/Snap browsers, the bar's Bookmarks menu; customizable toolbar (order, address bar position, hidden buttons).
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -1957,6 +1957,9 @@
+         <message name="IDS_HIVEY_BAR_HIDE" desc="Context menu item of the Hivey bar: hide it (it can be shown again from the tab strip menu or Hivey Studio)">
+           Hide the Hivey bar
+         </message>
++        <message name="IDS_HIVEY_BAR_IMPORT_BOOKMARKS" desc="Context menu item of the Bookmarks button of the Hivey bar: open the page that imports bookmarks from Chrome, Edge, Brave, Firefox...">
++          Import bookmarks from another browser...
++        </message>
+         <message name="IDS_HIVEY_BAR_HIDE_ITEM" desc="Context menu item of a button of the Hivey bar: remove that button from the bar (it can be shown again from Hivey Studio)">
+           Hide this button
+         </message>
+@@ -20681,6 +20684,9 @@
+       <message name="IDS_HIVEY_SERVER_INFO_COPY_IP" desc="Button of the server info bubble: copy the site's IP address">
+           Copy IP
+         </message>
++        <message name="IDS_HIVEY_PICTURE_IN_PICTURE" desc="Tooltip of the location bar button, shown while the page plays a video, that moves the video to a small always-on-top window">
++          Picture in picture: keep watching in another tab
++        </message>
+         <message name="IDS_HIVEY_OPEN_AS_APP" desc="Tooltip of the location bar button that opens the page as an app, in its own window with its own taskbar icon">
+           Open as an app, in its own window
+         </message>
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10887,4 +10887,6 @@
+ <translation id="963583333837971347">Ces liens ouvrent un site web dans un nouvel onglet, qui apprend alors le domaine ou l'adresse.</translation>
+ <translation id="1198436571127508047">Géolocalisation IP par DB-IP</translation>
+ <translation id="2810925360372147318">Ouvrir comme application, dans sa propre fenêtre</translation>
++<translation id="5905890467343114573">Incrustation vidéo : continuer de regarder dans un autre onglet</translation>
++<translation id="5846001751038331366">Importer les favoris d’un autre navigateur...</translation>
+ </translationbundle>
+\ No newline at end of file
+--- a/chrome/browser/hivey/hivey_bar_prefs.cc
++++ b/chrome/browser/hivey/hivey_bar_prefs.cc
+@@ -27,6 +27,10 @@
+   registry->RegisterDictionaryPref(kHiveyBarZones);
+   registry->RegisterListPref(kHiveyBarHidden);
+   registry->RegisterListPref(kHiveyBarApps);
++  registry->RegisterListPref(kHiveyToolbarOrder);
++  registry->RegisterListPref(kHiveyToolbarHidden);
++  registry->RegisterListPref(kHiveyToolbarOrder);
++  registry->RegisterListPref(kHiveyToolbarHidden);
+   registry->RegisterBooleanPref(kHiveyGoogleDefaultApplied, false);
+ }
+ 
+--- a/chrome/browser/hivey/hivey_bar_prefs.h
++++ b/chrome/browser/hivey/hivey_bar_prefs.h
+@@ -45,6 +45,20 @@
+ inline constexpr char kHiveyBarOrder[] = "hivey.bar.order";
+ // Ids of the buttons the user hid.
+ inline constexpr char kHiveyBarHidden[] = "hivey.bar.hidden";
++// The toolbar's buttons in the user's order ("back", "forward", "reload",
++// "home", "location", "extensions", "pinned", "avatar", "menu"); the ones
++// left out keep Chromium's order, after. Empty: Chromium's toolbar.
++inline constexpr char kHiveyToolbarOrder[] = "hivey.toolbar.order";
++// The toolbar buttons the user hid ("back", "reload", "extensions",
++// "pinned"; Forward and Home have Chromium's own settings).
++inline constexpr char kHiveyToolbarHidden[] = "hivey.toolbar.hidden";
++// The toolbar's buttons in the user's order ("back", "forward", "reload",
++// "home", "location", "extensions", "pinned", "avatar", "menu"); the ones
++// left out keep Chromium's order, after. Empty: Chromium's toolbar.
++inline constexpr char kHiveyToolbarOrder[] = "hivey.toolbar.order";
++// The toolbar buttons the user hid ("back", "reload", "extensions",
++// "pinned"; Forward and Home have Chromium's own settings).
++inline constexpr char kHiveyToolbarHidden[] = "hivey.toolbar.hidden";
+ // The user's sites, opened in the side panel: {"id", "title", "url"}.
+ inline constexpr char kHiveyBarApps[] = "hivey.bar.apps";
+ // Whether this profile moved from DuckDuckGo (Hivey's former default search
+--- a/chrome/browser/hivey/hivey_resource_limits.cc
++++ b/chrome/browser/hivey/hivey_resource_limits.cc
+@@ -7,6 +7,7 @@
+ #include <utility>
+ #include <vector>
+ 
++#include "base/command_line.h"
+ #include "base/functional/bind.h"
+ #include "base/logging.h"
+ #include "base/time/time.h"
+@@ -15,6 +16,7 @@
+ #include "chrome/browser/hivey/hivey_updater.h"
+ #include "chrome/browser/net/system_network_context_manager.h"
+ #include "components/prefs/pref_registry_simple.h"
++#include "components/translate/core/common/translate_switches.h"
+ #include "components/performance_manager/public/user_tuning/prefs.h"
+ #include "components/prefs/pref_service.h"
+ #include "content/public/browser/child_process_termination_info.h"
+@@ -233,6 +235,22 @@
+ ChromeBrowserMainExtraPartsHivey::~ChromeBrowserMainExtraPartsHivey() =
+     default;
+ 
++void ChromeBrowserMainExtraPartsHivey::PreProfileInit() {
++  // Google Translate, on demand only (the location bar's Translate button,
++  // the context menu): Chromium's own translation, which ungoogled-chromium
++  // enables with these switches. Pages are never offered a translation
++  // (translate.enabled is off), so nothing is sent until the user asks.
++  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
++  if (!command_line->HasSwitch(translate::switches::kTranslateScriptURL)) {
++    command_line->AppendSwitchASCII(
++        translate::switches::kTranslateScriptURL,
++        "https://translate.googleapis.com/translate_a/element.js");
++    command_line->AppendSwitchASCII(
++        translate::switches::kTranslateSecurityOrigin,
++        "https://translate.googleapis.com/");
++  }
++}
++
+ void ChromeBrowserMainExtraPartsHivey::PostBrowserStart() {
+   resource_limits_ = std::make_unique<ResourceLimits>();
+   updater_ = std::make_unique<Updater>();
+--- a/chrome/browser/hivey/hivey_resource_limits.h
++++ b/chrome/browser/hivey/hivey_resource_limits.h
+@@ -95,6 +95,7 @@
+   ~ChromeBrowserMainExtraPartsHivey() override;
+ 
+   // ChromeBrowserMainExtraParts:
++  void PreProfileInit() override;
+   void PostBrowserStart() override;
+   void PostMainMessageLoopRun() override;
+ 
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -108,6 +108,13 @@
+     hiveyBarSide: 'Hivey bar position',
+     hiveyBarAuto: 'Automatic (left with vertical tabs)',
+     importTitle: 'Import bookmarks',
++    navImport: 'Import',
++    toolbarTitle: 'Toolbar',
++    toolbarHint: 'Drag the buttons, the address bar too, to any place; the eye shows or hides one.',
++    toolbarReset: 'Reset the toolbar',
++    tbBack: 'Back', tbForward: 'Forward', tbReload: 'Reload', tbHome: 'Home', tbLocation: 'Address bar',
++    tbExtensions: 'Extensions', tbPinned: 'Pinned buttons', tbAvatar: 'Profile', tbMenu: 'Menu',
++    importSectionHint: 'Bring your bookmarks from the browser you used before.',
+     importHint: 'From Chrome, Edge, Brave, Vivaldi, Opera or Chromium on this computer: each profile goes to a folder of Other bookmarks.',
+     importFind: 'Browsers on this computer',
+     importFindButton: 'Find',
+@@ -166,6 +173,8 @@
+     ctrlTabMru: 'Ctrl+Tab cycles through recently used tabs',
+     hoverImages: 'Tab previews on hover',
+     hoverMemory: 'Show memory use in tab previews',
++    autoPip: 'Picture in picture when leaving a video',
++    autoPipHint: 'A playing video follows you in a small window when you switch tabs. The button in the address bar does it on demand.',
+     hoverCards: 'Tab hover cards',
+     hoverCardsDefault: 'Cards',
+     hoverCardsTooltip: 'Simple tooltip',
+@@ -362,6 +371,13 @@
+     hiveyBarSide: 'Position de la barre Hivey',
+     hiveyBarAuto: 'Automatique (à gauche avec les onglets verticaux)',
+     importTitle: 'Importer des favoris',
++    navImport: 'Importer',
++    toolbarTitle: 'Barre d’outils',
++    toolbarHint: 'Glissez les boutons, la barre d’adresse aussi, où vous voulez ; l’œil en affiche ou masque un.',
++    toolbarReset: 'Rétablir la barre d’outils',
++    tbBack: 'Retour', tbForward: 'Avancer', tbReload: 'Actualiser', tbHome: 'Accueil', tbLocation: 'Barre d’adresse',
++    tbExtensions: 'Extensions', tbPinned: 'Boutons épinglés', tbAvatar: 'Profil', tbMenu: 'Menu',
++    importSectionHint: 'Récupérez les favoris du navigateur que vous utilisiez avant.',
+     importHint: 'Depuis Chrome, Edge, Brave, Vivaldi, Opera ou Chromium sur cet ordinateur : chaque profil va dans un dossier des Autres favoris.',
+     importFind: 'Navigateurs sur cet ordinateur',
+     importFindButton: 'Rechercher',
+@@ -420,6 +436,8 @@
+     ctrlTabMru: 'Ctrl+Tab parcourt les onglets récemment utilisés',
+     hoverImages: 'Aperçu des onglets au survol',
+     hoverMemory: 'Afficher la mémoire utilisée dans l’aperçu',
++    autoPip: 'Incrustation vidéo en changeant d’onglet',
++    autoPipHint: 'Une vidéo en cours vous suit dans une petite fenêtre quand vous changez d’onglet. Le bouton de la barre d’adresse le fait à la demande.',
+     hoverCards: 'Infobulles des onglets',
+     hoverCardsDefault: 'Cartes',
+     hoverCardsTooltip: 'Info-bulle simple',
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -50,6 +50,7 @@
+ const SECTIONS = [
+   {id: 'appearance', nav: 'navAppearance', icon: 'palette', build: buildAppearance},
+   {id: 'layout', nav: 'navLayout', icon: 'layout', build: buildLayout},
++  {id: 'import', nav: 'navImport', icon: 'import', build: buildImport},
+   {id: 'tabs', nav: 'navTabs', icon: 'tabs', build: buildTabs},
+   {id: 'resources', nav: 'navResources', icon: 'gauge', build: buildResources},
+   {id: 'privacy', nav: 'navPrivacy', icon: 'shield', build: buildPrivacy},
+@@ -58,6 +59,7 @@
+ 
+ // 24x24 stroke icons (Lucide-style paths).
+ const ICONS = {
++  import: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'],
+   palette: ['M12 22a10 10 0 1 1 10-10c0 2.2-1.8 3.5-4 3.5h-1.6a1.9 1.9 0 0 0-1.4 3.2A1.9 1.9 0 0 1 12 22z',
+             'M7.5 10.5h.01', 'M12 7.5h.01', 'M16.5 10.5h.01'],
+   layout: ['M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', 'M9 3v18', 'M9 9h12'],
+@@ -587,6 +589,78 @@
+               el('div', {class: 'bar-list'}, ...tools));
+ }
+ 
++// The toolbar, like Firefox's: the buttons in any order (the address bar
++// too), Back, Reload and the extensions hidden or shown.
++const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'extensions', 'pinned', 'avatar', 'menu'];
++const TOOLBAR_LABELS = {back: 'tbBack', forward: 'tbForward', reload: 'tbReload', home: 'tbHome',
++                        location: 'tbLocation', extensions: 'tbExtensions', pinned: 'tbPinned',
++                        avatar: 'tbAvatar', menu: 'tbMenu'};
++// Forward and Home have Chromium's own settings.
++const TOOLBAR_PREFS = {forward: 'browser.show_forward_button', home: 'browser.show_home_button'};
++
++function toolbarCard() {
++  if (!hasPref('hivey.toolbar.order')) {
++    return null;
++  }
++  const saved = pref('hivey.toolbar.order') || [];
++  const order = [...saved.filter(id => TOOLBAR_ITEMS.includes(id)),
++                 ...TOOLBAR_ITEMS.filter(id => !saved.includes(id))];
++  const hidden = pref('hivey.toolbar.hidden') || [];
++  const send = (newOrder, newHidden) => chrome.send('setToolbarLayout', [newOrder, newHidden]);
++  const move = (from, to) => {
++    if (to < 0 || to >= order.length || from === to) {
++      return;
++    }
++    const next = [...order];
++    next.splice(to, 0, next.splice(from, 1)[0]);
++    send(next, hidden);
++  };
++  const isShown = id => TOOLBAR_PREFS[id] ? pref(TOOLBAR_PREFS[id]) !== false : !hidden.includes(id);
++  const toggle = id => {
++    if (TOOLBAR_PREFS[id]) {
++      setPref(TOOLBAR_PREFS[id], !isShown(id));
++    } else {
++      send(order, hidden.includes(id) ? hidden.filter(h => h !== id) : [...hidden, id]);
++    }
++  };
++  const rows = order.map((id, index) => {
++    const title = t(TOOLBAR_LABELS[id]);
++    const hideable = !['location', 'menu', 'avatar'].includes(id);
++    const shown = isShown(id);
++    const row = el('div', {class: `bar-item${shown ? '' : ' off'}`, draggable: 'true', 'data-key': `toolbar-${id}`},
++                   el('span', {class: 'grip', 'aria-hidden': 'true'}, icon('grip')),
++                   el('span', {class: 'row-text'}, el('span', {class: 'row-label', text: title})),
++                   el('button', {class: 'icon-button', title: t('moveUp'), 'aria-label': `${t('moveUp')} ${title}`,
++                                 disabled: index === 0, onclick: () => move(index, index - 1)}, icon('up')),
++                   el('button', {class: 'icon-button', title: t('moveDown'), 'aria-label': `${t('moveDown')} ${title}`,
++                                 disabled: index === order.length - 1, onclick: () => move(index, index + 1)},
++                      icon('down')),
++                   hideable ? el('button', {class: 'icon-button', title: t(shown ? 'barHide' : 'barShow'),
++                                            'aria-label': `${t(shown ? 'barHide' : 'barShow')} ${title}`,
++                                            'aria-pressed': shown ? 'true' : 'false', onclick: () => toggle(id)},
++                                 icon(shown ? 'eye' : 'eyeOff'))
++                            : el('span', {class: 'icon-button', 'aria-hidden': 'true'}));
++    row.addEventListener('dragstart', e => {
++      e.dataTransfer.setData('text/plain', String(index));
++      row.classList.add('dragging');
++    });
++    row.addEventListener('dragend', () => row.classList.remove('dragging'));
++    row.addEventListener('dragover', e => e.preventDefault());
++    row.addEventListener('drop', e => {
++      e.preventDefault();
++      move(Number(e.dataTransfer.getData('text/plain')), index);
++    });
++    return row;
++  });
++  return card(t('toolbarTitle'),
++              el('p', {class: 'muted small', text: t('toolbarHint')}),
++              el('div', {class: 'bar-list'}, ...rows),
++              linkRow({label: t('customizeToolbar'), hint: t('customizeToolbarHint'),
++                       onClick: () => chrome.send('openCustomizeToolbar')}),
++              el('div', {class: 'actions'},
++                 el('button', {class: 'button ghost', text: t('toolbarReset'), onclick: () => send([], [])})));
++}
++
+ function searchEngineRow() {
+   const search = state.search;
+   if (!search || !search.engines || !search.engines.length) {
+@@ -632,13 +706,16 @@
+                        onClick: () => chrome.send('openImportPage')}));
+ }
+ 
++function buildImport() {
++  return el('div', {}, sectionHeader('navImport', 'importSectionHint'), importCard());
++}
++
+ function buildLayout() {
+   const vertical = hasPref('vertical_tabs.enabled') && pref('vertical_tabs.enabled');
+   return el('div', {},
+             sectionHeader('layoutTitle', 'layoutHint'),
+             card(null, searchEngineRow(),
+                  linkRow({label: t('manageSearchEngines'), onClick: () => openUrl('chrome://settings/searchEngines')})),
+-            importCard(),
+             card(null,
+                  prefToggle('vertical_tabs.enabled', 'verticalTabs', 'verticalTabsHint'),
+                  vertical ? prefToggle('vertical_tabs.expand_on_hover', 'expandOnHover') : null,
+@@ -657,6 +734,7 @@
+                    onChange: v => setPref('side_panel.is_right_aligned', Number(v) === 1),
+                  }) : null),
+             pref('hivey.bar.visible') ? barCard() : null,
++            toolbarCard(),
+             card(null,
+                  prefToggle('browser.show_home_button', 'homeButton'),
+                  prefToggle('browser.show_forward_button', 'forwardButton'),
+@@ -700,7 +778,11 @@
+             card(null,
+                  flagSelect('tab-hover-cards', 'hoverCards', ['hoverCardsDefault', 'hoverCardsNone', 'hoverCardsTooltip']),
+                  prefToggle('browser.hovercard.image_previews_enabled', 'hoverImages'),
+-                 prefToggle('browser.hovercard.memory_usage_enabled', 'hoverMemory')));
++                 prefToggle('browser.hovercard.memory_usage_enabled', 'hoverMemory')),
++            hasPref('profile.default_content_setting_values.auto_picture_in_picture') ? card(null, toggleRow({
++              label: t('autoPip'), hint: t('autoPipHint'), checked: pref('profile.default_content_setting_values.auto_picture_in_picture') !== 2,
++              onChange: on => setPref('profile.default_content_setting_values.auto_picture_in_picture', on ? 1 : 2),
++            })) : null);
+ }
+ 
+ // ---------------------------------------------------------------- resources
+--- a/chrome/browser/ui/startup/bad_flags_prompt.cc
++++ b/chrome/browser/ui/startup/bad_flags_prompt.cc
+@@ -112,7 +112,7 @@
+ 
+     // These flags change the URLs that handle PII.
+     switches::kGaiaUrl,
+-    translate::switches::kTranslateScriptURL,
++    // Hivey sets --translate-script-url itself (Google Translate on demand).
+ 
+ #if BUILDFLAG(ENABLE_EXTENSIONS)
+     // These flags enable extensions running scripts on chrome:// and
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
+@@ -5,6 +5,7 @@
+ #include "chrome/browser/ui/views/frame/hivey_bar_view.h"
+ 
+ #include <algorithm>
++#include <cmath>
+ #include <cstdlib>
+ #include <utility>
+ 
+@@ -80,6 +81,8 @@
+ #include "ui/compositor/paint_recorder.h"
+ #include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
+ #include "ui/events/event.h"
++#include "cc/paint/color_filter.h"
++#include "cc/paint/paint_filter.h"
+ #include "cc/paint/paint_shader.h"
+ #include "third_party/skia/include/core/SkRRect.h"
+ #include "ui/gfx/canvas.h"
+@@ -118,6 +121,7 @@
+   kCommandToolsIconsTheme,
+   kCommandIconsModernTheme,
+   kCommandToolsIconsModernTheme,
++  kCommandImportBookmarks,
+   // One per hidden button ("Hidden buttons" submenu).
+   kCommandShowHiddenFirst = 100,
+ };
+@@ -201,27 +205,64 @@
+   return gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f);
+ }
+ 
+-// A modern icon: the glyph itself (`mask`, white, 40 px for 20 DIP), no tile,
+-// filled with a diagonal gradient from `from` to `to`; its duotone fill keeps
+-// its own lighter alpha.
+-gfx::ImageSkia ModernGlyph(const gfx::ImageSkia& mask,
+-                           SkColor from,
+-                           SkColor to) {
+-  const SkBitmap glyph = mask.GetRepresentation(2.0f).GetBitmap();
+-  const int size = glyph.width();
+-  gfx::Canvas canvas(gfx::Size(size, size), 1.0f, /*is_opaque=*/false);
++// The modern (solid) glyph of a built-in item, if it has one.
++template <typename T>
++gfx::ImageSkia ModernIcon(const T& item) {
++  return item.modern_png ? DecodeIcon(item.modern_png, item.modern_size)
++                         : gfx::ImageSkia();
++}
++
++// `color` turned on the color wheel by `hue` (0-1), more saturated by
++// `saturation`, lighter by `lightness`.
++SkColor ShiftColor(SkColor color, double hue, double saturation,
++                   double lightness) {
++  color_utils::HSL hsl;
++  color_utils::SkColorToHSL(color, &hsl);
++  hsl.h = std::fmod(hsl.h + hue + 1.0, 1.0);
++  hsl.s = std::clamp(hsl.s + saturation, 0.0, 1.0);
++  hsl.l = std::clamp(hsl.l + lightness, 0.0, 1.0);
++  return color_utils::HSLToSkColor(hsl, SK_AlphaOPAQUE);
++}
++
++// A modern icon, "neon": the glyph (`mask`, white, at 2x) filled with a
++// diagonal gradient from `base` to a neighboring hue, over a soft glow of its
++// own color. Everything stays inside the mask's square (it has a margin).
++gfx::ImageSkia NeonIcon(const gfx::ImageSkia& mask,
++                        SkColor base,
++                        bool dark_toolbar) {
++  const SkBitmap glyph_bitmap = mask.GetRepresentation(2.0f).GetBitmap();
++  const gfx::ImageSkia glyph = gfx::ImageSkia::CreateFrom1xBitmap(glyph_bitmap);
++  const int size = glyph_bitmap.width();
++  const SkColor end = ShiftColor(base, 0.12, 0.15, dark_toolbar ? -0.05 : -0.08);
++  const SkColor glow = SkColorSetA(ShiftColor(base, 0.06, 0, 0),
++                                   dark_toolbar ? 0xC0 : 0x70);
++
++  // The glyph in its gradient.
++  gfx::Canvas fill(gfx::Size(size, size), 1.0f, /*is_opaque=*/false);
+   cc::PaintFlags flags;
+   flags.setAntiAlias(true);
+   const SkPoint diagonal[] = {{0, 0}, {static_cast<float>(size),
+                                        static_cast<float>(size)}};
+-  const SkColor4f gradient[] = {SkColor4f::FromColor(from),
+-                                SkColor4f::FromColor(to)};
++  const SkColor4f gradient[] = {SkColor4f::FromColor(base),
++                                SkColor4f::FromColor(end)};
+   flags.setShader(cc::PaintShader::MakeLinearGradient(
+       diagonal, gradient, nullptr, 2, SkTileMode::kClamp));
+-  canvas.sk_canvas()->drawRect(SkRect::MakeWH(size, size), flags);
++  fill.sk_canvas()->drawRect(SkRect::MakeWH(size, size), flags);
+   cc::PaintFlags keep;
+   keep.setBlendMode(SkBlendMode::kDstIn);
+-  canvas.DrawImageInt(gfx::ImageSkia::CreateFrom1xBitmap(glyph), 0, 0, keep);
++  fill.DrawImageInt(glyph, 0, 0, keep);
++
++  // Its glow, then the glyph over it.
++  gfx::Canvas canvas(gfx::Size(size, size), 1.0f, /*is_opaque=*/false);
++  cc::PaintFlags halo;
++  halo.setAntiAlias(true);
++  halo.setColorFilter(cc::ColorFilter::MakeBlend(SkColor4f::FromColor(glow),
++                                                 SkBlendMode::kSrcIn));
++  halo.setImageFilter(sk_make_sp<cc::BlurPaintFilter>(
++      size / 12.f, size / 12.f, SkTileMode::kDecal, nullptr));
++  canvas.DrawImageInt(glyph, 0, 0, halo);
++  canvas.DrawImageInt(gfx::ImageSkia::CreateFrom1xBitmap(fill.GetBitmap()), 0,
++                      0);
+   return gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f);
+ }
+ 
+@@ -516,7 +557,7 @@
+                       base::RepeatingClosure callback) -> ToolbarButton* {
+     ToolbarButton* button = AddButton(
+         group, id, ItemTitle(id), DecodeIcon(icon.png, icon.size),
+-        OwnColors(icon), /*movable=*/true,
++        ModernIcon(icon), OwnColors(icon), /*movable=*/true,
+         std::move(callback));
+     icons_.back().bottom = true;
+     return button;
+@@ -559,7 +600,7 @@
+     const std::u16string name = base::UTF8ToUTF16(title ? *title : "");
+     const auto& [on_dark, on_light] =
+         kAppColors[base::PersistentHash(id) % std::size(kAppColors)];
+-    AddButton(group, id, name, MonogramIcon(name),
++    AddButton(group, id, name, MonogramIcon(name), gfx::ImageSkia(),
+               OwnColors(on_dark, on_light, true), /*movable=*/true,
+               base::BindRepeating(&HiveyBarView::OnAppPressed,
+                                   base::Unretained(this), id));
+@@ -572,8 +613,8 @@
+     }
+     ToolbarButton* button = AddButton(
+         group, id, ItemTitle(id),
+-        DecodeIcon(workspace->png, workspace->png_size), OwnColors(*workspace),
+-        /*movable=*/true,
++        DecodeIcon(workspace->png, workspace->png_size), ModernIcon(*workspace),
++        OwnColors(*workspace), /*movable=*/true,
+         base::BindRepeating(&HiveyBarView::OnWorkspacePressed,
+                             base::Unretained(this), id));
+     workspaces_.push_back({id, button});
+@@ -585,6 +626,7 @@
+     std::string id,
+     std::u16string tooltip,
+     gfx::ImageSkia image,
++    gfx::ImageSkia modern,
+     std::optional<std::pair<SkColor, SkColor>> colors,
+     bool movable,
+     base::RepeatingClosure callback) {
+@@ -605,7 +647,8 @@
+     button->set_drag_controller(this);
+   }
+   ToolbarButton* added = parent->AddChildView(std::move(button));
+-  icons_.push_back({added, std::move(id), std::move(image), colors, movable});
++  icons_.push_back({added, std::move(id), std::move(image), std::move(modern),
++                    colors, movable});
+   return added;
+ }
+ 
+@@ -691,20 +734,17 @@
+       continue;
+     }
+     if (modern) {
+-      // The glyph's gradient: the item's colors, or the theme's accent;
+-      // lighter to deeper, kept legible on the toolbar.
++      // Neon: the item's color (or the theme's accent), light on a dark
++      // toolbar and deep on a light one.
+       const SkColor accent = colors->GetColor(ui::kColorSysPrimary);
+       const bool own = icon.colors && style == hivey::HiveyBarIconStyle::kModern;
+-      const SkColor light = own ? icon.colors->first
+-                                : color_utils::AlphaBlend(SK_ColorWHITE, accent,
+-                                                          0.5f);
+-      const SkColor deep = own ? icon.colors->second : accent;
+-      image = dark_toolbar
+-                  ? ModernGlyph(icon.image, light,
+-                                color_utils::AlphaBlend(deep, light, 0.55f))
+-                  : ModernGlyph(icon.image, deep,
+-                                color_utils::AlphaBlend(SK_ColorBLACK, deep,
+-                                                        0.3f));
++      const SkColor base =
++          own ? (dark_toolbar ? icon.colors->first : icon.colors->second)
++              : (dark_toolbar
++                     ? color_utils::AlphaBlend(SK_ColorWHITE, accent, 0.35f)
++                     : accent);
++      image = NeonIcon(icon.modern.isNull() ? icon.image : icon.modern, base,
++                       dark_toolbar);
+     } else {
+       image = gfx::ImageSkiaOperations::CreateColorMask(icon.image, color);
+     }
+@@ -1138,6 +1178,10 @@
+   if (const Icon* icon = FindIcon(source)) {
+     context_item_ = icon->id;
+   }
++  if (context_item_ == "bookmarks") {
++    menu_model_->AddItemWithStringId(kCommandImportBookmarks,
++                                     IDS_HIVEY_BAR_IMPORT_BOOKMARKS);
++  }
+   if (!context_item_.empty() && context_item_ != "settings") {
+     menu_model_->AddItemWithStringId(kCommandHideItem,
+                                      IDS_HIVEY_BAR_HIDE_ITEM);
+@@ -1303,6 +1347,11 @@
+           GURL("chrome://hivey/#layout"),
+           WindowOpenDisposition::NEW_FOREGROUND_TAB);
+       break;
++    case kCommandImportBookmarks:
++      browser_view_->browser()->OpenGURL(
++          GURL("chrome://hivey/#import"),
++          WindowOpenDisposition::NEW_FOREGROUND_TAB);
++      break;
+   }
+ }
+ 
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.h
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.h
+@@ -133,9 +133,10 @@
+     raw_ptr<ToolbarButton> button = nullptr;
+     // The button's id in the bar's prefs (empty for Settings).
+     std::string id;
+-    // White, tinted (classic) or filled with a gradient (modern) by
+-    // UpdateColors().
++    // White, tinted by UpdateColors() (classic style).
+     gfx::ImageSkia image;
++    // The modern style's solid glyph, white (empty: `image`'s shape).
++    gfx::ImageSkia modern;
+     // Its own color on a dark and on a light toolbar (Hivey Tools'
+     // workspaces, multicolor style; the user's sites, modern style).
+     std::optional<std::pair<SkColor, SkColor>> colors;
+@@ -157,11 +158,13 @@
+   void Rebuild();
+   void UpdateColors();
+   void UpdateActive();
+-  // A button with a white icon (`image`), drawn in the bar's style.
++  // A button with white icons (classic `image`, modern `modern`), drawn in
++  // the bar's style.
+   ToolbarButton* AddButton(views::View* parent,
+                            std::string id,
+                            std::u16string tooltip,
+                            gfx::ImageSkia image,
++                           gfx::ImageSkia modern,
+                            std::optional<std::pair<SkColor, SkColor>> colors,
+                            bool movable,
+                            base::RepeatingClosure callback);
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
+@@ -9,6 +9,7 @@
+ #include <utility>
+ #include <vector>
+ 
++#include "base/containers/contains.h"
+ #include "base/functional/bind.h"
+ #include "base/strings/strcat.h"
+ #include "base/strings/string_util.h"
+@@ -31,6 +32,7 @@
+ #include "net/base/ip_address.h"
+ #include "chrome/browser/hivey/hivey_flags.h"
+ #include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/translate/chrome_translate_client.h"
+ #include "chrome/browser/ui/browser_commands.h"
+ #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+@@ -57,7 +59,18 @@
+ #include "chrome/grit/generated_resources.h"
+ #include "components/vector_icons/vector_icons.h"
+ #include "content/public/browser/page_navigator.h"
++#include "content/public/browser/browser_context.h"
++#include "content/public/browser/media_session.h"
++#include "content/public/browser/storage_partition.h"
+ #include "content/public/browser/web_contents.h"
++#include "net/base/address_list.h"
++#include "net/base/host_port_pair.h"
++#include "net/base/network_anonymization_key.h"
++#include "net/base/schemeful_site.h"
++#include "net/dns/public/dns_query_type.h"
++#include "services/network/public/cpp/simple_host_resolver.h"
++#include "services/network/public/mojom/host_resolver.mojom.h"
++#include "services/network/public/mojom/network_context.mojom.h"
+ #include "content/public/common/referrer.h"
+ #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
+ #include "ui/base/l10n/l10n_util.h"
+@@ -69,6 +82,7 @@
+ #include "ui/base/window_open_disposition.h"
+ #include "ui/gfx/text_constants.h"
+ #include "ui/views/bubble/bubble_border.h"
++#include "ui/views/controls/image_view.h"
+ #include "ui/views/controls/label.h"
+ #include "ui/views/controls/link.h"
+ #include "ui/views/layout/box_layout.h"
+@@ -205,6 +219,12 @@
+              : nullptr;
+ }
+ 
++// Shows addresses in `label` ("—": none).
++void ShowAddresses(views::Label* label, const std::vector<std::string>& ips) {
++  label->SetText(ips.empty() ? u"—"
++                             : base::UTF8ToUTF16(base::JoinString(ips, ", ")));
++}
++
+ // The bubble shown when the chip is clicked.
+ class HiveyServerInfoBubbleView : public LocationBarBubbleDelegateView {
+   METADATA_HEADER(HiveyServerInfoBubbleView, LocationBarBubbleDelegateView)
+@@ -273,34 +293,53 @@
+                                   0, 0);
+     const int row_spacing =
+         provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL);
+-    auto add_row = [&](int name_id, const std::u16string& value,
+-                       bool selectable) {
++    // A row: its name, then its value (after an image, e.g. a flag).
++    auto add_row = [&](const std::u16string& name, const std::u16string& value,
++                       bool selectable,
++                       const gfx::ImageSkia& image = gfx::ImageSkia()) {
+       if (table->children().size()) {
+         layout.AddPaddingRow(views::TableLayout::kFixedSize, row_spacing);
+       }
+       layout.AddRows(1, views::TableLayout::kFixedSize);
+       table->AddChildView(std::make_unique<views::Label>(
+-          l10n_util::GetStringUTF16(name_id),
+-          views::style::CONTEXT_DIALOG_BODY_TEXT,
++          name, views::style::CONTEXT_DIALOG_BODY_TEXT,
+           views::style::STYLE_SECONDARY));
+-      auto* label = table->AddChildView(std::make_unique<views::Label>(
++      auto* cell = table->AddChildView(std::make_unique<views::View>());
++      cell->SetLayoutManager(std::make_unique<views::BoxLayout>(
++                                 views::BoxLayout::Orientation::kHorizontal,
++                                 gfx::Insets(), 6))
++          ->set_cross_axis_alignment(
++              views::BoxLayout::CrossAxisAlignment::kCenter);
++      if (!image.isNull()) {
++        cell->AddChildView(std::make_unique<views::ImageView>(
++            ui::ImageModel::FromImageSkia(image)));
++      }
++      auto* label = cell->AddChildView(std::make_unique<views::Label>(
+           value, views::style::CONTEXT_DIALOG_BODY_TEXT));
+       label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+       label->SetSelectable(selectable);
++      return label;
+     };
+     const char* cdn = CdnName(info.address);
+     if (cdn) {
+-      add_row(IDS_HIVEY_SERVER_INFO_CDN, base::ASCIIToUTF16(cdn),
+-              /*selectable=*/false);
++      add_row(l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_CDN),
++              base::ASCIIToUTF16(cdn), /*selectable=*/false);
+     }
++    // The site's addresses of both families (the page came over one of
++    // them): looked up now, through the browser's own DNS.
++    ipv4_label_ = add_row(u"IPv4", u"…", /*selectable=*/true);
++    ipv6_label_ = add_row(u"IPv6", u"…", /*selectable=*/true);
++    ResolveAddresses(web_contents, info);
+     std::u16string country = CountryName(info);
++    gfx::ImageSkia flag;
+     if (!info.via_proxy && !info.country_code.empty()) {
+-      country = HiveyServerInfoView::FlagEmoji(info.country_code) + u" " +
+-                country + u" (" + base::ASCIIToUTF16(info.country_code) + u")";
++      flag = FlagImage(info.country_code);
++      country += u" (" + base::ASCIIToUTF16(info.country_code) + u")";
+     }
+-    add_row(IDS_HIVEY_SERVER_INFO_COUNTRY, country, /*selectable=*/false);
+-    add_row(IDS_HIVEY_SERVER_INFO_CONNECTION, ConnectionText(info),
+-            /*selectable=*/false);
++    add_row(l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_COUNTRY), country,
++            /*selectable=*/false, flag);
++    add_row(l10n_util::GetStringUTF16(IDS_HIVEY_SERVER_INFO_CONNECTION),
++            ConnectionText(info), /*selectable=*/false);
+ 
+     if (info.via_proxy) {
+       AddNote(IDS_HIVEY_SERVER_INFO_PROXY_NOTE);
+@@ -398,6 +437,60 @@
+     GetWidget()->Close();
+   }
+ 
++  // Looks up the site's IPv4 (A) and IPv6 (AAAA) addresses; the one the
++  // page came from is known at once.
++  void ResolveAddresses(content::WebContents* web_contents,
++                        const hivey::ServerInfo& info) {
++    const std::string known = info.address.ToString();
++    if (info.via_proxy || !web_contents) {
++      ShowAddresses(info.address.IsIPv4() ? ipv4_label_ : ipv6_label_, {known});
++      ShowAddresses(info.address.IsIPv4() ? ipv6_label_ : ipv4_label_, {});
++      return;
++    }
++    resolver_ = network::SimpleHostResolver::Create(
++        web_contents->GetBrowserContext()
++            ->GetDefaultStoragePartition()
++            ->GetNetworkContext());
++    const net::NetworkAnonymizationKey key =
++        net::NetworkAnonymizationKey::CreateSameSite(
++            net::SchemefulSite(info.url));
++    for (const bool v6 : {false, true}) {
++      auto parameters = network::mojom::ResolveHostParameters::New();
++      parameters->dns_query_type =
++          v6 ? net::DnsQueryType::AAAA : net::DnsQueryType::A;
++      resolver_->ResolveHost(
++          network::mojom::HostResolverHost::NewHostPortPair(
++              net::HostPortPair::FromURL(info.url)),
++          key, std::move(parameters),
++          base::BindOnce(
++              [](views::Label* label, bool v6, std::string known, int result,
++                 const net::ResolveErrorInfo&,
++                 const net::AddressList& addresses,
++                 const net::HostResolverEndpointResults&) {
++                std::vector<std::string> ips;
++                for (const net::IPEndPoint& endpoint : addresses) {
++                  const net::IPAddress& ip = endpoint.address();
++                  if (ip.IsIPv6() == v6 && ips.size() < 3 &&
++                      !base::Contains(ips, ip.ToString())) {
++                    ips.push_back(ip.ToString());
++                  }
++                }
++                // The address the page came from, even if DNS says otherwise.
++                const net::IPAddress page_ip =
++                    net::IPAddress::FromIPLiteral(known).value_or(
++                        net::IPAddress());
++                if (page_ip.IsValid() && page_ip.IsIPv6() == v6 &&
++                    !base::Contains(ips, known)) {
++                  ips.insert(ips.begin(), known);
++                }
++                ShowAddresses(label, ips);
++              },
++              // The resolver (and its callbacks) go with the bubble.
++              base::Unretained(v6 ? ipv6_label_.get() : ipv4_label_.get()),
++              v6, known));
++    }
++  }
++
+   void AddNote(int message_id) {
+     auto* note = AddChildView(std::make_unique<views::Label>(
+         l10n_util::GetStringUTF16(message_id),
+@@ -429,6 +522,10 @@
+         /*navigation_handle_callback=*/{});
+     GetWidget()->Close();
+   }
++
++  raw_ptr<views::Label> ipv4_label_ = nullptr;
++  raw_ptr<views::Label> ipv6_label_ = nullptr;
++  std::unique_ptr<network::SimpleHostResolver> resolver_;
+ };
+ 
+ BEGIN_METADATA(HiveyServerInfoBubbleView)
+@@ -562,16 +659,18 @@
+     : IconLabelBubbleView(font_list, parent_delegate), kind_(kind) {
+   SetVisible(false);
+   SetImageModel(ui::ImageModel::FromVectorIcon(
+-      kind == Kind::kTranslate
+-          ? vector_icons::kGTranslateIcon
++      kind == Kind::kTranslate ? vector_icons::kGTranslateIcon
++      : kind == Kind::kPictureInPicture
++          ? vector_icons::kPictureInPictureAltIcon
+           : (features::IsRoundedIconsEnabled()
+                  ? vector_icons::kInstallDesktopIcon
+                  : kInstallDesktopChromeRefreshOldIcon),
+       kColorOmniboxResultsIcon,
+       GetLayoutConstant(LayoutConstant::kLocationBarTrailingIconSize)));
+   const std::u16string tooltip = l10n_util::GetStringUTF16(
+-      kind == Kind::kTranslate ? IDS_HIVEY_SERVER_INFO_TRANSLATE
+-                               : IDS_HIVEY_OPEN_AS_APP);
++      kind == Kind::kTranslate          ? IDS_HIVEY_SERVER_INFO_TRANSLATE
++      : kind == Kind::kPictureInPicture ? IDS_HIVEY_PICTURE_IN_PICTURE
++                                        : IDS_HIVEY_OPEN_AS_APP);
+   SetTooltipText(tooltip);
+   GetViewAccessibility().SetName(tooltip);
+ }
+@@ -580,15 +679,20 @@
+ 
+ void HiveyPageButtonView::Update(content::WebContents* web_contents,
+                                  bool force_hidden) {
+-  web_contents_ = web_contents ? web_contents->GetWeakPtr() : nullptr;
+-  bool visible = !force_hidden && web_contents &&
+-                 web_contents->GetLastCommittedURL().SchemeIsHTTPOrHTTPS();
+-  if (visible && kind_ == Kind::kTranslate) {
+-    // Translation is Hivey Tools': not when it is turned off.
+-    visible = extensions::ExtensionRegistry::Get(
+-                  web_contents->GetBrowserContext())
+-                  ->enabled_extensions()
+-                  .Contains(HIVEY_BUNDLED_AI_ID);
++  force_hidden_ = force_hidden;
++  if (web_contents != content::WebContentsObserver::web_contents()) {
++    playing_videos_.clear();
++    Observe(web_contents);
++  }
++  Refresh();
++}
++
++void HiveyPageButtonView::Refresh() {
++  content::WebContents* contents = content::WebContentsObserver::web_contents();
++  bool visible = !force_hidden_ && contents &&
++                 contents->GetLastCommittedURL().SchemeIsHTTPOrHTTPS();
++  if (visible && kind_ == Kind::kPictureInPicture) {
++    visible = !playing_videos_.empty();
+   }
+   if (visible != GetVisible()) {
+     SetVisible(visible);
+@@ -596,13 +700,50 @@
+   }
+ }
+ 
++void HiveyPageButtonView::MediaStartedPlaying(
++    const MediaPlayerInfo& info,
++    const content::MediaPlayerId& id) {
++  if (kind_ == Kind::kPictureInPicture && info.has_video) {
++    playing_videos_.insert(id);
++    Refresh();
++  }
++}
++
++void HiveyPageButtonView::MediaStoppedPlaying(
++    const MediaPlayerInfo& info,
++    const content::MediaPlayerId& id,
++    WebContentsObserver::MediaStoppedReason reason) {
++  if (playing_videos_.erase(id)) {
++    Refresh();
++  }
++}
++
++void HiveyPageButtonView::MediaDestroyed(const content::MediaPlayerId& id) {
++  if (playing_videos_.erase(id)) {
++    Refresh();
++  }
++}
++
+ bool HiveyPageButtonView::ShowBubble(const ui::Event& event) {
+-  BrowserWindowInterface* browser = BrowserWithTab(web_contents_.get());
++  content::WebContents* contents = content::WebContentsObserver::web_contents();
++  BrowserWindowInterface* browser = BrowserWithTab(contents);
+   if (!browser) {
+     return false;
+   }
+-  if (kind_ == Kind::kTranslate) {
+-    ShowHiveyTranslation(browser);
++  if (kind_ == Kind::kPictureInPicture) {
++    // The playing video in its own small window, as from the media controls.
++    content::MediaSession::Get(contents)->EnterPictureInPicture();
++  } else if (kind_ == Kind::kTranslate) {
++    // Google Translate, in place, into the browser's language; Hivey Tools'
++    // translation where the page cannot be translated that way.
++    ChromeTranslateClient* client =
++        ChromeTranslateClient::FromWebContents(contents);
++    if (client && client->GetTranslateManager()) {
++      client->GetTranslateManager()->ShowTranslateUI(
++          /*auto_translate=*/true, /*triggered_from_menu=*/true);
++    } else {
++      ShowHiveyTranslation(browser);
++    }
+   } else {
+     // "Install page as app": any site, in its own window and taskbar icon;
+     // a shortcut where that is not offered.
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
+@@ -5,11 +5,15 @@
+ #ifndef CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_HIVEY_SERVER_INFO_VIEW_H_
+ #define CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_HIVEY_SERVER_INFO_VIEW_H_
+ 
++#include <set>
++
+ #include <string>
+ 
+ #include "base/callback_list.h"
+ #include "base/memory/weak_ptr.h"
+ #include "chrome/browser/ui/views/location_bar/icon_label_bubble_view.h"
++#include "content/public/browser/media_player_id.h"
++#include "content/public/browser/web_contents_observer.h"
+ #include "ui/base/metadata/metadata_header_macros.h"
+ #include "ui/views/view_tracker.h"
+ 
+@@ -65,11 +69,13 @@
+ // A location bar button for the page, beside the server chip: Hivey Tools'
+ // translation in the side panel, or the page as an app in its own window
+ // (with its own taskbar icon). Shown on web pages only.
+-class HiveyPageButtonView : public IconLabelBubbleView {
++class HiveyPageButtonView : public IconLabelBubbleView,
++                            public content::WebContentsObserver {
+   METADATA_HEADER(HiveyPageButtonView, IconLabelBubbleView)
+ 
+  public:
+-  enum class Kind { kTranslate, kApp };
++  // kPictureInPicture: shown while the tab plays a video.
++  enum class Kind { kTranslate, kApp, kPictureInPicture };
+ 
+   HiveyPageButtonView(Kind kind,
+                       IconLabelBubbleView::Delegate* parent_delegate,
+@@ -88,9 +94,22 @@
+   bool IsBubbleShowing() const override;
+   bool ShouldShowSeparator() const override;
+ 
++  // content::WebContentsObserver:
++  void MediaStartedPlaying(const MediaPlayerInfo& info,
++                           const content::MediaPlayerId& id) override;
++  void MediaStoppedPlaying(
++      const MediaPlayerInfo& info,
++      const content::MediaPlayerId& id,
++      WebContentsObserver::MediaStoppedReason reason) override;
++  void MediaDestroyed(const content::MediaPlayerId& id) override;
++
+  private:
++  void Refresh();
++
+   const Kind kind_;
+-  base::WeakPtr<content::WebContents> web_contents_;
++  bool force_hidden_ = false;
++  // The tab's playing videos (kPictureInPicture).
++  std::set<content::MediaPlayerId> playing_videos_;
+ };
+ 
+ #endif  // CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_HIVEY_SERVER_INFO_VIEW_H_
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -485,6 +485,9 @@
+       HiveyPageButtonView::Kind::kTranslate, this, page_action_font_list));
+   hivey_app_view_ = AddChildView(std::make_unique<HiveyPageButtonView>(
+       HiveyPageButtonView::Kind::kApp, this, page_action_font_list));
++  hivey_pip_view_ = AddChildView(std::make_unique<HiveyPageButtonView>(
++      HiveyPageButtonView::Kind::kPictureInPicture, this,
++      page_action_font_list));
+ 
+   std::vector<actions::ActionItem*> page_action_items = {};
+   if (browser_) {
+@@ -916,11 +919,13 @@
+                           /*edge_padding=*/trailing_decorations_edge_padding);
+   add_trailing_decoration(hivey_app_view_, kHiveyTrailingGap,
+                           /*edge_padding=*/trailing_decorations_edge_padding);
++  add_trailing_decoration(hivey_pip_view_, kHiveyTrailingGap,
++                          /*edge_padding=*/trailing_decorations_edge_padding);
+   // The page actions keep that gap from the chip and its buttons.
+   const int hivey_page_action_gap =
+       hivey_server_info_view_->GetVisible() ||
+               hivey_translate_view_->GetVisible() ||
+-              hivey_app_view_->GetVisible()
++              hivey_app_view_->GetVisible() || hivey_pip_view_->GetVisible()
+           ? kHiveyTrailingGap
+           : 0;
+ 
+@@ -2079,6 +2084,7 @@
+     hivey_translate_view_->Update(GetWebContents(),
+                                   ShouldHidePageActionIcons());
+     hivey_app_view_->Update(GetWebContents(), ShouldHidePageActionIcons());
++    hivey_pip_view_->Update(GetWebContents(), ShouldHidePageActionIcons());
+   }
+ 
+   InvalidateLayout();
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.h
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.h
+@@ -595,6 +595,7 @@
+   // Hivey: translate the page, open it as an app (beside the chip).
+   raw_ptr<HiveyPageButtonView> hivey_translate_view_ = nullptr;
+   raw_ptr<HiveyPageButtonView> hivey_app_view_ = nullptr;
++  raw_ptr<HiveyPageButtonView> hivey_pip_view_ = nullptr;
+ 
+   // The container for page action icons.
+   raw_ptr<page_actions::PageActionContainerView> page_action_container_ =
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -696,6 +696,15 @@
+     home_->SetVisible(show_home_button_.GetValue());
+   }
+ 
++  hivey_toolbar_prefs_.Init(prefs);
++  for (const char* pref :
++       {hivey::kHiveyToolbarOrder, hivey::kHiveyToolbarHidden}) {
++    hivey_toolbar_prefs_.Add(
++        pref, base::BindRepeating(&ToolbarView::ApplyHiveyToolbarLayout,
++                                  base::Unretained(this)));
++  }
++  ApplyHiveyToolbarLayout();
++
+   auto* vertical_tab_strip_state_controller =
+       tabs::VerticalTabStripStateController::From(browser_view_->browser());
+   if (vertical_tab_strip_state_controller) {
+@@ -2161,6 +2170,69 @@
+   InvalidateLayout();
+ }
+ 
++void ToolbarView::ApplyHiveyToolbarLayout() {
++  if (display_mode_ != DisplayMode::NORMAL) {
++    return;
++  }
++  const PrefService* prefs = browser_->profile()->GetPrefs();
++  // The buttons the user places, in Chromium's order.
++  const std::pair<std::string_view, views::View*> items[] = {
++      {"back", back_},
++      {"forward", forward_},
++      {"reload", reload_},
++      {"home", home_},
++      {"location", location_bar_view_},
++      {"extensions", extensions_container_},
++      {"pinned", pinned_toolbar_actions_container_},
++      {"avatar", avatar_},
++      {"menu", app_menu_button_},
++  };
++  std::vector<views::View*> ordered;
++  for (const base::Value& id : prefs->GetList(hivey::kHiveyToolbarOrder)) {
++    for (const auto& [name, view] : items) {
++      if (view && view->parent() == this && id.is_string() &&
++          id.GetString() == name && !std::ranges::contains(ordered, view)) {
++        ordered.push_back(view);
++      }
++    }
++  }
++  for (const auto& [name, view] : items) {
++    if (view && view->parent() == this &&
++        !std::ranges::contains(ordered, view)) {
++      ordered.push_back(view);
++    }
++  }
++  // Each of them takes the place of one of them: the rest of the toolbar
++  // (dividers, media, overflow) stays where it is.
++  std::vector<views::View*> order(children().begin(), children().end());
++  size_t next = 0;
++  for (views::View*& child : order) {
++    if (std::ranges::contains(ordered, child)) {
++      child = ordered[next++];
++    }
++  }
++  for (size_t i = 0; i < order.size(); ++i) {
++    ReorderChildView(order[i], i);
++  }
++  // Hidden buttons (Forward and Home follow their own settings).
++  const base::ListValue& hidden = prefs->GetList(hivey::kHiveyToolbarHidden);
++  for (const auto& [name, view] : items) {
++    if (!view ||
++        !(name == "back" || name == "reload" || name == "extensions" ||
++          name == "pinned")) {
++      continue;
++    }
++    const std::string id(name);
++    if (hidden.contains(id)) {
++      hivey_hidden_.insert(id);
++      view->SetVisible(false);
++    } else if (hivey_hidden_.erase(id)) {
++      view->SetVisible(true);
++    }
++  }
++  InvalidateLayout();
++}
++
+ void ToolbarView::OnShowHomeButtonChanged() {
+   if (home_) {
+     home_->SetVisible(show_home_button_.GetValue());
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.h
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.h
+@@ -7,6 +7,10 @@
+ 
+ #include <memory>
+ #include <optional>
++#include <set>
++#include <string>
++#include <set>
++#include <string>
+ #include <vector>
+ 
+ #include "base/gtest_prod_util.h"
+@@ -29,6 +33,8 @@
+ #include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions.h"
+ #include "chrome/browser/ui/views/toolbar/split_tabs_button.h"
+ #include "components/apps/link_capturing/intent_picker_info.h"
++#include "components/prefs/pref_change_registrar.h"
++#include "components/prefs/pref_change_registrar.h"
+ #include "components/prefs/pref_member.h"
+ #include "ui/base/accelerators/accelerator.h"
+ #include "ui/base/interaction/element_identifier.h"
+@@ -368,6 +374,14 @@
+ 
+   void OnShowHomeButtonChanged();
+ 
++  // Hivey: the user's toolbar (Hivey Studio > Layout): the buttons in their
++  // order, the hidden ones hidden.
++  void ApplyHiveyToolbarLayout();
++
++  // Hivey: the user's toolbar (Hivey Studio > Layout): the buttons in their
++  // order, the hidden ones hidden.
++  void ApplyHiveyToolbarLayout();
++
+   void OnTouchUiChanged();
+ 
+   void InitGlicContainer();
+@@ -479,6 +493,16 @@
+   // Controls whether or not a home button should be shown on the toolbar.
+   BooleanPrefMember show_home_button_;
+ 
++  // Hivey: the toolbar's order and hidden buttons, and the buttons this
++  // hid (shown again only by it).
++  PrefChangeRegistrar hivey_toolbar_prefs_;
++  std::set<std::string> hivey_hidden_;
++
++  // Hivey: the toolbar's order and hidden buttons, and the buttons this
++  // hid (shown again only by it).
++  PrefChangeRegistrar hivey_toolbar_prefs_;
++  std::set<std::string> hivey_hidden_;
++
+   BooleanPrefMember show_chrome_labs_button_;
+ 
+   // The display mode used when laying out the toolbar.
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -78,62 +78,82 @@
+   const char* name;
+   const char* windows_dir;  // under %LOCALAPPDATA% (or %APPDATA% if roaming)
+   bool windows_roaming;
+-  const char* linux_dir;    // under ~/.config
++  // Under the home folder: the package, Flatpak and Snap installs.
++  const char* linux_dirs[3];
+   bool single_profile;      // Opera: the folder is the profile
+ };
+ constexpr ChromiumBrowser kChromiumBrowsers[] = {
+-    {"Chrome", "Google/Chrome/User Data", false, "google-chrome", false},
+-    {"Chromium", "Chromium/User Data", false, "chromium", false},
+-    {"Edge", "Microsoft/Edge/User Data", false, "microsoft-edge", false},
++    {"Chrome", "Google/Chrome/User Data", false,
++     {".config/google-chrome", ".var/app/com.google.Chrome/config/google-chrome"},
++     false},
++    {"Chromium", "Chromium/User Data", false,
++     {".config/chromium", ".var/app/org.chromium.Chromium/config/chromium",
++      "snap/chromium/common/chromium"},
++     false},
++    {"Edge", "Microsoft/Edge/User Data", false,
++     {".config/microsoft-edge",
++      ".var/app/com.microsoft.Edge/config/microsoft-edge"},
++     false},
+     {"Brave", "BraveSoftware/Brave-Browser/User Data", false,
+-     "BraveSoftware/Brave-Browser", false},
+-    {"Vivaldi", "Vivaldi/User Data", false, "vivaldi", false},
+-    {"Opera", "Opera Software/Opera Stable", true, "opera", true},
+-    {"Opera GX", "Opera Software/Opera GX Stable", true, nullptr, true},
++     {".config/BraveSoftware/Brave-Browser",
++      ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser",
++      "snap/brave/current/.config/BraveSoftware/Brave-Browser"},
++     false},
++    {"Vivaldi", "Vivaldi/User Data", false,
++     {".config/vivaldi", ".var/app/com.vivaldi.Vivaldi/config/vivaldi"}, false},
++    {"Opera", "Opera Software/Opera Stable", true,
++     {".config/opera", ".var/app/com.opera.Opera/config/opera",
++      "snap/opera/current/.config/opera"},
++     true},
++    {"Opera GX", "Opera Software/Opera GX Stable", true, {}, true},
+ };
+ 
+ // Blocking: every profile with bookmarks, as (file, "Browser — profile").
+ std::vector<std::pair<base::FilePath, std::string>> FindImportSources() {
+   std::vector<std::pair<base::FilePath, std::string>> sources;
+   for (const ChromiumBrowser& browser : kChromiumBrowsers) {
+-    base::FilePath dir;
++    std::vector<base::FilePath> dirs;
+ #if BUILDFLAG(IS_WIN)
++    base::FilePath app_data;
+     if (!base::PathService::Get(browser.windows_roaming
+                                     ? base::DIR_ROAMING_APP_DATA
+                                     : base::DIR_LOCAL_APP_DATA,
+-                                &dir)) {
++                                &app_data)) {
+       continue;
+     }
+-    dir = dir.AppendASCII(browser.windows_dir);
++    dirs.push_back(app_data.AppendASCII(browser.windows_dir));
+ #else
+-    if (!browser.linux_dir) {
+-      continue;
++    for (const char* linux_dir : browser.linux_dirs) {
++      if (linux_dir && base::DirectoryExists(
++                           base::GetHomeDir().AppendASCII(linux_dir))) {
++        dirs.push_back(base::GetHomeDir().AppendASCII(linux_dir));
++      }
+     }
+-    dir = base::GetHomeDir().AppendASCII(".config").AppendASCII(
+-        browser.linux_dir);
+ #endif
+-    if (browser.single_profile) {
+-      if (base::PathExists(dir.AppendASCII("Bookmarks"))) {
+-        sources.emplace_back(dir.AppendASCII("Bookmarks"), browser.name);
++    for (const base::FilePath& dir : dirs) {
++      if (browser.single_profile) {
++        if (base::PathExists(dir.AppendASCII("Bookmarks"))) {
++          sources.emplace_back(dir.AppendASCII("Bookmarks"), browser.name);
++        }
++        continue;
++      }
++      base::FileEnumerator profiles(dir, /*recursive=*/false,
++                                    base::FileEnumerator::DIRECTORIES);
++      std::vector<base::FilePath> found;
++      for (base::FilePath profile = profiles.Next(); !profile.empty();
++           profile = profiles.Next()) {
++        if (base::PathExists(profile.AppendASCII("Bookmarks"))) {
++          found.push_back(profile);
++        }
++      }
++      std::ranges::sort(found);
++      for (const base::FilePath& profile : found) {
++        sources.emplace_back(
++            profile.AppendASCII("Bookmarks"),
++            found.size() == 1 ? std::string(browser.name)
++                              : base::StrCat({browser.name, " \u2014 ",
++                                              profile.BaseName().AsUTF8Unsafe()}));
+       }
+-      continue;
+-    }
+-    base::FileEnumerator profiles(dir, /*recursive=*/false,
+-                                  base::FileEnumerator::DIRECTORIES);
+-    std::vector<base::FilePath> found;
+-    for (base::FilePath profile = profiles.Next(); !profile.empty();
+-         profile = profiles.Next()) {
+-      if (base::PathExists(profile.AppendASCII("Bookmarks"))) {
+-        found.push_back(profile);
+-      }
+-    }
+-    std::ranges::sort(found);
+-    for (const base::FilePath& profile : found) {
+-      sources.emplace_back(
+-          profile.AppendASCII("Bookmarks"),
+-          found.size() == 1 ? std::string(browser.name)
+-                            : base::StrCat({browser.name, " \u2014 ",
+-                                            profile.BaseName().AsUTF8Unsafe()}));
+     }
+   }
+   return sources;
+@@ -196,6 +216,8 @@
+     {hivey::kHiveyBarOrder, false},
+     {hivey::kHiveyBarHidden, false},
+     {hivey::kHiveyBarApps, false},
++    {hivey::kHiveyToolbarOrder, false},
++    {hivey::kHiveyToolbarHidden, false},
+     {"side_panel.is_right_aligned", false},
+     {"browser.show_home_button", false},
+     {"browser.show_forward_button", false},
+@@ -204,6 +226,8 @@
+     {"browser.ctrl_tab_mru", false},
+     {"browser.hovercard.image_previews_enabled", false},
+     {"browser.hovercard.memory_usage_enabled", false},
++    // Automatic picture-in-picture (1: allow, 2: block).
++    {"profile.default_content_setting_values.auto_picture_in_picture", false},
+     {"https_only_mode_enabled", false},
+     {"hivey.memory_limit_mb", true},
+     {hivey::kCpuLimitPercent, true},
+@@ -363,6 +387,7 @@
+   add("setSecurity", &HiveyStudioHandler::HandleSetSecurity);
+   add("showUI", &HiveyStudioHandler::HandleShowUI);
+   add("setBarLayout", &HiveyStudioHandler::HandleSetBarLayout);
++  add("setToolbarLayout", &HiveyStudioHandler::HandleSetToolbarLayout);
+   add("addBarApp", &HiveyStudioHandler::HandleAddBarApp);
+   add("removeBarApp", &HiveyStudioHandler::HandleRemoveBarApp);
+   add("setSearchEngine", &HiveyStudioHandler::HandleSetSearchEngine);
+@@ -1066,6 +1091,29 @@
+   prefs->SetList(hivey::kHiveyBarHidden, ids(args[1].GetList()));
+ }
+ 
++void HiveyStudioHandler::HandleSetToolbarLayout(const base::ListValue& args) {
++  // [order, hidden]: lists of toolbar button ids ([], []: Chromium's toolbar).
++  if (args.size() != 2 || !args[0].is_list() || !args[1].is_list()) {
++    return;
++  }
++  constexpr std::string_view kIds[] = {"back",       "forward", "reload",
++                                       "home",       "location", "extensions",
++                                       "pinned",     "avatar",  "menu"};
++  auto ids = [&](const base::ListValue& list) {
++    base::ListValue clean;
++    for (const base::Value& id : list) {
++      if (id.is_string() && std::ranges::contains(kIds, id.GetString()) &&
++          !clean.contains(id.GetString())) {
++        clean.Append(id.GetString());
++      }
++    }
++    return clean;
++  };
++  PrefService* prefs = GetProfile()->GetPrefs();
++  prefs->SetList(hivey::kHiveyToolbarOrder, ids(args[0].GetList()));
++  prefs->SetList(hivey::kHiveyToolbarHidden, ids(args[1].GetList()));
++}
++
+ void HiveyStudioHandler::HandleAddBarApp(const base::ListValue& args) {
+   // [title, url]: a web site, opened in the side panel from the bar.
+   const std::string* title = args.size() == 2 ? args[0].GetIfString() : nullptr;
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
+@@ -90,6 +90,7 @@
+   void HandleSetSecurity(const base::ListValue& args);
+   void HandleShowUI(const base::ListValue& args);
+   void HandleSetBarLayout(const base::ListValue& args);
++  void HandleSetToolbarLayout(const base::ListValue& args);
+   void HandleAddBarApp(const base::ListValue& args);
+   void HandleRemoveBarApp(const base::ListValue& args);
+   void HandleSetSearchEngine(const base::ListValue& args);
+--- a/components/content_settings/core/browser/content_settings_registry.cc
++++ b/components/content_settings/core/browser/content_settings_registry.cc
+@@ -644,8 +644,9 @@
+            ContentSettingsInfo::INHERIT_IN_INCOGNITO,
+            PermissionSettingsInfo::EXCEPTIONS_ON_SECURE_ORIGINS_ONLY);
+ 
++  // Hivey: allowed by default (Hivey Studio > Tabs & behaviour).
+   Register(ContentSettingsType::AUTO_PICTURE_IN_PICTURE,
+-           "auto-picture-in-picture", CONTENT_SETTING_ASK,
++           "auto-picture-in-picture", CONTENT_SETTING_ALLOW,
+            WebsiteSettingsInfo::UNSYNCABLE, /*allowlisted_primary_schemes=*/{},
+            /*valid_settings=*/
+            {CONTENT_SETTING_ALLOW, CONTENT_SETTING_BLOCK, CONTENT_SETTING_ASK},
+--- a/components/translate/core/browser/translate_manager.cc
++++ b/components/translate/core/browser/translate_manager.cc
+@@ -750,7 +750,9 @@
+   return &language_state_;
+ }
+ 
+-bool TranslateManager::ignore_missing_key_for_testing_ = false;
++// Hivey: the Translate element works without a Google API key (it is only
++// loaded when the user asks for a translation).
++bool TranslateManager::ignore_missing_key_for_testing_ = true;
+ 
+ // static
+ void TranslateManager::SetIgnoreMissingKeyForTesting(bool ignore) {
+--- a/third_party/blink/renderer/platform/runtime_enabled_features.json5
++++ b/third_party/blink/renderer/platform/runtime_enabled_features.json5
+@@ -989,7 +989,8 @@
+     {
+       name: "BrowserInitiatedAutomaticPictureInPicture",
+       public: true,
+-      status: "experimental",
++      // Hivey: a playing video follows the user to another tab.
++      status: "stable",
+     },
+     {
+       name: "BufferedBytesConsumerLimitSize",

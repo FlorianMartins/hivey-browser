@@ -14,6 +14,21 @@
       "fr": "Bloque publicités, traqueurs et bandeaux de cookies (uBlock Origin Lite)."
     }
   },
+  "ublock-origin": {
+    "name": "uBlock Origin",
+    "type": "release-zip",
+    "version": "1.75.0",
+    "url": "https://github.com/gorhill/uBlock/releases/download/1.75.0/uBlock0_1.75.0.chromium.zip",
+    "sha256": "393cf95709d1074d4022970e9014e434395c53a822387f1e25f43be97cf4b582",
+    "root": "uBlock0.chromium",
+    "license": "GPL-3.0-or-later",
+    "source": "https://github.com/gorhill/uBlock",
+    "pin": false,
+    "setup": {
+      "en": "The full uBlock Origin: blocks YouTube and Twitch ads, pop-ups and malware sites too.",
+      "fr": "uBlock Origin complet : bloque aussi les pubs YouTube et Twitch, les pop-ups et les sites malveillants."
+    }
+  },
   "hivey-ai": {
     "name": "Hivey AI",
     "type": "submodule",
