@@ -10,8 +10,12 @@ and the artifacts from $HB_BUILD_DIR/dist (hb.py package). The release tag is
 v<version>, e.g. v156.0.8078.4701.
 
 hivey-update.json tells installed browsers what the latest version is and
-where its installers are, with their size and sha256. It is signed with the
-Ed25519 update key (hb.py ensure_update_key); browsers only accept a
+where its installers are, with their size and sha256. On Windows the
+browsers download "windows-x64" and run it silently with
+--do-not-launch-chrome: that is the bare mini_installer (-update.exe), never
+the setup wizard (-installer.exe, "windows-x64-setup"), so every installed
+version, 4710 and older included, keeps updating the same way. It is signed
+with the Ed25519 update key (hb.py ensure_update_key); browsers only accept a
 manifest signed with the key whose public half they were built with. A
 draft release is invisible to them: the updater reads releases/latest,
 which only points to published releases.
@@ -20,6 +24,7 @@ The `dev` pre-release is a testing channel with permanent links, replaced
 with every build of main (scripts/autoupdate.py), like the other Hivey
 projects:
   https://github.com/FlorianMartins/hivey-browser/releases/download/dev/hivey-browser-dev-windows-x64-installer.exe
+  https://github.com/FlorianMartins/hivey-browser/releases/download/dev/hivey-browser-dev-windows-x64-update.exe
   https://github.com/FlorianMartins/hivey-browser/releases/download/dev/hivey-browser-dev-linux-x64.tar.xz
 Installed browsers never take it (pre-releases are not "latest").
 """
@@ -37,7 +42,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hb  # noqa: E402
 
 REPO = os.environ.get('HB_REPO', 'FlorianMartins/hivey-browser')
-PLATFORMS = {'windows-x64': '-windows-x64-installer.exe', 'linux-x64': '-linux-x64.tar.xz'}
+# Artifacts of hb.py package. Windows: the setup wizard and the bare
+# mini_installer it embeds (what the updater runs); a dist packaged before the
+# wizard has only -installer.exe, then the mini_installer itself.
+PLATFORMS = {'windows-x64': '-windows-x64-installer.exe', 'windows-x64-update': '-windows-x64-update.exe',
+             'linux-x64': '-linux-x64.tar.xz'}
 
 
 def version():
@@ -60,6 +69,7 @@ def artifacts(ver):
 # serve the latest published version:
 #   https://github.com/<repo>/releases/latest/download/<name>
 STABLE_NAMES = {'windows-x64': 'hivey-browser-windows-x64-installer.exe',
+                'windows-x64-update': 'hivey-browser-windows-x64-update.exe',
                 'linux-x64': 'hivey-browser-linux-x64.tar.xz'}
 
 
@@ -89,12 +99,17 @@ def write_manifest(ver, tag, found):
         'published': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'page': f'https://github.com/{REPO}/releases/tag/{tag}',
     }
-    for platform, path in found.items():
-        manifest[platform] = {
-            'url': f'https://github.com/{REPO}/releases/download/{tag}/{path.name}',
-            'sha256': hb.sha256_file(path),
-            'size': path.stat().st_size,
-        }
+    entries = {platform: {
+        'url': f'https://github.com/{REPO}/releases/download/{tag}/{path.name}',
+        'sha256': hb.sha256_file(path),
+        'size': path.stat().st_size,
+    } for platform, path in found.items()}
+    # "windows-x64" is what browsers run silently: the mini_installer.
+    if 'windows-x64-update' in entries:
+        manifest['windows-x64'] = entries.pop('windows-x64-update')
+        if 'windows-x64' in entries:
+            manifest['windows-x64-setup'] = entries.pop('windows-x64')
+    manifest.update(entries)
     path = hb.DIST / 'hivey-update.json'
     path.write_text(json.dumps(manifest, indent=2) + '\n')
     sig = hb.DIST / 'hivey-update.json.sig'
@@ -124,7 +139,7 @@ def release_notes(ver):
 
 Installed browsers update by themselves (Hivey Studio > About). To install:
 
-- **Windows x64**: run `{STABLE_NAMES['windows-x64']}` (per-user install, no admin rights).
+- **Windows x64**: run `{STABLE_NAMES['windows-x64']}`, the setup wizard (install folder, bundled add-ons, privacy mode, shortcuts; per-user install, no admin rights). `{STABLE_NAMES['windows-x64-update']}` is the silent installer that installed browsers use to update.
 - **Linux x64**: extract `{STABLE_NAMES['linux-x64']}` and run `hivey-browser`.
 
 Permanent links to the latest version:
@@ -160,6 +175,7 @@ def cmd_draft(args):
 
 
 DEV_NAMES = {'windows-x64': 'hivey-browser-dev-windows-x64-installer.exe',
+             'windows-x64-update': 'hivey-browser-dev-windows-x64-update.exe',
              'linux-x64': 'hivey-browser-dev-linux-x64.tar.xz'}
 
 

@@ -70,17 +70,50 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
-        run: gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern "*-windows-x64-installer.exe" --dir dist
+        run: |
+          gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern "*-windows-x64-installer.exe" --dir dist
+          # The updater's installer (releases packaged before the setup wizard have none).
+          $assets = (gh release view "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --json assets | ConvertFrom-Json).assets.name
+          if ($assets -like '*-windows-x64-update.exe') {
+            gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern "*-windows-x64-update.exe" --dir dist
+          }
       - name: Install (per user, silent)
         if: steps.release.outputs.skip == 'false'
         shell: pwsh
         run: |
           $installer = Get-ChildItem dist -Filter *-windows-x64-installer.exe | Select-Object -First 1
-          Start-Process -FilePath $installer.FullName -ArgumentList '--do-not-launch-chrome' -Wait
-          $exe = "$env:LOCALAPPDATA\Hivey\Browser\Application\chrome.exe"
+          $update = Get-ChildItem dist -Filter *-windows-x64-update.exe | Select-Object -First 1
+          $default = "$env:LOCALAPPDATA\Hivey\Browser\Application"
+          if ($update) {
+            # The setup wizard, silent, in a folder of its own (as picked on
+            # its directory page): /D= comes last, unquoted.
+            $dir = Join-Path $env:RUNNER_TEMP 'Hivey Apps\Hivey Browser'
+            $p = Start-Process -FilePath $installer.FullName -ArgumentList '/S', "/D=$dir" -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "setup wizard failed: exit code $($p.ExitCode)" }
+          } else {
+            # A release packaged before the wizard: the installer is mini_installer.
+            $dir = $default
+            Start-Process -FilePath $installer.FullName -ArgumentList '--do-not-launch-chrome' -Wait
+          }
+          $exe = Join-Path $dir 'chrome.exe'
           if (-not (Test-Path $exe)) { throw "not installed at $exe" }
+          if ($update -and (Test-Path "$default\chrome.exe")) { throw "installed in $default instead of $dir" }
+          $location = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Hivey Browser').InstallLocation
+          if ($location -ne $dir) { throw "registered in $location, not $dir" }
           (Get-Item $exe).VersionInfo | Format-List ProductName, ProductVersion, CompanyName
           "BROWSER=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "INSTALL_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Update in place (the updater's installer, no folder given)
+        if: steps.release.outputs.skip == 'false' && hashFiles('dist/*-windows-x64-update.exe') != ''
+        shell: pwsh
+        run: |
+          # What the browser's updater does: the bare mini_installer, hidden,
+          # with --do-not-launch-chrome only. It must find the custom folder.
+          $update = Get-ChildItem dist -Filter *-windows-x64-update.exe | Select-Object -First 1
+          $p = Start-Process -FilePath $update.FullName -ArgumentList '--do-not-launch-chrome' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "update failed: exit code $($p.ExitCode)" }
+          if (-not (Test-Path "$env:INSTALL_DIR\chrome.exe")) { throw "the install left $env:INSTALL_DIR" }
+          if (Test-Path "$env:LOCALAPPDATA\Hivey\Browser\Application\chrome.exe") { throw "updated into the default folder" }
       - name: No request at startup
         if: steps.release.outputs.skip == 'false'
         run: python tests/startup_requests.py "$env:BROWSER" --seconds 60 --keep out

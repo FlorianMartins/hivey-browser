@@ -8,7 +8,11 @@
     "license": "GPL-3.0-or-later",
     "source": "https://github.com/uBlockOrigin/uBOL-home",
     "enable_rulesets": ["adguard-spyware-url", "annoyances-cookies"],
-    "pin": true
+    "pin": true,
+    "setup": {
+      "en": "Blocks ads, trackers and cookie banners (uBlock Origin Lite).",
+      "fr": "Bloque publicités, traqueurs et bandeaux de cookies (uBlock Origin Lite)."
+    }
   },
   "hivey-ai": {
     "name": "Hivey AI",
@@ -20,7 +24,11 @@
     "files": ["LICENSE", "README.md", "CHANGELOG.md", "icons", "src", "vendor", "rules"],
     "license": "MIT",
     "source": "https://github.com/FlorianMartins/HiveyAI-Sidebar",
-    "pin": false
+    "pin": false,
+    "setup": {
+      "en": "AI assistant in the side panel: ask about a page, translate, summarise; your own keys.",
+      "fr": "Assistant IA dans le panneau latéral : questions sur une page, traduction, résumé ; vos propres clés."
+    }
   },
   "hivey-cyber": {
     "name": "Hivey Cyber",
@@ -29,6 +37,10 @@
     "icon_svg": "icon.svg",
     "license": "MIT",
     "source": "https://github.com/FlorianMartins/hivey-browser/tree/main/extensions/hivey-cyber",
-    "pin": false
+    "pin": false,
+    "setup": {
+      "en": "Security lookups for a site, a link or selected text: Whois, DNS, certificates, VirusTotal...",
+      "fr": "Analyses de sécurité d’un site, d’un lien ou d’un texte : Whois, DNS, certificats, VirusTotal..."
+    }
   }
 }
