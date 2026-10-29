@@ -195,6 +195,11 @@ LOGO = ROOT / 'brand' / 'logo.svg'
 SVG_NS = 'http://www.w3.org/2000/svg'
 
 
+# Icons show the mark this much larger than the logo's canvas (it reads better
+# in the taskbar); chrome/browser/hivey/hivey_app_icon.cc uses the same.
+LOGO_ICON_SCALE = 1.15
+
+
 def _mark_svg(size, fill=None):
     """brand/logo.svg with its bars snapped to the pixel grid of a `size` px image.
 
@@ -212,7 +217,7 @@ def _mark_svg(size, fill=None):
     svg = tree.getroot()
     view = float(svg.get('viewBox').split()[2])
     rects = svg.findall(f'.//{{{SVG_NS}}}rect')
-    s = size / view
+    s = size / view * LOGO_ICON_SCALE
     height = float(rects[0].get('height'))
     gap = float(rects[1].get('y')) - float(rects[0].get('y')) - height
     h = max(3, int(height * s + 0.5))
