@@ -172,7 +172,7 @@
        "views/toolbar/hivey_resources_coordinator.cc",
 --- a/chrome/browser/ui/hivey/hivey_tor.cc
 +++ b/chrome/browser/ui/hivey/hivey_tor.cc
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,304 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
@@ -414,6 +414,8 @@
 +    options.start_hidden = true;
 +#else
 +    options.kill_on_parent_death = true;
++    // Its libevent and OpenSSL ship next to it, as in Tor Browser.
++    options.environment["LD_LIBRARY_PATH"] = tor_dir.value();
 +#endif
 +    process_ = base::LaunchProcess(command, options);
 +    if (!process_.IsValid()) {
