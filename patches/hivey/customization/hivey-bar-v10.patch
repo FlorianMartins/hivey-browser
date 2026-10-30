@@ -407,7 +407,20 @@
  constexpr int kMaxContentCustomCommands = 1000;
  constexpr int IDC_CONTENT_CONTEXT_CUSTOM_LAST =
      IDC_CONTENT_CONTEXT_CUSTOM_FIRST + kMaxContentCustomCommands;
-@@ -2192,6 +2247,10 @@
+@@ -1657,6 +1712,12 @@
+ }
+ 
+ void RenderViewContextMenu::RecordUsedItem(int id) {
++  // Hivey's items have no entry in Chromium's metrics enums (and Hivey
++  // records nothing).
++  if (id == kHiveyCopyCleanLink || id == kHiveyCopyCleanPageUrl) {
++    return;
++  }
++
+   // Log general ID.
+ 
+   int enum_id =
+@@ -2192,6 +2253,10 @@
                                    params_.link_url.SchemeIs(url::kMailToScheme)
                                        ? IDS_CONTENT_CONTEXT_COPYEMAILADDRESS
                                        : IDS_CONTENT_CONTEXT_COPYLINKLOCATION);
@@ -418,7 +431,7 @@
    if (features::IsMenuSimplificationEnabled() && !params_.has_image_contents) {
      menu_model_.AddItemWithStringIdAndIcon(
          IDC_CONTENT_CONTEXT_ADD_LINK_TO_READING_LIST,
-@@ -2566,6 +2625,12 @@
+@@ -2566,6 +2631,12 @@
  void RenderViewContextMenu::AppendPageItems() {
    AppendExitFullscreenItem();
  
@@ -431,7 +444,7 @@
    const bool glic_below_search =
        base::FeatureList::IsEnabled(features::kGlicContextMenuBelowSearch);
  
-@@ -3514,6 +3579,12 @@
+@@ -3514,6 +3585,12 @@
      case IDC_CONTENT_CONTEXT_COPYLINKLOCATION:
        return params_.unfiltered_link_url.is_valid();
  
@@ -444,7 +457,7 @@
      case IDC_CONTENT_CONTEXT_ADD_LINK_TO_READING_LIST:
        return params_.link_url.is_valid();
  
-@@ -3910,6 +3981,16 @@
+@@ -3910,6 +3987,16 @@
        WriteURLToClipboard(params_.unfiltered_link_url, id);
        break;
  
