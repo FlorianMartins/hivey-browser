@@ -130,12 +130,13 @@ jobs:
             '--SocksPort', '127.0.0.1:9399', '--DataDirectory', "`"$data`"", '--GeoIPFile', "`"$dir\geoip`"",
             '--GeoIPv6File', "`"$dir\geoip6`"", '--Log', "`"notice file $log`""
           $deadline = (Get-Date).AddMinutes(3)
-          while ((Get-Date) -lt $deadline -and -not (Select-String -Path $log -Pattern 'Bootstrapped 100%' -Quiet -ErrorAction SilentlyContinue)) {
+          $connected = { (Test-Path $log) -and (Select-String -Path $log -Pattern 'Bootstrapped 100%' -Quiet) }
+          while ((Get-Date) -lt $deadline -and -not (& $connected)) {
             Start-Sleep -Seconds 3
           }
           Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-          Get-Content $log -Tail 5
-          if (-not (Select-String -Path $log -Pattern 'Bootstrapped 100%' -Quiet)) { throw "tor did not connect" }
+          if (Test-Path $log) { Get-Content $log -Tail 5 } else { "tor wrote no log" }
+          if (-not (& $connected)) { throw "tor did not connect" }
       - name: No request at startup
         if: steps.release.outputs.skip == 'false'
         run: python tests/startup_requests.py "$env:BROWSER" --seconds 60 --keep out
