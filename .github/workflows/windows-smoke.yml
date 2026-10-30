@@ -114,6 +114,29 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "update failed: exit code $($p.ExitCode)" }
           if (-not (Test-Path "$env:INSTALL_DIR\chrome.exe")) { throw "the install left $env:INSTALL_DIR" }
           if (Test-Path "$env:LOCALAPPDATA\Hivey\Browser\Application\chrome.exe") { throw "updated into the default folder" }
+      - name: Tor connects (the tor of private windows with Tor)
+        if: steps.release.outputs.skip == 'false'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          # The installed tor.exe, alone, until "Bootstrapped 100%" (the
+          # release machine cannot reach the Tor network; this runner can).
+          $tor = Get-ChildItem -Path $env:INSTALL_DIR -Recurse -Filter tor.exe | Select-Object -First 1
+          if (-not $tor) { throw "no tor.exe in $env:INSTALL_DIR" }
+          $data = Join-Path $env:RUNNER_TEMP 'tor-data'
+          $log = Join-Path $env:RUNNER_TEMP 'tor.log'
+          $dir = $tor.DirectoryName
+          $p = Start-Process -FilePath $tor.FullName -PassThru -WindowStyle Hidden -ArgumentList `
+            '--SocksPort', '127.0.0.1:9399', '--DataDirectory', "`"$data`"", '--GeoIPFile', "`"$dir\geoip`"",
+            '--GeoIPv6File', "`"$dir\geoip6`"", '--Log', "`"notice file $log`""
+          $deadline = (Get-Date).AddMinutes(3)
+          $connected = { (Test-Path $log) -and (Select-String -Path $log -Pattern 'Bootstrapped 100%' -Quiet) }
+          while ((Get-Date) -lt $deadline -and -not (& $connected)) {
+            Start-Sleep -Seconds 3
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (Test-Path $log) { Get-Content $log -Tail 5 } else { "tor wrote no log" }
+          if (-not (& $connected)) { throw "tor did not connect" }
       - name: No request at startup
         if: steps.release.outputs.skip == 'false'
         run: python tests/startup_requests.py "$env:BROWSER" --seconds 60 --keep out

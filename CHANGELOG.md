@@ -3,6 +3,16 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4714 — 30 octobre 2026
+
+### Confidentialité
+- **Fenêtre privée avec Tor**, comme Brave : gratuit et sans compte. Votre
+  trafic passe par le réseau Tor (les sites ne voient pas votre adresse IP,
+  les noms de domaine sont résolus par Tor) et rien n'est gardé à la
+  fermeture. Bouton dans la barre Hivey, dans Paramètres > Confidentialité,
+  et « Ouvrir le lien dans une fenêtre Tor » au clic droit. Tor démarre à la
+  demande et s'arrête avec la dernière fenêtre Tor.
+
 ## 156.0.8078.4713 — 30 octobre 2026
 
 ### Confidentialité

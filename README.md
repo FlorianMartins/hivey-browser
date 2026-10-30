@@ -102,5 +102,7 @@ the location bar uses [IP to Country Lite by DB-IP](https://db-ip.com),
 licensed under CC BY 4.0. The Hivey bar's icons are
 [Phosphor Icons](https://phosphoricons.com) (MIT); the modern style fills them
 with a color gradient. Country flags: [flag-icons](https://flagicons.lipis.dev) (MIT).
+Private windows with Tor use the [Tor](https://www.torproject.org) client (BSD-3-Clause)
+from Tor Browser's expert bundle, unmodified.
 
 Hivey Browser is not affiliated with Google or the Chromium project.

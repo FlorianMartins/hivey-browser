@@ -1,0 +1,591 @@
+# Hivey 4714: private windows with Tor (like Brave): the bundled tor started on demand, a hidden 'Hivey Tor' profile proxied through it (SOCKS5, WebRTC proxied only, no prediction), its off-the-record windows; from the Hivey bar, Hivey Studio > Privacy and 'Open link in Tor window'; tor in the installer.
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -20693,6 +20693,18 @@
+         <message name="IDS_HIVEY_COPY_CLEAN_PAGE_URL" desc="Context menu item on a page: copy its address without the tracking parameters (utm_*, fbclid...)">
+           Copy page address without tracking
+         </message>
++        <message name="IDS_HIVEY_TOR_WINDOW" desc="Hivey bar button: open a private window whose traffic goes through the Tor network">
++          New private window with Tor
++        </message>
++        <message name="IDS_HIVEY_TOR_CONNECTING" desc="Shown in a new Tor window while the browser connects to the Tor network">
++          Connecting to the Tor network...
++        </message>
++        <message name="IDS_HIVEY_TOR_FAILED" desc="Shown in a Tor window when the browser could not connect to the Tor network">
++          Tor could not connect. Check your internet connection, then open a new Tor window.
++        </message>
++        <message name="IDS_HIVEY_OPEN_LINK_IN_TOR" desc="Context menu item on a link: open it in a private window that goes through the Tor network">
++          Open link in Tor window
++        </message>
+         <message name="IDS_HIVEY_OPEN_AS_APP" desc="Tooltip of the location bar button that opens the page as an app, in its own window with its own taskbar icon">
+           Open as an app, in its own window
+         </message>
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10913,4 +10913,8 @@
+ <translation id="6947736787244354378">Contour</translation>
+ <translation id="5809090008577139505">Aurore</translation>
+ <translation id="1070901266639972381">Nuit</translation>
++<translation id="6313675821927505581">Nouvelle fenêtre privée avec Tor</translation>
++<translation id="2982511483541443728">Connexion au réseau Tor…</translation>
++<translation id="5574428149758801684">Tor n’a pas pu se connecter. Vérifiez votre connexion à Internet, puis ouvrez une nouvelle fenêtre Tor.</translation>
++<translation id="3577720797358450269">Ouvrir le lien dans une fenêtre Tor</translation>
+ </translationbundle>
+\ No newline at end of file
+--- a/chrome/browser/hivey/hivey_bar_prefs.h
++++ b/chrome/browser/hivey/hivey_bar_prefs.h
+@@ -67,8 +67,8 @@
+ inline constexpr char kHiveyBarAppPrefix[] = "app:";
+ // Hivey Cyber sits at the top of the bar; these are the bottom buttons
+ // (Settings stays, last).
+-inline constexpr const char* kHiveyBarTools[] = {"performance", "bookmarks",
+-                                                 "history"};
++inline constexpr const char* kHiveyBarTools[] = {"tor", "performance",
++                                                 "bookmarks", "history"};
+ inline constexpr size_t kHiveyBarMaxApps = 30;
+ 
+ enum class HiveyBarIconStyle {
+--- a/chrome/browser/renderer_context_menu/render_view_context_menu.cc
++++ b/chrome/browser/renderer_context_menu/render_view_context_menu.cc
+@@ -106,6 +106,7 @@
+ #include "chrome/browser/translate/chrome_translate_client.h"
+ #include "chrome/browser/translate/translate_service.h"
+ #include "chrome/browser/ui/browser_commands.h"
++#include "chrome/browser/ui/hivey/hivey_tor.h"
+ #include "chrome/browser/ui/browser_window.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+@@ -421,6 +422,8 @@
+ // content context range Chromium leaves free.
+ constexpr int kHiveyCopyCleanLink = 50198;
+ constexpr int kHiveyCopyCleanPageUrl = 50199;
++// "Open link in Tor window".
++constexpr int kHiveyOpenLinkInTor = 50197;
+ 
+ // Query parameters that only follow people around: campaign tags and ad click
+ // ids, as stripped by Firefox and the AdGuard URL tracking list.
+@@ -1714,7 +1717,8 @@
+ void RenderViewContextMenu::RecordUsedItem(int id) {
+   // Hivey's items have no entry in Chromium's metrics enums (and Hivey
+   // records nothing).
+-  if (id == kHiveyCopyCleanLink || id == kHiveyCopyCleanPageUrl) {
++  if (id == kHiveyCopyCleanLink || id == kHiveyCopyCleanPageUrl ||
++      id == kHiveyOpenLinkInTor) {
+     return;
+   }
+ 
+@@ -2256,6 +2260,10 @@
+   if (params_.link_url.SchemeIsHTTPOrHTTPS()) {
+     menu_model_.AddItemWithStringId(kHiveyCopyCleanLink,
+                                     IDS_HIVEY_COPY_CLEAN_LINK);
++    if (!hivey::IsTorProfile(GetProfile())) {
++      menu_model_.AddItemWithStringId(kHiveyOpenLinkInTor,
++                                      IDS_HIVEY_OPEN_LINK_IN_TOR);
++    }
+   }
+   if (features::IsMenuSimplificationEnabled() && !params_.has_image_contents) {
+     menu_model_.AddItemWithStringIdAndIcon(
+@@ -3586,6 +3594,7 @@
+       return params_.unfiltered_link_url.is_valid();
+ 
+     case kHiveyCopyCleanLink:
++    case kHiveyOpenLinkInTor:
+       return params_.link_url.is_valid();
+ 
+     case kHiveyCopyCleanPageUrl:
+@@ -3997,6 +4006,10 @@
+                           IDC_CONTENT_CONTEXT_COPYLINKLOCATION);
+       break;
+ 
++    case kHiveyOpenLinkInTor:
++      hivey::OpenTorWindow(params_.link_url);
++      break;
++
+     case IDC_CONTENT_CONTEXT_ADD_LINK_TO_READING_LIST: {
+       ReadingListModel* model =
+           ReadingListModelFactory::GetForBrowserContext(browser_context_);
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -109,9 +109,12 @@
+     hiveyBarAuto: 'Automatic (left with vertical tabs)',
+     importTitle: 'Import bookmarks',
+     navImport: 'Import',
+-    vpnTitle: 'VPN',
++    vpnTitle: 'Tor & VPN',
+     vpnHint: 'A VPN hides your IP address from sites. Proton VPN is free with a Proton account (Switzerland, no logs, open source). Not installed until you add it.',
+     vpnAdd: 'Add', vpnInstalled: 'Installed',
++    torTitle: 'Private window with Tor',
++    torHint: 'Free, no account: your traffic goes through the Tor network, sites do not see your IP address and nothing is kept when you close the window. Slower; some sites block Tor.',
++    torOpen: 'Open',
+     toolbarTitle: 'Toolbar',
+     toolbarHint: 'Drag the buttons, the address bar too, to any place; the eye shows or hides one.',
+     toolbarReset: 'Reset the toolbar',
+@@ -375,9 +378,12 @@
+     hiveyBarAuto: 'Automatique (à gauche avec les onglets verticaux)',
+     importTitle: 'Importer des favoris',
+     navImport: 'Importer',
+-    vpnTitle: 'VPN',
++    vpnTitle: 'Tor & VPN',
+     vpnHint: 'Un VPN cache votre adresse IP aux sites. Proton VPN est gratuit avec un compte Proton (Suisse, sans journaux, open source). Rien n’est installé tant que vous ne l’ajoutez pas.',
+     vpnAdd: 'Ajouter', vpnInstalled: 'Installé',
++    torTitle: 'Fenêtre privée avec Tor',
++    torHint: 'Gratuit, sans compte : votre trafic passe par le réseau Tor, les sites ne voient pas votre adresse IP et rien n’est gardé à la fermeture. Plus lent ; certains sites bloquent Tor.',
++    torOpen: 'Ouvrir',
+     toolbarTitle: 'Barre d’outils',
+     toolbarHint: 'Glissez les boutons, la barre d’adresse aussi, où vous voulez ; l’œil en affiche ou masque un.',
+     toolbarReset: 'Rétablir la barre d’outils',
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -894,14 +894,17 @@
+ 
+ // ------------------------------------------------------------------ privacy
+ 
+-// Optional add-ons (a VPN): shipped with the browser, installed on demand.
++// Tor (built in) and the optional add-ons (a VPN, installed on demand).
+ function vpnCard() {
+   const addons = state.optionalAddons || [];
+-  if (!addons.length) {
+-    return null;
+-  }
+   return card(t('vpnTitle'),
+-              el('p', {class: 'muted small', text: t('vpnHint')}),
++              el('div', {class: 'row'},
++                 el('div', {class: 'row-text'},
++                    el('span', {class: 'row-label', text: t('torTitle')}),
++                    el('span', {class: 'row-hint', text: t('torHint')})),
++                 el('button', {class: 'button', text: t('torOpen'),
++                               onclick: () => chrome.send('openTorWindow')})),
++              addons.length ? el('p', {class: 'muted small', text: t('vpnHint')}) : null,
+               ...addons.map(addon => el('div', {class: 'row'},
+                   el('div', {class: 'row-text'},
+                      el('span', {class: 'row-label'}, addon.name,
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -2303,6 +2303,8 @@
+       "browser.h",
+       "browser_tabstrip.cc",
+       # Hivey: Hivey Studio (chrome://hivey) and the Resources button.
++      "hivey/hivey_tor.cc",
++      "hivey/hivey_tor.h",
+       "views/frame/hivey_bar_view.cc",
+       "views/frame/hivey_bar_view.h",
+       "views/toolbar/hivey_resources_coordinator.cc",
+--- a/chrome/browser/ui/hivey/hivey_tor.cc
++++ b/chrome/browser/ui/hivey/hivey_tor.cc
+@@ -0,0 +1,304 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/ui/hivey/hivey_tor.h"
++
++#include <string>
++#include <utility>
++#include <vector>
++
++#include "base/base64.h"
++#include "base/base_paths.h"
++#include "base/command_line.h"
++#include "base/files/file_path.h"
++#include "base/files/file_util.h"
++#include "base/functional/bind.h"
++#include "base/hash/hash.h"
++#include "base/memory/weak_ptr.h"
++#include "base/no_destructor.h"
++#include "base/path_service.h"
++#include "base/process/launch.h"
++#include "base/process/process.h"
++#include "base/process/process_handle.h"
++#include "base/scoped_observation.h"
++#include "base/strings/escape.h"
++#include "base/strings/string_number_conversions.h"
++#include "base/strings/stringprintf.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/task/thread_pool.h"
++#include "base/threading/platform_thread.h"
++#include "base/time/time.h"
++#include "build/build_config.h"
++#include "chrome/browser/browser_process.h"
++#include "chrome/browser/preloading/preloading_prefs.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/profiles/profile_attributes_entry.h"
++#include "chrome/browser/profiles/profile_attributes_storage.h"
++#include "chrome/browser/profiles/profile_manager.h"
++#include "chrome/browser/ui/browser_commands.h"
++#include "chrome/browser/ui/browser_tabstrip.h"
++#include "chrome/browser/ui/browser_window/public/browser_collection_observer.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
++#include "chrome/common/pref_names.h"
++#include "chrome/grit/generated_resources.h"
++#include "components/prefs/pref_service.h"
++#include "components/proxy_config/proxy_config_dictionary.h"
++#include "components/proxy_config/proxy_config_pref_names.h"
++#include "components/tabs/public/tab_interface.h"
++#include "content/public/browser/navigation_controller.h"
++#include "content/public/browser/web_contents.h"
++#include "ui/base/l10n/l10n_util.h"
++#include "ui/base/page_transition_types.h"
++#include "url/gurl.h"
++
++namespace hivey {
++
++namespace {
++
++// The hidden profile Tor windows belong to, in the user data directory.
++constexpr char kTorProfileDir[] = "Hivey Tor";
++constexpr char kCheckUrl[] = "https://check.torproject.org/";
++// tor connects within seconds; past this, the window says it could not.
++constexpr base::TimeDelta kBootstrapTimeout = base::Seconds(90);
++
++#if BUILDFLAG(IS_WIN)
++constexpr char kTorDir[] = "Tor";
++constexpr char kTorExe[] = "tor.exe";
++#else
++constexpr char kTorDir[] = "tor";
++constexpr char kTorExe[] = "tor";
++#endif
++
++// A page of the browser's own, as a data: URL (the window before and when
++// Tor connects).
++GURL StatusPage(int message_id) {
++  const std::string text = base::EscapeForHTML(
++      base::UTF16ToUTF8(l10n_util::GetStringUTF16(message_id)));
++  const std::string html = base::StringPrintf(
++      "<!doctype html><meta charset=utf-8><title>Tor</title>"
++      "<body style=\"margin:0;height:100vh;display:grid;place-items:center;"
++      "background:#13141f;color:#e6e7ff;font:20px system-ui,sans-serif\">"
++      "<div style=\"text-align:center\"><div style=\"font-size:56px\">"
++      "&#129477;</div><p>%s</p></div>",
++      text.c_str());
++  return GURL("data:text/html;base64," + base::Base64Encode(html));
++}
++
++// Runs on a blocking thread: waits for tor's log to say it is connected
++// ("Bootstrapped 100%"), or that it failed. True when connected.
++bool WaitForBootstrap(base::FilePath log) {
++  const base::TimeTicks deadline = base::TimeTicks::Now() + kBootstrapTimeout;
++  while (base::TimeTicks::Now() < deadline) {
++    std::string contents;
++    if (base::ReadFileToString(log, &contents)) {
++      if (contents.find("Bootstrapped 100%") != std::string::npos) {
++        return true;
++      }
++      if (contents.find("[err]") != std::string::npos) {
++        return false;
++      }
++    }
++    base::PlatformThread::Sleep(base::Milliseconds(300));
++  }
++  return false;
++}
++
++class TorController : public BrowserCollectionObserver {
++ public:
++  static TorController& Get() {
++    static base::NoDestructor<TorController> instance;
++    return *instance;
++  }
++
++  void Open(const GURL& url) {
++    ProfileManager* profile_manager = g_browser_process->profile_manager();
++    if (!profile_manager) {
++      return;
++    }
++    profile_manager->CreateProfileAsync(
++        profile_manager->user_data_dir().AppendASCII(kTorProfileDir),
++        base::BindOnce(&TorController::OnProfileReady,
++                       weak_factory_.GetWeakPtr(), url));
++  }
++
++  // BrowserCollectionObserver:
++  void OnBrowserClosed(BrowserWindowInterface* browser) override {
++    if (!IsTorProfile(browser->GetProfile())) {
++      return;
++    }
++    bool others = false;
++    GlobalBrowserCollection::GetInstance()->ForEach(
++        [&](BrowserWindowInterface* other) {
++          others |= other != browser && IsTorProfile(other->GetProfile());
++          return !others;
++        });
++    if (!others) {
++      Stop();
++    }
++  }
++
++ private:
++  friend class base::NoDestructor<TorController>;
++
++  enum class State { kStopped, kStarting, kReady };
++
++  TorController() {
++    observation_.Observe(GlobalBrowserCollection::GetInstance());
++  }
++
++  void OnProfileReady(GURL url, Profile* profile) {
++    if (!profile) {
++      return;
++    }
++    if (ProfileAttributesEntry* entry =
++            g_browser_process->profile_manager()
++                ->GetProfileAttributesStorage()
++                .GetProfileAttributesWithPath(profile->GetPath())) {
++      // Not a profile of its own for the user: no picker, no menu entry.
++      entry->SetIsOmitted(true);
++    }
++    PrefService* pref_service = profile->GetPrefs();
++    // Everything through Tor (SOCKS5: names are resolved by Tor as well),
++    // WebRTC included; no DNS prefetching, no suggestions while typing.
++    pref_service->SetDict(proxy_config::prefs::kProxy,
++                   ProxyConfigDictionary::CreateFixedServers(
++                       base::StringPrintf("socks5://127.0.0.1:%d", Port()),
++                       std::string()));
++    pref_service->SetString(prefs::kWebRTCIPHandlingPolicy,
++                            "disable_non_proxied_udp");
++    pref_service->SetInteger(
++        prefs::kNetworkPredictionOptions,
++        static_cast<int>(prefetch::NetworkPredictionOptions::kDisabled));
++    pref_service->SetBoolean(prefs::kSearchSuggestEnabled, false);
++
++    BrowserWindowInterface* window = chrome::OpenEmptyWindow(
++        profile->GetPrimaryOTRProfile(/*create_if_needed=*/true),
++        /*should_trigger_session_restore=*/false);
++    if (!window) {
++      return;
++    }
++    const GURL target = url.is_valid() ? url : GURL(kCheckUrl);
++    if (state_ == State::kReady) {
++      chrome::AddTabAt(window, target, -1, /*foreground=*/true);
++      return;
++    }
++    chrome::AddTabAt(window, StatusPage(IDS_HIVEY_TOR_CONNECTING), -1,
++                     /*foreground=*/true);
++    if (tabs::TabInterface* tab = window->GetActiveTabInterface()) {
++      waiting_.emplace_back(tab->GetContents()->GetWeakPtr(), target);
++    }
++    if (state_ == State::kStopped) {
++      Start(profile->GetPath());
++    }
++  }
++
++  // The port tor listens on: the same for a user data directory, apart
++  // from the usual Tor ports (9050, 9150).
++  int Port() const {
++    const std::string dir = g_browser_process->profile_manager()
++                                ->user_data_dir()
++                                .AsUTF8Unsafe();
++    return 9250 + static_cast<int>(base::PersistentHash(dir) % 500);
++  }
++
++  void Start(const base::FilePath& profile_dir) {
++    base::FilePath module_dir;
++    base::PathService::Get(base::DIR_MODULE, &module_dir);
++    const base::FilePath tor_dir = module_dir.AppendASCII(kTorDir);
++    const base::FilePath data_dir = profile_dir.AppendASCII("tor");
++    const base::FilePath log = data_dir.AppendASCII("notice.log");
++    base::CreateDirectory(data_dir);
++    base::DeleteFile(log);
++    const base::FilePath torrc = data_dir.AppendASCII("torrc");
++    if (!base::PathExists(torrc)) {
++      base::WriteFile(torrc, "");
++    }
++
++    base::CommandLine command(tor_dir.AppendASCII(kTorExe));
++    auto arg = [&](const char* name, const std::string& value) {
++      command.AppendArg(name);
++      command.AppendArg(value);
++    };
++    arg("-f", torrc.AsUTF8Unsafe());
++    arg("--defaults-torrc", torrc.AsUTF8Unsafe());
++    arg("--SocksPort", base::StringPrintf("127.0.0.1:%d", Port()));
++    arg("--DataDirectory", data_dir.AsUTF8Unsafe());
++    arg("--GeoIPFile", tor_dir.AppendASCII("geoip").AsUTF8Unsafe());
++    arg("--GeoIPv6File", tor_dir.AppendASCII("geoip6").AsUTF8Unsafe());
++    arg("--ClientOnly", "1");
++    arg("--AvoidDiskWrites", "1");
++    arg("--Log", "notice file " + log.AsUTF8Unsafe());
++    // tor exits by itself if the browser goes away.
++    arg("__OwningControllerProcess",
++        base::NumberToString(base::GetCurrentProcId()));
++
++    base::LaunchOptions options;
++#if BUILDFLAG(IS_WIN)
++    options.start_hidden = true;
++#else
++    options.kill_on_parent_death = true;
++    // Its libevent and OpenSSL ship next to it, as in Tor Browser.
++    options.environment["LD_LIBRARY_PATH"] = tor_dir.value();
++#endif
++    process_ = base::LaunchProcess(command, options);
++    if (!process_.IsValid()) {
++      Finish(false);
++      return;
++    }
++    state_ = State::kStarting;
++    base::ThreadPool::PostTaskAndReplyWithResult(
++        FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++        base::BindOnce(&WaitForBootstrap, log),
++        base::BindOnce(&TorController::Finish, weak_factory_.GetWeakPtr()));
++  }
++
++  void Finish(bool connected) {
++    state_ = connected ? State::kReady : State::kStopped;
++    if (!connected && process_.IsValid()) {
++      process_.Terminate(0, /*wait=*/false);
++      process_ = base::Process();
++    }
++    for (auto& [contents, url] : waiting_) {
++      if (contents) {
++        contents->GetController().LoadURL(
++            connected ? url : StatusPage(IDS_HIVEY_TOR_FAILED),
++            content::Referrer(), ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
++            std::string());
++      }
++    }
++    waiting_.clear();
++  }
++
++  void Stop() {
++    if (process_.IsValid()) {
++      process_.Terminate(0, /*wait=*/false);
++      process_ = base::Process();
++    }
++    state_ = State::kStopped;
++    waiting_.clear();
++  }
++
++  State state_ = State::kStopped;
++  base::Process process_;
++  // Tabs waiting for Tor, with the page they then open.
++  std::vector<std::pair<base::WeakPtr<content::WebContents>, GURL>> waiting_;
++  base::ScopedObservation<BrowserCollection, BrowserCollectionObserver>
++      observation_{this};
++  base::WeakPtrFactory<TorController> weak_factory_{this};
++};
++
++}  // namespace
++
++void OpenTorWindow(const GURL& url) {
++  TorController::Get().Open(url);
++}
++
++bool IsTorProfile(const Profile* profile) {
++  return profile &&
++         profile->GetOriginalProfile()->GetPath().BaseName().AsUTF8Unsafe() ==
++             kTorProfileDir;
++}
++
++}  // namespace hivey
+--- a/chrome/browser/ui/hivey/hivey_tor.h
++++ b/chrome/browser/ui/hivey/hivey_tor.h
+@@ -0,0 +1,29 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_HIVEY_HIVEY_TOR_H_
++#define CHROME_BROWSER_UI_HIVEY_HIVEY_TOR_H_
++
++class GURL;
++class Profile;
++
++namespace hivey {
++
++// Private windows with Tor, like Brave's: the tor program that ships with
++// Hivey (next to the browser, in "tor") is started on demand, and a hidden
++// profile ("Hivey Tor") sends everything through it (SOCKS5, the names are
++// resolved by Tor too). Its windows are that profile's off-the-record ones:
++// nothing they see is kept. tor stops with the last of them, or with the
++// browser.
++//
++// Opens such a window on `url` (empty: check.torproject.org), once Tor is
++// connected; meanwhile the window says it is connecting.
++void OpenTorWindow(const GURL& url);
++
++// Whether `profile` is Hivey's Tor profile (or its off-the-record profile).
++bool IsTorProfile(const Profile* profile);
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_UI_HIVEY_HIVEY_TOR_H_
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
+@@ -29,6 +29,7 @@
+ #include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/search_engines/template_url_service_factory.h"
++#include "chrome/browser/ui/hivey/hivey_tor.h"
+ #include "chrome/browser/ui/browser.h"
+ #include "chrome/browser/ui/browser_commands.h"
+ #include "chrome/browser/ui/browser_tabstrip.h"
+@@ -573,6 +574,10 @@
+               },
+               base::Unretained(this)));
+     }
++  } else if (id == "tor") {
++    // A private window with Tor.
++    add_tool(kHiveyBarTorIcon,
++             base::BindRepeating([] { hivey::OpenTorWindow(GURL()); }));
+   } else if (id == "performance") {
+     performance_button_ = add_tool(
+         kHiveyBarPerformanceIcon,
+@@ -663,6 +668,9 @@
+   if (id == "settings") {
+     return l10n_util::GetStringUTF16(IDS_HIVEY_BAR_SETTINGS);
+   }
++  if (id == "tor") {
++    return l10n_util::GetStringUTF16(IDS_HIVEY_TOR_WINDOW);
++  }
+   if (id == "performance") {
+     return l10n_util::GetStringUTF16(IDS_HIVEY_BAR_PERFORMANCE);
+   }
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -63,6 +63,7 @@
+ #include "components/webui/flags/pref_service_flags_storage.h"
+ #include "content/public/browser/web_ui.h"
+ #include "chrome/browser/extensions/external_provider_manager.h"
++#include "chrome/browser/ui/hivey/hivey_tor.h"
+ #include "extensions/browser/extension_registry.h"
+ #include "third_party/skia/include/core/SkColor.h"
+ #include "ui/base/mojom/themes.mojom.h"
+@@ -390,6 +391,7 @@
+   add("setBarLayout", &HiveyStudioHandler::HandleSetBarLayout);
+   add("setToolbarLayout", &HiveyStudioHandler::HandleSetToolbarLayout);
+   add("addOptionalAddon", &HiveyStudioHandler::HandleAddOptionalAddon);
++  add("openTorWindow", &HiveyStudioHandler::HandleOpenTorWindow);
+   add("addBarApp", &HiveyStudioHandler::HandleAddBarApp);
+   add("removeBarApp", &HiveyStudioHandler::HandleRemoveBarApp);
+   add("setSearchEngine", &HiveyStudioHandler::HandleSetSearchEngine);
+@@ -574,6 +576,10 @@
+   return addons;
+ }
+ 
++void HiveyStudioHandler::HandleOpenTorWindow(const base::ListValue& args) {
++  hivey::OpenTorWindow(GURL());
++}
++
+ void HiveyStudioHandler::HandleAddOptionalAddon(const base::ListValue& args) {
+   // [id]: one of the optional bundled add-ons, installed now.
+   const std::string* id = args.size() == 1 ? args[0].GetIfString() : nullptr;
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
+@@ -92,6 +92,7 @@
+   void HandleSetBarLayout(const base::ListValue& args);
+   void HandleSetToolbarLayout(const base::ListValue& args);
+   void HandleAddOptionalAddon(const base::ListValue& args);
++  void HandleOpenTorWindow(const base::ListValue& args);
+   base::ListValue BuildOptionalAddonsState();
+   void HandleAddBarApp(const base::ListValue& args);
+   void HandleRemoveBarApp(const base::ListValue& args);
+--- a/chrome/installer/mini_installer/chrome.release
++++ b/chrome/installer/mini_installer/chrome.release
+@@ -42,6 +42,7 @@
+ # Sub directories living in the version dir
+ #
+ Extensions\*.*: %(VersionDir)s\Extensions\
++Tor\*.*: %(VersionDir)s\Tor\
+ locales\*.pak: %(VersionDir)s\Locales
+ 
+ #

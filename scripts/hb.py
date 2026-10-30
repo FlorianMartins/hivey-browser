@@ -891,7 +891,7 @@ WORKSPACE_ICONS = {
     'security': 'shield-check', 'wisebase': 'books', 'benchmark': 'chart-bar', 'mcp': 'plugs-connected',
 }
 TOOL_ICONS = {
-    'Cyber': 'fingerprint', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
+    'Cyber': 'fingerprint', 'Tor': 'detective', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
     'Bookmarks': 'bookmark-simple', 'Settings': 'gear-six', 'App': 'app-window',
 }
 # "Modern" icons: the Phosphor glyph in its fill weight (a different, solid
@@ -920,6 +920,7 @@ ICON_COLORS = {
     'wisebase': ('#fde68a', '#a16207'),   # gold: knowledge
     'benchmark': ('#a5f3fc', '#0891b2'),  # cyan: measures
     'Cyber': ('#6ee7b7', '#059669'),      # emerald: investigation
+    'Tor': ('#d8b4fe', '#7d4698'),        # Tor's purple
     'Performance': ('#bef264', '#65a30d'),  # lime: speed
     'History': ('#93c5fd', '#2563eb'),    # blue: time
     'Bookmarks': ('#fda4af', '#e11d48'),  # rose: favorites
@@ -1239,6 +1240,42 @@ def step_bundle(args):
               geoip={'month': geoip_month, 'sha256': sha256_file(geoip_bin)})
 
 
+# Tor (BSD-3-Clause, https://www.torproject.org): the client of Tor Browser's
+# "expert bundle", for Hivey's private windows with Tor. Checksums from
+# https://dist.torproject.org/torbrowser/<version>/sha256sums-signed-build.txt.
+TOR_VERSION = '16.0'
+TOR_BUNDLES = {
+    'linux': ('tor-expert-bundle-linux-x86_64-16.0.tar.gz',
+              'cc950ebe9acb80188325c3a2cd8817def7dd7237d6fdcd861bb87b234a0cb2fd'),
+    'win': ('tor-expert-bundle-windows-x86_64-16.0.tar.gz',
+            '2ee123e9167318a3742778ff704e75f01d4780f05a14522d451fe011011077c4'),
+}
+
+
+def _stage_tor():
+    """tor next to the browser, in <module dir>/tor ("Tor" on Windows, which
+    the installer packs): the client, its libraries on Linux, the GeoIP
+    files and its license. Not the pluggable transports (bridges)."""
+    name, sha256 = TOR_BUNDLES[TARGET]
+    archive = download(f'https://dist.torproject.org/torbrowser/{TOR_VERSION}/{name}',
+                       BUILD / 'download_cache' / name, sha256)
+    dest = OUT / ('Tor' if TARGET == 'win' else 'tor')
+    shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True)
+    wanted = {'tor/tor.exe', 'tor/tor', 'tor/libcrypto.so.3', 'tor/libssl.so.3', 'tor/libevent-2.1.so.7',
+              'data/geoip', 'data/geoip6', 'docs/tor.txt'}
+    with tarfile.open(archive) as t:
+        for member in t.getmembers():
+            if member.isfile() and member.name in wanted:
+                target = dest / ('LICENSE.txt' if member.name == 'docs/tor.txt' else Path(member.name).name)
+                with t.extractfile(member) as src, open(target, 'wb') as out:
+                    shutil.copyfileobj(src, out)
+                if member.mode & 0o111:
+                    target.chmod(0o755)
+    if not (dest / ('tor.exe' if TARGET == 'win' else 'tor')).exists():
+        raise SystemExit(f'{name}: no tor binary')
+
+
 def _stage_bundled_extensions():
     """Put the .crx files and the GeoIP database where the browser looks for
     them: <module dir>/extensions (the Windows installer packs
@@ -1377,6 +1414,7 @@ def step_build(args):
         cmd = ['systemd-run', '--scope', '--quiet', '--collect', '-p', f'MemoryMax={mem_max}',
                '-p', 'MemorySwapMax=0', '-p', 'CPUWeight=10', '-p', 'IOWeight=10', '--'] + cmd
     _stage_bundled_extensions()
+    _stage_tor()
     log(f'building with {jobs} jobs, memory cap {mem_max}'
         + (f', ccache in {CCACHE_DIR}' if _ccache() else ''))
     try:
@@ -1397,7 +1435,7 @@ def step_build(args):
 LINUX_FILES = ['chrome', 'chrome_100_percent.pak', 'chrome_200_percent.pak', 'chrome_crashpad_handler',
                'chrome-wrapper', 'icudtl.dat', 'libEGL.so', 'libGLESv2.so', 'libvk_swiftshader.so',
                'libvulkan.so.1', 'locales', 'product_logo_48.png', 'resources.pak', 'v8_context_snapshot.bin',
-               'vk_swiftshader_icd.json', 'xdg-mime', 'xdg-settings', 'extensions']
+               'vk_swiftshader_icd.json', 'xdg-mime', 'xdg-settings', 'extensions', 'tor']
 LINUX_REQUIRED = {'chrome', 'resources.pak', 'icudtl.dat', 'locales', 'v8_context_snapshot.bin'}
 
 LINUX_LAUNCHER = """#!/bin/sh
