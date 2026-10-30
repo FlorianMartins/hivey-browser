@@ -3,6 +3,20 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4715 — 30 octobre 2026
+
+### Confidentialité
+- **Ponts Tor** : là où le réseau Tor est bloqué (certains réseaux
+  d'entreprise, d'école, certains pays), la fenêtre Tor passe quand même.
+  En mode automatique, elle essaie la connexion directe, puis Snowflake,
+  puis meek ; vous pouvez aussi choisir le pont (Paramètres >
+  Confidentialité > Ponts Tor).
+
+### Barre d'adresse
+- Une adresse tapée comme telle (« kamaraderie.fr », sans « www. ») ouvre
+  toujours le site ; la recherche Google n'apparaît qu'en suggestion
+  en-dessous, même si vous l'aviez déjà recherchée.
+
 ## 156.0.8078.4714 — 30 octobre 2026
 
 ### Confidentialité

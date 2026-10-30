@@ -1,0 +1,367 @@
+# Hivey 4715: Tor bridges (Snowflake, obfs4, meek through lyrebird; automatic: direct, then Snowflake, then meek when the Tor network is blocked; Hivey Studio > Privacy); an address typed in the address bar always opens the site, a search for it never comes first.
+--- a/chrome/browser/hivey/hivey_resource_limits.cc
++++ b/chrome/browser/hivey/hivey_resource_limits.cc
+@@ -72,6 +72,7 @@
+ void RegisterResourceLimitsPrefs(PrefRegistrySimple* registry) {
+   registry->RegisterIntegerPref(kCpuLimitPercent, 0);
+   registry->RegisterIntegerPref(kNetworkLimitKbps, 0);
++  registry->RegisterStringPref(kTorBridges, "auto");
+ }
+ 
+ bool IsCpuLimiterSupported() {
+--- a/chrome/browser/hivey/hivey_resource_limits.h
++++ b/chrome/browser/hivey/hivey_resource_limits.h
+@@ -33,6 +33,11 @@
+ // Browser-wide network bandwidth limit, in kilobits per second (0 = off).
+ inline constexpr char kNetworkLimitKbps[] = "hivey.network_limit_kbps";
+ 
++// How private windows with Tor reach the Tor network: "auto" (direct, then
++// bridges if it is blocked), "direct", or bridges: "snowflake", "obfs4",
++// "meek".
++inline constexpr char kTorBridges[] = "hivey.tor_bridges";
++
+ void RegisterResourceLimitsPrefs(PrefRegistrySimple* registry);
+ 
+ // Whether this platform supports the CPU limiter (Windows: job objects).
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -115,6 +115,9 @@
+     torTitle: 'Private window with Tor',
+     torHint: 'Free, no account: your traffic goes through the Tor network, sites do not see your IP address and nothing is kept when you close the window. Slower; some sites block Tor.',
+     torOpen: 'Open',
++    torBridges: 'Tor bridges',
++    torBridgesHint: 'Where the Tor network is blocked (some networks, countries), bridges get through. Automatic: direct, then Snowflake, then meek.',
++    torBridgesAuto: 'Automatic', torBridgesDirect: 'Direct (no bridge)',
+     toolbarTitle: 'Toolbar',
+     toolbarHint: 'Drag the buttons, the address bar too, to any place; the eye shows or hides one.',
+     toolbarReset: 'Reset the toolbar',
+@@ -384,6 +387,9 @@
+     torTitle: 'Fenêtre privée avec Tor',
+     torHint: 'Gratuit, sans compte : votre trafic passe par le réseau Tor, les sites ne voient pas votre adresse IP et rien n’est gardé à la fermeture. Plus lent ; certains sites bloquent Tor.',
+     torOpen: 'Ouvrir',
++    torBridges: 'Ponts Tor',
++    torBridgesHint: 'Là où le réseau Tor est bloqué (certains réseaux, pays), les ponts passent. Automatique : direct, puis Snowflake, puis meek.',
++    torBridgesAuto: 'Automatique', torBridgesDirect: 'Direct (sans pont)',
+     toolbarTitle: 'Barre d’outils',
+     toolbarHint: 'Glissez les boutons, la barre d’adresse aussi, où vous voulez ; l’œil en affiche ou masque un.',
+     toolbarReset: 'Rétablir la barre d’outils',
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -904,6 +904,13 @@
+                     el('span', {class: 'row-hint', text: t('torHint')})),
+                  el('button', {class: 'button', text: t('torOpen'),
+                                onclick: () => chrome.send('openTorWindow')})),
++              hasPref('hivey.tor_bridges') ? selectRow({
++                label: t('torBridges'), hint: t('torBridgesHint'), value: pref('hivey.tor_bridges'),
++                options: [{value: 'auto', label: t('torBridgesAuto')}, {value: 'direct', label: t('torBridgesDirect')},
++                          {value: 'snowflake', label: 'Snowflake'}, {value: 'obfs4', label: 'obfs4'},
++                          {value: 'meek', label: 'meek'}],
++                onChange: v => setPref('hivey.tor_bridges', v),
++              }) : null,
+               addons.length ? el('p', {class: 'muted small', text: t('vpnHint')}) : null,
+               ...addons.map(addon => el('div', {class: 'row'},
+                   el('div', {class: 'row-text'},
+--- a/chrome/browser/ui/hivey/hivey_tor.cc
++++ b/chrome/browser/ui/hivey/hivey_tor.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/hivey/hivey_tor.h"
+ 
++#include <algorithm>
++#include <optional>
+ #include <string>
+ #include <utility>
+ #include <vector>
+@@ -15,6 +17,7 @@
+ #include "base/files/file_util.h"
+ #include "base/functional/bind.h"
+ #include "base/hash/hash.h"
++#include "base/json/json_reader.h"
+ #include "base/memory/weak_ptr.h"
+ #include "base/no_destructor.h"
+ #include "base/path_service.h"
+@@ -23,14 +26,17 @@
+ #include "base/process/process_handle.h"
+ #include "base/scoped_observation.h"
+ #include "base/strings/escape.h"
++#include "base/strings/string_util.h"
+ #include "base/strings/string_number_conversions.h"
+ #include "base/strings/stringprintf.h"
+ #include "base/strings/utf_string_conversions.h"
++#include "base/task/single_thread_task_runner.h"
+ #include "base/task/thread_pool.h"
+ #include "base/threading/platform_thread.h"
+ #include "base/time/time.h"
+ #include "build/build_config.h"
+ #include "chrome/browser/browser_process.h"
++#include "chrome/browser/hivey/hivey_resource_limits.h"
+ #include "chrome/browser/preloading/preloading_prefs.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/profiles/profile_attributes_entry.h"
+@@ -60,17 +66,26 @@
+ // The hidden profile Tor windows belong to, in the user data directory.
+ constexpr char kTorProfileDir[] = "Hivey Tor";
+ constexpr char kCheckUrl[] = "https://check.torproject.org/";
+-// tor connects within seconds; past this, the window says it could not.
+-constexpr base::TimeDelta kBootstrapTimeout = base::Seconds(90);
++// A connection that does not get past this within its time gives up.
++constexpr base::TimeDelta kBootstrapTimeout = base::Seconds(120);
++// Automatic mode: a direct connection still at "Connecting to a relay"
++// after this is blocked; then bridges.
++constexpr base::TimeDelta kDirectStall = base::Seconds(20);
+ 
+ #if BUILDFLAG(IS_WIN)
+ constexpr char kTorDir[] = "Tor";
+ constexpr char kTorExe[] = "tor.exe";
++// tor starts in its folder: the pluggable transport by a relative name (the
++// folder may have spaces, which tor's option parsing does not take).
++constexpr char kLyrebird[] = "lyrebird.exe";
+ #else
+ constexpr char kTorDir[] = "tor";
+ constexpr char kTorExe[] = "tor";
++constexpr char kLyrebird[] = "./lyrebird";
+ #endif
+ 
++enum class Bootstrap { kConnected, kFailed, kStalled };
++
+ // A page of the browser's own, as a data: URL (the window before and when
+ // Tor connects).
+ GURL StatusPage(int message_id) {
+@@ -86,23 +101,97 @@
+   return GURL("data:text/html;base64," + base::Base64Encode(html));
+ }
+ 
+-// Runs on a blocking thread: waits for tor's log to say it is connected
+-// ("Bootstrapped 100%"), or that it failed. True when connected.
+-bool WaitForBootstrap(base::FilePath log) {
+-  const base::TimeTicks deadline = base::TimeTicks::Now() + kBootstrapTimeout;
+-  while (base::TimeTicks::Now() < deadline) {
++// The highest "Bootstrapped N%" in tor's log.
++int BootstrapProgress(const std::string& log) {
++  int progress = 0;
++  for (size_t at = log.find("Bootstrapped "); at != std::string::npos;
++       at = log.find("Bootstrapped ", at + 1)) {
++    const size_t start = at + 13;
++    const size_t end = log.find('%', start);
++    int value = 0;
++    if (end != std::string::npos &&
++        base::StringToInt(log.substr(start, end - start), &value)) {
++      progress = std::max(progress, value);
++    }
++  }
++  return progress;
++}
++
++// Runs on a blocking thread: follows tor's log until it is connected
++// ("Bootstrapped 100%"), fails, or (with `stall`) is still not past
++// "Connecting to a relay" (5 %) after it.
++Bootstrap WaitForBootstrap(base::FilePath log, base::TimeDelta stall) {
++  const base::TimeTicks start = base::TimeTicks::Now();
++  while (base::TimeTicks::Now() - start < kBootstrapTimeout) {
+     std::string contents;
+     if (base::ReadFileToString(log, &contents)) {
+-      if (contents.find("Bootstrapped 100%") != std::string::npos) {
+-        return true;
++      const int progress = BootstrapProgress(contents);
++      if (progress == 100) {
++        return Bootstrap::kConnected;
+       }
+       if (contents.find("[err]") != std::string::npos) {
+-        return false;
++        return Bootstrap::kFailed;
++      }
++      if (stall.is_positive() && base::TimeTicks::Now() - start > stall &&
++          progress <= 5) {
++        return Bootstrap::kStalled;
+       }
+     }
+     base::PlatformThread::Sleep(base::Milliseconds(300));
+   }
+-  return false;
++  return Bootstrap::kStalled;
++}
++
++// The ways to reach the Tor network, in the order to try them: "direct",
++// then bridges ("snowflake", "obfs4", "meek"), from the user's choice
++// (Hivey Studio > Privacy; "auto": direct, then Snowflake, then meek).
++std::vector<std::string> ConnectionModes() {
++  std::string choice = "auto";
++  if (PrefService* local_state = g_browser_process->local_state()) {
++    choice = local_state->GetString(kTorBridges);
++  }
++  if (choice == "direct" || choice == "snowflake" || choice == "obfs4" ||
++      choice == "meek") {
++    return {choice};
++  }
++  return {"direct", "snowflake", "meek"};
++}
++
++// tor's options for a bridge `mode`: its built-in bridges and the pluggable
++// transport that reaches them, from pt_config.json (shipped with tor, as in
++// Tor Browser).
++void AppendBridgeOptions(const base::FilePath& tor_dir,
++                         const std::string& mode,
++                         base::CommandLine* command) {
++  std::string json;
++  if (!base::ReadFileToString(tor_dir.AppendASCII("pt_config.json"), &json)) {
++    return;
++  }
++  std::optional<base::Value> config = base::JSONReader::Read(json, 0);
++  if (!config || !config->is_dict()) {
++    return;
++  }
++  const std::string* plugin = config->GetDict().FindStringByDottedPath(
++      mode == "snowflake" ? "pluggableTransports.snowflake"
++                          : "pluggableTransports.lyrebird");
++  const base::ListValue* bridges =
++      config->GetDict().FindListByDottedPath("bridges." + mode);
++  if (!plugin || !bridges) {
++    return;
++  }
++  std::string line = *plugin;
++  base::ReplaceSubstringsAfterOffset(&line, 0, "${pt_path}lyrebird",
++                                     kLyrebird);
++  command->AppendArg("--UseBridges");
++  command->AppendArg("1");
++  command->AppendArg("--ClientTransportPlugin");
++  command->AppendArg(line.substr(line.find(' ') + 1));
++  for (const base::Value& bridge : *bridges) {
++    if (bridge.is_string()) {
++      command->AppendArg("--Bridge");
++      command->AppendArg(bridge.GetString());
++    }
++  }
+ }
+ 
+ class TorController : public BrowserCollectionObserver {
+@@ -190,7 +279,9 @@
+       waiting_.emplace_back(tab->GetContents()->GetWeakPtr(), target);
+     }
+     if (state_ == State::kStopped) {
+-      Start(profile->GetPath());
++      profile_dir_ = profile->GetPath();
++      modes_ = ConnectionModes();
++      Start();
+     }
+   }
+ 
+@@ -203,11 +294,14 @@
+     return 9250 + static_cast<int>(base::PersistentHash(dir) % 500);
+   }
+ 
+-  void Start(const base::FilePath& profile_dir) {
++  // Starts tor with the first of `modes_` left.
++  void Start() {
++    const std::string mode = modes_.front();
++    modes_.erase(modes_.begin());
+     base::FilePath module_dir;
+     base::PathService::Get(base::DIR_MODULE, &module_dir);
+     const base::FilePath tor_dir = module_dir.AppendASCII(kTorDir);
+-    const base::FilePath data_dir = profile_dir.AppendASCII("tor");
++    const base::FilePath data_dir = profile_dir_.AppendASCII("tor");
+     const base::FilePath log = data_dir.AppendASCII("notice.log");
+     base::CreateDirectory(data_dir);
+     base::DeleteFile(log);
+@@ -230,11 +324,15 @@
+     arg("--ClientOnly", "1");
+     arg("--AvoidDiskWrites", "1");
+     arg("--Log", "notice file " + log.AsUTF8Unsafe());
++    if (mode != "direct") {
++      AppendBridgeOptions(tor_dir, mode, &command);
++    }
+     // tor exits by itself if the browser goes away.
+     arg("__OwningControllerProcess",
+         base::NumberToString(base::GetCurrentProcId()));
+ 
+     base::LaunchOptions options;
++    options.current_directory = tor_dir;
+ #if BUILDFLAG(IS_WIN)
+     options.start_hidden = true;
+ #else
+@@ -244,22 +342,36 @@
+ #endif
+     process_ = base::LaunchProcess(command, options);
+     if (!process_.IsValid()) {
+-      Finish(false);
++      Finish(Bootstrap::kFailed);
+       return;
+     }
+     state_ = State::kStarting;
++    // A direct connection that other ways can follow gives up early when
++    // the Tor network is blocked.
++    const base::TimeDelta stall =
++        mode == "direct" && !modes_.empty() ? kDirectStall : base::TimeDelta();
+     base::ThreadPool::PostTaskAndReplyWithResult(
+         FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+-        base::BindOnce(&WaitForBootstrap, log),
++        base::BindOnce(&WaitForBootstrap, log, stall),
+         base::BindOnce(&TorController::Finish, weak_factory_.GetWeakPtr()));
+   }
+ 
+-  void Finish(bool connected) {
+-    state_ = connected ? State::kReady : State::kStopped;
++  void Finish(Bootstrap result) {
++    const bool connected = result == Bootstrap::kConnected;
+     if (!connected && process_.IsValid()) {
+       process_.Terminate(0, /*wait=*/false);
+       process_ = base::Process();
+     }
++    if (!connected && !modes_.empty() && !waiting_.empty()) {
++      // The next way to the Tor network, once this tor has let go of its
++      // port.
++      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
++          FROM_HERE,
++          base::BindOnce(&TorController::Start, weak_factory_.GetWeakPtr()),
++          base::Seconds(2));
++      return;
++    }
++    state_ = connected ? State::kReady : State::kStopped;
+     for (auto& [contents, url] : waiting_) {
+       if (contents) {
+         contents->GetController().LoadURL(
+@@ -282,6 +394,9 @@
+ 
+   State state_ = State::kStopped;
+   base::Process process_;
++  base::FilePath profile_dir_;
++  // The ways to the Tor network still to try.
++  std::vector<std::string> modes_;
+   // Tabs waiting for Tor, with the page they then open.
+   std::vector<std::pair<base::WeakPtr<content::WebContents>, GURL>> waiting_;
+   base::ScopedObservation<BrowserCollection, BrowserCollectionObserver>
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -235,6 +235,7 @@
+     {hivey::kCpuLimitPercent, true},
+     {hivey::kNetworkLimitKbps, true},
+     {"hivey.gaming_mode", true},
++    {hivey::kTorBridges, true},
+     {hivey::kAutoUpdateEnabled, true},
+ };
+ 
+--- a/components/omnibox/browser/autocomplete_result.cc
++++ b/components/omnibox/browser/autocomplete_result.cc
+@@ -390,6 +390,23 @@
+       top_match = preserved_default_match;
+   }
+ 
++  // Hivey: an address typed as one ("example.fr": a known domain, no
++  // spaces) opens that site; a search for it, even one made before, never
++  // comes first.
++  if (input.type() == metrics::OmniboxInputType::URL &&
++      input.text().find_first_of(u" \t") == std::u16string::npos &&
++      top_match != matches_.end() &&
++      AutocompleteMatch::IsSearchType(top_match->type)) {
++    const auto site =
++        std::ranges::find_if(matches_, [](const AutocompleteMatch& match) {
++          return match.allowed_to_be_default_match &&
++                 !AutocompleteMatch::IsSearchType(match.type);
++        });
++    if (site != matches_.end()) {
++      top_match = site;
++    }
++  }
++
+   RotateMatchToFront(top_match, &matches_);
+ 
+   // The search provider may pre-deduplicate search suggestions. It's possible
