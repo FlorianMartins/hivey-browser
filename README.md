@@ -96,7 +96,8 @@ the [MIT license](LICENSE). Chromium and ungoogled-chromium keep their own
 licenses (BSD-3-Clause and others); the browser binary includes their notices
 at `chrome://credits`. uBlock Origin Lite is GPL-3.0-or-later and ships
 unmodified except for its default rulesets
-([source](https://github.com/uBlockOrigin/uBOL-home)). The server country in
+([source](https://github.com/uBlockOrigin/uBOL-home)); uBlock Origin
+(GPL-3.0-or-later) ships unmodified ([source](https://github.com/gorhill/uBlock)). The server country in
 the location bar uses [IP to Country Lite by DB-IP](https://db-ip.com),
 licensed under CC BY 4.0. The Hivey bar's icons are
 [Phosphor Icons](https://phosphoricons.com) (MIT); the modern style fills them

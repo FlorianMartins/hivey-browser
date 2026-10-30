@@ -765,6 +765,32 @@ def _write_update_key_header():
     return raw.hex()
 
 
+# uBlock Origin updates its filter lists from CDNs. The browser makes no
+# request at startup: the lists it ships with work at once, and the first
+# update (an "emergency" one too, as the shipped lists are old) waits this
+# long after launch; then uBlock Origin's own schedule.
+UBO_FIRST_UPDATE_SECONDS = 300
+
+
+def _apply_ubo_defaults(unpacked):
+    background = unpacked / 'js' / 'background.js'
+    s = background.read_text()
+    old = '    autoUpdateDelayAfterLaunch: 37,\n'
+    if s.count(old) != 1:
+        raise SystemExit('uBlock Origin: autoUpdateDelayAfterLaunch not found, check _apply_ubo_defaults')
+    background.write_text(s.replace(old, f'    autoUpdateDelayAfterLaunch: {UBO_FIRST_UPDATE_SECONDS},\n'))
+    start = unpacked / 'js' / 'start.js'
+    s = start.read_text()
+    old = '''    const updateDelay = needEmergencyUpdate
+        ? 2000
+'''
+    if s.count(old) != 1:
+        raise SystemExit('uBlock Origin: emergency update delay not found, check _apply_ubo_defaults')
+    start.write_text(s.replace(old, f'''    const updateDelay = needEmergencyUpdate
+        ? {UBO_FIRST_UPDATE_SECONDS * 1000}
+'''))
+
+
 def _apply_shield_defaults(unpacked, enable):
     """Hivey defaults for uBlock Origin Lite: extra rulesets on at first run
     (tracking parameters removal, cookie banners)."""
@@ -791,15 +817,23 @@ def _extension_key(name):
 
 
 def _unpack_release_zip(name, spec, unpacked):
-    """A published .zip, sha256-pinned (uBlock Origin Lite)."""
+    """A published .zip, sha256-pinned (uBlock Origin Lite, uBlock Origin).
+    "root" names the folder of the extension inside the archive, if any."""
     archive = download(spec['url'], BUILD / 'download_cache' / Path(spec['url']).name, spec['sha256'])
     with zipfile.ZipFile(archive) as zf:
         zf.extractall(unpacked)
+    if spec.get('root'):
+        root = unpacked / spec['root']
+        for item in list(root.iterdir()):
+            item.rename(unpacked / item.name)
+        root.rmdir()
     version = json.loads((unpacked / 'manifest.json').read_text())['version']
     if version != spec['version']:
         raise SystemExit(f"{spec['name']} archive is {version}, expected {spec['version']}")
     if name == 'hivey-shield':
         _apply_shield_defaults(unpacked, spec.get('enable_rulesets', []))
+    if name == 'ublock-origin':
+        _apply_ubo_defaults(unpacked)
     return version
 
 
@@ -847,6 +881,14 @@ TOOL_ICONS = {
     'Cyber': 'fingerprint', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
     'Bookmarks': 'bookmark-simple', 'Settings': 'gear-six', 'App': 'app-window',
 }
+# "Modern" icons: the Phosphor glyph in its fill weight (a different, solid
+# shape from the classic duotone one), white, 34 px centered in a 48 px square
+# (24 DIP at 2x): the browser fills it with a two-hue gradient of the item's
+# (or the theme's) color and draws a soft glow around it in the margin.
+MODERN_GLYPH_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+<g transform="translate(7 7) scale(0.1328125)" fill="#ffffff">{glyph}</g>
+</svg>"""
+MODERN_PX = 48
 # The bar's default order (the sidebar's own order for the others, after).
 WORKSPACE_ORDER = ['chat', 'web', 'agent', 'mcp', 'translate', 'improve', 'image', 'pdf', 'security',
                    'wisebase', 'benchmark']
@@ -961,6 +1003,27 @@ def _phosphor_duotone_dir():
     return icons
 
 
+def _modern_png(phosphor, key, name):
+    """The modern glyph for `key` (Phosphor glyph `name`, fill weight), white
+    at MODERN_PX, or None when the item has no color of its own."""
+    import cairosvg
+    if not name or key not in ICON_COLORS:
+        return None
+    glyph = (phosphor.parent / 'fill' / f'{name}-fill.svg').read_text()
+    glyph = re.sub(r'^.*?<svg[^>]*>|</svg>\s*$', '', glyph, flags=re.S).replace('currentColor', '#ffffff')
+    return cairosvg.svg2png(bytestring=MODERN_GLYPH_SVG.format(glyph=glyph).encode(),
+                            output_width=MODERN_PX, output_height=MODERN_PX)
+
+
+def _modern(arrays, phosphor, name, key, glyph):
+    """C++ (pointer, size) of the modern icon for `key`, adding its array."""
+    png = _modern_png(phosphor, key, glyph)
+    if png is None:
+        return 'nullptr, 0'
+    arrays.append(_c_bytes(name, png))
+    return f'{name}, sizeof({name})'
+
+
 def _white_png(svg):
     import cairosvg
     if 'xmlns=' not in svg:
@@ -1038,17 +1101,20 @@ def _write_bar_assets(src):
         arrays.append(_c_bytes(f'kHiveyBarWorkspacePng{i}', _white_png(svg)))
         workspaces.append(f'    {{{_c_string(tab["mode"])}, {_c_string(tab["title"]["en"])}, '
                           f'{_c_string(tab["title"]["fr"])}, kHiveyBarWorkspacePng{i}, '
-                          f'sizeof(kHiveyBarWorkspacePng{i}), {_icon_colors(tab["mode"])}}},')
+                          f'sizeof(kHiveyBarWorkspacePng{i}), {_icon_colors(tab["mode"])}, '
+                          f'{_modern(arrays, phosphor, f"kHiveyBarWorkspaceModernPng{i}", tab["mode"], name)}}},')
     for tool, name in TOOL_ICONS.items():
         arrays.append(_c_bytes(f'kHiveyBar{tool}Png', _white_png((phosphor / f'{name}-duotone.svg').read_text())))
         tools.append(f'inline constexpr HiveyBarIcon kHiveyBar{tool}Icon = {{kHiveyBar{tool}Png, '
-                     f'sizeof(kHiveyBar{tool}Png), {_icon_colors(tool)}}};')
+                     f'sizeof(kHiveyBar{tool}Png), {_icon_colors(tool)}, '
+                     f'{_modern(arrays, phosphor, f"kHiveyBar{tool}ModernPng", tool, name)}}};')
     hosts = _sidebar_frame_hosts(src)
     header = SRC / 'chrome/browser/hivey/hivey_bar_assets.h'
     header.write_text(
         '// Generated by scripts/hb.py (step "bundle"). Do not edit.\n'
-        '// Icons: Phosphor Icons (MIT), duotone, white; the browser tints them\n'
-        '// (classic) or fills them with a gradient (modern).\n'
+        '// Icons: Phosphor Icons (MIT), duotone, white; the browser tints them.\n'
+        '// Modern icons: Phosphor fill glyphs, white; the browser fills them with\n'
+        '// a gradient and draws their glow.\n'
         '#ifndef CHROME_BROWSER_HIVEY_HIVEY_BAR_ASSETS_H_\n'
         '#define CHROME_BROWSER_HIVEY_HIVEY_BAR_ASSETS_H_\n\n'
         '#include <stddef.h>\n\n'
@@ -1056,11 +1122,13 @@ def _write_bar_assets(src):
         '// Multicolor icons: 0xRRGGBB on a dark / a light toolbar (has_color is\n'
         '// false for an item without its own color).\n'
         'struct HiveyBarIcon {\n  const unsigned char* png;\n  size_t size;\n'
-        '  unsigned int color_on_dark;\n  unsigned int color_on_light;\n  bool has_color;\n};\n\n'
+        '  unsigned int color_on_dark;\n  unsigned int color_on_light;\n  bool has_color;\n'
+        '  const unsigned char* modern_png;\n  size_t modern_size;\n};\n\n'
         '// Hivey Tools\' workspaces (the sidebar\'s rail), in its order.\n'
         'struct HiveyBarWorkspace {\n  const char* mode;\n  const char* title_en;\n'
         '  const char* title_fr;\n  const unsigned char* png;\n  size_t png_size;\n'
-        '  unsigned int color_on_dark;\n  unsigned int color_on_light;\n  bool has_color;\n};\n'
+        '  unsigned int color_on_dark;\n  unsigned int color_on_light;\n  bool has_color;\n'
+        '  const unsigned char* modern_png;\n  size_t modern_size;\n};\n'
         'inline constexpr HiveyBarWorkspace kHiveyBarWorkspaces[] = {\n' + '\n'.join(workspaces) + '\n};\n\n'
         + '\n'.join(tools) + '\n\n'
         '// Sites Hivey Tools shows in frames (its web chats).\n'
@@ -1363,6 +1431,43 @@ def _write_setup_addons(path):
                     encoding='utf-8')
 
 
+def _make_setup_bitmaps(out_dir):
+    """The wizard's pictures, at 2x: the welcome and finish pages' panel
+    (164 x 314) and the header (150 x 57), dark ink with the logo in its
+    gradient and a soft indigo glow, like the browser's Aura theme."""
+    import io
+    import cairosvg
+    from PIL import Image, ImageDraw, ImageFilter
+    ink, deep = (19, 20, 31), (36, 27, 75)
+
+    def logo(size):
+        png = cairosvg.svg2png(url=str(ROOT / 'brand' / 'logo.svg'), output_width=size, output_height=size)
+        return Image.open(io.BytesIO(png)).convert('RGBA')
+
+    def panel(w, h, logo_size, center):
+        image = Image.new('RGB', (w, h), ink)
+        draw = ImageDraw.Draw(image)
+        for y in range(h):  # ink to a deep indigo, downwards
+            t = y / max(1, h - 1)
+            draw.line([(0, y), (w, y)], fill=tuple(round(a + (b - a) * t) for a, b in zip(ink, deep)))
+        mark = logo(logo_size)
+        pad = logo_size // 3  # room for the glow to fade out
+        alpha = Image.new('L', (logo_size + 2 * pad, logo_size + 2 * pad), 0)
+        alpha.paste(mark.getchannel('A'), (pad, pad))
+        glow = Image.new('RGBA', alpha.size, (139, 92, 246, 0))
+        glow.putalpha(alpha.filter(ImageFilter.GaussianBlur(logo_size / 10)).point(lambda a: a * 3 // 4))
+        x, y = center[0] - logo_size // 2, center[1] - logo_size // 2
+        image.paste(glow, (x - pad, y - pad), glow)
+        image.paste(mark, (x, y), mark)
+        return image
+
+    welcome = out_dir / 'setup-welcome.bmp'
+    header = out_dir / 'setup-header.bmp'
+    panel(328, 628, 200, (164, 250)).save(welcome)
+    panel(300, 114, 84, (240, 57)).save(header)
+    return welcome, header
+
+
 def _make_setup_wizard(version, mini_installer, dest):
     """The setup wizard, embedding the mini_installer (makensis, from the
     nsis package, runs on Linux)."""
@@ -1371,9 +1476,11 @@ def _make_setup_wizard(version, mini_installer, dest):
         raise SystemExit('makensis is missing: apt-get install nsis')
     addons = BUILD / 'setup-addons.nsh'
     _write_setup_addons(addons)
+    welcome, header = _make_setup_bitmaps(BUILD)
     run([makensis, '-V2', '-INPUTCHARSET', 'UTF8', f'-DVERSION={version}', f'-DMINI_INSTALLER={mini_installer}',
          f'-DICON={SRC / "chrome/installer/mini_installer/mini_installer.ico"}', f'-DLICENSE_FILE={ROOT / "LICENSE"}',
-         f'-DADDONS_NSH={addons}', f'-DOUTFILE={dest}', WINDOWS_SETUP_NSI])
+         f'-DADDONS_NSH={addons}', f'-DWELCOME_BMP={welcome}', f'-DHEADER_BMP={header}',
+         f'-DOUTFILE={dest}', WINDOWS_SETUP_NSI])
 
 
 def step_package(args):

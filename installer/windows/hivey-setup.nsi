@@ -91,13 +91,24 @@ Var Verbose
 
 !define MUI_ICON "${ICON}"
 !define MUI_ABORTWARNING
+; The browser's colors (Aura): dark ink, light text; the welcome and finish
+; pages, the header and the progress log follow them.
+!define MUI_BGCOLOR "13141F"
+!define MUI_TEXTCOLOR "F2F3FF"
+!define MUI_HEADER_TRANSPARENT_TEXT
+!define MUI_LICENSEPAGE_BGCOLOR "1B1C2B"
+!define MUI_INSTFILESPAGE_COLORS "E6E7FF 1B1C2B"
+!define MUI_INSTFILESPAGE_PROGRESSBAR "colored"
+!define MUI_WELCOMEFINISHPAGE_BITMAP_STRETCH "FitControl"
 !define MUI_COMPONENTSPAGE_SMALLDESC
 !ifdef WELCOME_BMP
   !define MUI_WELCOMEFINISHPAGE_BITMAP "${WELCOME_BMP}"
 !endif
 !ifdef HEADER_BMP
   !define MUI_HEADERIMAGE
+  !define MUI_HEADERIMAGE_RIGHT
   !define MUI_HEADERIMAGE_BITMAP "${HEADER_BMP}"
+  !define MUI_HEADERIMAGE_BITMAP_STRETCH "FitControl"
 !endif
 
 !define MUI_WELCOMEPAGE_TITLE "$(WelcomeTitle)"
@@ -201,7 +212,7 @@ SectionGroup /e "$(GrpAddonsName)" SecAddons
   !insertmacro HIVEY_ADDON_SECTIONS
 SectionGroupEnd
 
-Section /o "$(SecPrivacyName)" SecPrivacy
+Section "$(SecPrivacyName)" SecPrivacy
 SectionEnd
 
 Section "$(SecDesktopName)" SecDesktop
@@ -432,6 +443,9 @@ Function .onInit
   ${EndIf}
 
   ${If} ${Silent}
+    ; Silent (scripts, CI): privacy mode only when asked, as before; the
+    ; wizard checks it.
+    !insertmacro UnselectSection ${SecPrivacy}
     ClearErrors
     ${GetOptions} $Params "/PRIVACY" $0
     ${IfNot} ${Errors}

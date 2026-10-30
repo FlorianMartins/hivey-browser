@@ -3,6 +3,42 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4712 — 30 octobre 2026
+
+### Barre Hivey
+- **Icônes modernes « néon »** : une nouvelle image pour chaque onglet et
+  outil, le pictogramme plein dans un dégradé de deux teintes, avec un halo
+  lumineux ; bien distinctes des icônes classiques.
+- Clic droit sur **Favoris** : « Importer les favoris d'un autre
+  navigateur… ».
+
+### Barre d'adresse
+- Le bouton **Traduire** traduit la page directement (Google Traduction),
+  sans ouvrir la sidebar. Rien n'est envoyé à Google tant que vous ne
+  cliquez pas.
+- Bouton **Incrustation vidéo** (image dans l'image) quand une vidéo joue ;
+  et la vidéo vous suit automatiquement dans une petite fenêtre quand vous
+  changez d'onglet (réglable dans Paramètres > Onglets).
+- La bulle du serveur affiche l'**IPv4 et l'IPv6** du site, et le
+  **drapeau** s'affiche correctement sur la ligne Pays.
+
+### Personnalisation
+- **Barre d'outils personnalisable** (Paramètres > Disposition) : déplacez
+  les boutons et la barre d'adresse où vous voulez, masquez-en, ajoutez-en
+  (impression, téléchargements, historique…).
+- **Importer** a sa propre section dans les Paramètres : favoris de Chrome,
+  Edge, Brave, Vivaldi, Opera, Chromium (aussi en Flatpak et Snap sous
+  Linux) et Firefox.
+
+### Confidentialité
+- **uBlock Origin complet** intégré, en plus d'uBlock Origin Lite : bloque
+  les pubs YouTube et Twitch (Twitch insère certaines pubs dans la vidéo
+  elle-même : aucun bloqueur n'en vient à bout à 100 %).
+
+### Installation (Windows)
+- L'assistant prend les couleurs du navigateur et **coche toutes les
+  options** par défaut (modules, mode confidentialité, raccourcis).
+
 ## 156.0.8078.4711 — 29 octobre 2026
 
 ### Barre Hivey
