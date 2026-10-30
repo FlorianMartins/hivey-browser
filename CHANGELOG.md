@@ -3,6 +3,28 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4713 — 30 octobre 2026
+
+### Confidentialité
+- **Copier le lien sans pistage**, comme Firefox : clic droit sur un lien
+  (ou sur la page : « Copier l'adresse de la page sans pistage ») ; les
+  balises qui vous suivent (utm_*, fbclid, gclid, msclkid, igshid, si de
+  YouTube…) sont retirées avant la copie.
+- **VPN au choix** : Proton VPN (gratuit avec un compte Proton, Suisse,
+  sans journaux, open source) se propose pendant l'installation, ou dans
+  Paramètres > Confidentialité > VPN. Rien n'est installé si vous ne le
+  choisissez pas.
+
+### Profils
+- **Nouvelles images de profil Hivey**, en trois styles : des mascottes
+  rigolotes (abeille, robot, fantôme, renard, astronaute…), des emblèmes
+  sérieux et des motifs sobres.
+
+### Barre d'adresse
+- Le bouton Traduire de Hivey disparaît (il faisait doublon avec celui de
+  Chromium) ; « Traduire cette page » dans la bulle du drapeau et le clic
+  droit traduisent toujours la page directement.
+
 ## 156.0.8078.4712 — 30 octobre 2026
 
 ### Barre Hivey

@@ -29,6 +29,21 @@
       "fr": "uBlock Origin complet : bloque aussi les pubs YouTube et Twitch, les pop-ups et les sites malveillants."
     }
   },
+  "proton-vpn": {
+    "name": "Proton VPN",
+    "type": "webstore-crx",
+    "id": "jplgfhpmjnbigmhklmmbgecoobifkmpa",
+    "version": "1.3.6",
+    "sha256": "bd3c0f5e404a94e034154cda4130f5865745ccc7afb527f8d481e5db392641ad",
+    "license": "GPL-3.0",
+    "source": "https://github.com/ProtonVPN/proton-vpn-browser-extension",
+    "optional": true,
+    "pin": true,
+    "setup": {
+      "en": "Proton VPN: hides your IP address from sites. Free with a Proton account (Switzerland, no logs, open source).",
+      "fr": "Proton VPN : cache votre adresse IP aux sites. Gratuit avec un compte Proton (Suisse, sans journaux, open source)."
+    }
+  },
   "hivey-ai": {
     "name": "Hivey AI",
     "type": "submodule",

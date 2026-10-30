@@ -30,6 +30,7 @@ import configparser
 import gzip
 import re
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -717,8 +718,20 @@ def _write_hivey_version():
     return f'{major}.{minor}.{build}.{patch}'
 
 
+def _write_avatars():
+    """Hivey's profile pictures (scripts/avatars.py) in place of Chromium's
+    modern avatars, at 100 % and 200 %."""
+    import cairosvg
+    import avatars
+    theme = SRC / 'chrome/app/theme'
+    avatars.render(_phosphor_duotone_dir().parent / 'fill', theme / 'default_100_percent/common/modern_avatars',
+                   theme / 'default_200_percent/common/modern_avatars', cairosvg)
+    log(f'avatars: {len(avatars.SLOTS)} profile pictures')
+
+
 def step_brand(args):
     run([sys.executable, ROOT / 'scripts' / 'branding.py', SRC])
+    _write_avatars()
     version = _write_hivey_version()
     log(f'version {version}')
     mark_done('brand', version=version)
@@ -1152,6 +1165,23 @@ def _unpack_directory(name, spec, unpacked):
     return json.loads((unpacked / 'manifest.json').read_text())['version']
 
 
+def _fetch_webstore_crx(spec, crx):
+    """An extension as its publisher signed it (a VPN's own build), from the
+    Chrome Web Store, sha256-pinned: its id is the publisher's, nothing is
+    repacked. Returns (id, version)."""
+    url = ('https://clients2.google.com/service/update2/crx?response=redirect&prodversion=156.0.0.0'
+           f'&acceptformat=crx2,crx3&x=id%3D{spec["id"]}%26uc')
+    cached = download(url, BUILD / 'download_cache' / f'{spec["id"]}-{spec["version"]}.crx', spec['sha256'])
+    data = cached.read_bytes()
+    header = int.from_bytes(data[8:12], 'little')
+    with zipfile.ZipFile(io.BytesIO(data[12 + header:])) as archive:
+        version = json.loads(archive.read('manifest.json').decode('utf-8-sig'))['version']
+    if version != spec['version']:
+        raise SystemExit(f"{spec['name']} is {version}, expected {spec['version']}")
+    shutil.copy2(cached, crx)
+    return spec['id'], version
+
+
 def step_bundle(args):
     """Generated inputs of the build: the bundled extensions (signed .crx files
     and a header listing them) and the public key of the update signature."""
@@ -1162,13 +1192,17 @@ def step_bundle(args):
     unpackers = {'release-zip': _unpack_release_zip, 'submodule': _unpack_submodule, 'directory': _unpack_directory}
     entries, defines, info = [], [], {}
     for name, spec in specs.items():
-        unpacked = BUNDLED / name
-        unpacked.mkdir()
-        version = unpackers[spec['type']](name, spec, unpacked)
         crx = BUNDLED / f'{name}.crx'
-        ext_id = crx3.pack(unpacked, _extension_key(name), crx)
+        if spec['type'] == 'webstore-crx':
+            ext_id, version = _fetch_webstore_crx(spec, crx)
+        else:
+            unpacked = BUNDLED / name
+            unpacked.mkdir()
+            version = unpackers[spec['type']](name, spec, unpacked)
+            ext_id = crx3.pack(unpacked, _extension_key(name), crx)
         macro = name.upper().replace('-', '_').replace('HIVEY_', 'HIVEY_BUNDLED_')
-        entries.append(f'    {{"{ext_id}", "{version}", "{name}.crx", {str(spec.get("pin", False)).lower()}}},'
+        entries.append(f'    {{"{ext_id}", "{version}", "{name}.crx", {str(spec.get("pin", False)).lower()}, '
+                       f'{str(spec.get("optional", False)).lower()}, {_c_string(spec["name"])}}},'
                        f'  // {spec["name"]} ({spec["license"]})')
         defines.append(f'#define {macro}_ID "{ext_id}"')
         info[name] = {'id': ext_id, 'version': version, 'sha256': sha256_file(crx)}
@@ -1186,6 +1220,8 @@ def step_bundle(args):
         '  const char* version;\n'
         '  const char* crx;\n'
         '  bool pinned;  // shown in the toolbar on install\n'
+        '  bool optional;  // installed only when the user chose it\n'
+        '  const char* name;\n'
         '};\n'
         'inline constexpr HiveyBundledExtension kHiveyBundledExtensions[] = {\n'
         + '\n'.join(entries) + '\n};\n\n'
@@ -1403,7 +1439,8 @@ def _write_setup_addons(path):
     recorded as removed by the user in the initial preferences."""
     specs = json.loads((ROOT / 'extensions' / 'bundled.json').read_text())
     ids = load_state().get('bundle', {}).get('extensions', {})
-    macros = {'SECTIONS': [], 'STRINGS': [], 'DESCRIPTIONS': [], 'UNSELECTED_IDS': [], 'SILENT_OPTIONS': []}
+    macros = {'SECTIONS': [], 'OPTIONAL_SECTIONS': [], 'STRINGS': [], 'DESCRIPTIONS': [], 'UNSELECTED_IDS': [],
+              'SELECTED_OPTIONAL': [], 'SILENT_OPTIONS': []}
     for name, spec in specs.items():
         if name not in ids:
             raise SystemExit(f'{name}: no extension ID, run hb.py bundle first')
@@ -1411,12 +1448,25 @@ def _write_setup_addons(path):
         section = f'SecAddon_{key}'
         setup = spec.get('setup', {})
         title = _nsis_string(spec.get('display_name', spec['name']))
-        unchecked = '' if setup.get('default', True) else '/o '
-        macros['SECTIONS'].append(f'  Section {unchecked}"{title}" {section}\n  SectionEnd')
+        optional = spec.get('optional', False)
+        unchecked = '' if setup.get('default', not optional) else '/o '
+        macros['OPTIONAL_SECTIONS' if optional else 'SECTIONS'].append(
+            f'  Section {unchecked}"{title}" {section}\n  SectionEnd')
         for lang, nsis_lang in (('en', 'ENGLISH'), ('fr', 'FRENCH')):
             desc = _nsis_string(setup.get(lang) or setup.get('en') or f'{spec["name"]} ({spec["license"]})')
             macros['STRINGS'].append(f'  LangString AddonDesc_{key} ${{LANG_{nsis_lang}}} "{desc}"')
         macros['DESCRIPTIONS'].append(f'  !insertmacro MUI_DESCRIPTION_TEXT ${{{section}}} "$(AddonDesc_{key})"')
+        if optional:  # chosen: listed in hivey.optional_addons
+            macros['SELECTED_OPTIONAL'].append(f'  ${{If}} ${{SectionIsSelected}} ${{{section}}}\n'
+                                               f'    StrCpy $R8 \'$R8"{ids[name]["id"]}",\'\n'
+                                               f'  ${{EndIf}}')
+            macros['SILENT_OPTIONS'].append(f'  !insertmacro UnselectSection ${{{section}}}\n'
+                                            f'  ClearErrors\n'
+                                            f'  ${{GetOptions}} $Params "/ADD-{name}" $0\n'
+                                            f'  ${{IfNot}} ${{Errors}}\n'
+                                            f'    !insertmacro SelectSection ${{{section}}}\n'
+                                            f'  ${{EndIf}}')
+            continue
         macros['UNSELECTED_IDS'].append(f'  ${{IfNot}} ${{SectionIsSelected}} ${{{section}}}\n'
                                         f'    StrCpy $R9 \'$R9"{ids[name]["id"]}",\'\n'
                                         f'  ${{EndIf}}')
