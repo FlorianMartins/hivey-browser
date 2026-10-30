@@ -246,7 +246,7 @@ try:
           'example.com' in str(tools['whois']), f'{tools}')
     p.goto('chrome://hivey/', settle=3)
     nav = p.eval("document.querySelectorAll('.nav-item').length")
-    check('Hivey Studio loads', nav == 6, f'{nav} sections in the navigation')
+    check('Hivey Studio loads', nav == 7, f'{nav} sections in the navigation')
     p.shot('hivey-studio')
     p.goto('about:blank', settle=0.5)
     p.goto('chrome://hivey/#resources', settle=4)

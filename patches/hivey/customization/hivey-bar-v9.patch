@@ -541,15 +541,7 @@
                             base::RepeatingClosure callback);
 --- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
 +++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
-@@ -9,6 +9,7 @@
- #include <utility>
- #include <vector>
- 
-+#include "base/containers/contains.h"
- #include "base/functional/bind.h"
- #include "base/strings/strcat.h"
- #include "base/strings/string_util.h"
-@@ -31,6 +32,7 @@
+@@ -31,6 +31,7 @@
  #include "net/base/ip_address.h"
  #include "chrome/browser/hivey/hivey_flags.h"
  #include "chrome/browser/profiles/profile.h"
@@ -557,8 +549,11 @@
  #include "chrome/browser/ui/browser_commands.h"
  #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
-@@ -57,7 +59,18 @@
+@@ -55,9 +56,21 @@
+ #include "chrome/browser/ui/layout_constants.h"
+ #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
  #include "chrome/grit/generated_resources.h"
++#include "components/translate/core/browser/translate_manager.h"
  #include "components/vector_icons/vector_icons.h"
  #include "content/public/browser/page_navigator.h"
 +#include "content/public/browser/browser_context.h"
@@ -701,7 +696,7 @@
 +                for (const net::IPEndPoint& endpoint : addresses) {
 +                  const net::IPAddress& ip = endpoint.address();
 +                  if (ip.IsIPv6() == v6 && ips.size() < 3 &&
-+                      !base::Contains(ips, ip.ToString())) {
++                      !std::ranges::contains(ips, ip.ToString())) {
 +                    ips.push_back(ip.ToString());
 +                  }
 +                }
@@ -710,7 +705,7 @@
 +                    net::IPAddress::FromIPLiteral(known).value_or(
 +                        net::IPAddress());
 +                if (page_ip.IsValid() && page_ip.IsIPv6() == v6 &&
-+                    !base::Contains(ips, known)) {
++                    !std::ranges::contains(ips, known)) {
 +                  ips.insert(ips.begin(), known);
 +                }
 +                ShowAddresses(label, ips);
@@ -968,10 +963,10 @@
  }
  
 +void ToolbarView::ApplyHiveyToolbarLayout() {
-+  if (display_mode_ != DisplayMode::NORMAL) {
++  if (display_mode_ != DisplayMode::kNormal) {
 +    return;
 +  }
-+  const PrefService* prefs = browser_->profile()->GetPrefs();
++  const PrefService* prefs = browser_->GetProfile()->GetPrefs();
 +  // The buttons the user places, in Chromium's order.
 +  const std::pair<std::string_view, views::View*> items[] = {
 +      {"back", back_},

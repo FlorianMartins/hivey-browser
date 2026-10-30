@@ -765,6 +765,32 @@ def _write_update_key_header():
     return raw.hex()
 
 
+# uBlock Origin updates its filter lists from CDNs. The browser makes no
+# request at startup: the lists it ships with work at once, and the first
+# update (an "emergency" one too, as the shipped lists are old) waits this
+# long after launch; then uBlock Origin's own schedule.
+UBO_FIRST_UPDATE_SECONDS = 300
+
+
+def _apply_ubo_defaults(unpacked):
+    background = unpacked / 'js' / 'background.js'
+    s = background.read_text()
+    old = '    autoUpdateDelayAfterLaunch: 37,\n'
+    if s.count(old) != 1:
+        raise SystemExit('uBlock Origin: autoUpdateDelayAfterLaunch not found, check _apply_ubo_defaults')
+    background.write_text(s.replace(old, f'    autoUpdateDelayAfterLaunch: {UBO_FIRST_UPDATE_SECONDS},\n'))
+    start = unpacked / 'js' / 'start.js'
+    s = start.read_text()
+    old = '''    const updateDelay = needEmergencyUpdate
+        ? 2000
+'''
+    if s.count(old) != 1:
+        raise SystemExit('uBlock Origin: emergency update delay not found, check _apply_ubo_defaults')
+    start.write_text(s.replace(old, f'''    const updateDelay = needEmergencyUpdate
+        ? {UBO_FIRST_UPDATE_SECONDS * 1000}
+'''))
+
+
 def _apply_shield_defaults(unpacked, enable):
     """Hivey defaults for uBlock Origin Lite: extra rulesets on at first run
     (tracking parameters removal, cookie banners)."""
@@ -806,6 +832,8 @@ def _unpack_release_zip(name, spec, unpacked):
         raise SystemExit(f"{spec['name']} archive is {version}, expected {spec['version']}")
     if name == 'hivey-shield':
         _apply_shield_defaults(unpacked, spec.get('enable_rulesets', []))
+    if name == 'ublock-origin':
+        _apply_ubo_defaults(unpacked)
     return version
 
 
