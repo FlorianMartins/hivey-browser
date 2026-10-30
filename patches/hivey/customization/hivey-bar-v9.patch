@@ -33,12 +33,10 @@
 \ No newline at end of file
 --- a/chrome/browser/hivey/hivey_bar_prefs.cc
 +++ b/chrome/browser/hivey/hivey_bar_prefs.cc
-@@ -27,6 +27,10 @@
+@@ -27,6 +27,8 @@
    registry->RegisterDictionaryPref(kHiveyBarZones);
    registry->RegisterListPref(kHiveyBarHidden);
    registry->RegisterListPref(kHiveyBarApps);
-+  registry->RegisterListPref(kHiveyToolbarOrder);
-+  registry->RegisterListPref(kHiveyToolbarHidden);
 +  registry->RegisterListPref(kHiveyToolbarOrder);
 +  registry->RegisterListPref(kHiveyToolbarHidden);
    registry->RegisterBooleanPref(kHiveyGoogleDefaultApplied, false);
@@ -46,17 +44,10 @@
  
 --- a/chrome/browser/hivey/hivey_bar_prefs.h
 +++ b/chrome/browser/hivey/hivey_bar_prefs.h
-@@ -45,6 +45,20 @@
+@@ -45,6 +45,13 @@
  inline constexpr char kHiveyBarOrder[] = "hivey.bar.order";
  // Ids of the buttons the user hid.
  inline constexpr char kHiveyBarHidden[] = "hivey.bar.hidden";
-+// The toolbar's buttons in the user's order ("back", "forward", "reload",
-+// "home", "location", "extensions", "pinned", "avatar", "menu"); the ones
-+// left out keep Chromium's order, after. Empty: Chromium's toolbar.
-+inline constexpr char kHiveyToolbarOrder[] = "hivey.toolbar.order";
-+// The toolbar buttons the user hid ("back", "reload", "extensions",
-+// "pinned"; Forward and Home have Chromium's own settings).
-+inline constexpr char kHiveyToolbarHidden[] = "hivey.toolbar.hidden";
 +// The toolbar's buttons in the user's order ("back", "forward", "reload",
 +// "home", "location", "extensions", "pinned", "avatar", "menu"); the ones
 +// left out keep Chromium's order, after. Empty: Chromium's toolbar.
@@ -1044,27 +1035,24 @@
      home_->SetVisible(show_home_button_.GetValue());
 --- a/chrome/browser/ui/views/toolbar/toolbar_view.h
 +++ b/chrome/browser/ui/views/toolbar/toolbar_view.h
-@@ -7,6 +7,10 @@
+@@ -7,6 +7,8 @@
  
  #include <memory>
  #include <optional>
 +#include <set>
 +#include <string>
-+#include <set>
-+#include <string>
  #include <vector>
  
  #include "base/gtest_prod_util.h"
-@@ -29,6 +33,8 @@
+@@ -29,6 +31,7 @@
  #include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions.h"
  #include "chrome/browser/ui/views/toolbar/split_tabs_button.h"
  #include "components/apps/link_capturing/intent_picker_info.h"
 +#include "components/prefs/pref_change_registrar.h"
-+#include "components/prefs/pref_change_registrar.h"
  #include "components/prefs/pref_member.h"
  #include "ui/base/accelerators/accelerator.h"
  #include "ui/base/interaction/element_identifier.h"
-@@ -368,6 +374,14 @@
+@@ -368,6 +371,10 @@
  
    void OnShowHomeButtonChanged();
  
@@ -1072,22 +1060,13 @@
 +  // order, the hidden ones hidden.
 +  void ApplyHiveyToolbarLayout();
 +
-+  // Hivey: the user's toolbar (Hivey Studio > Layout): the buttons in their
-+  // order, the hidden ones hidden.
-+  void ApplyHiveyToolbarLayout();
-+
    void OnTouchUiChanged();
  
    void InitGlicContainer();
-@@ -479,6 +493,16 @@
+@@ -479,6 +486,11 @@
    // Controls whether or not a home button should be shown on the toolbar.
    BooleanPrefMember show_home_button_;
  
-+  // Hivey: the toolbar's order and hidden buttons, and the buttons this
-+  // hid (shown again only by it).
-+  PrefChangeRegistrar hivey_toolbar_prefs_;
-+  std::set<std::string> hivey_hidden_;
-+
 +  // Hivey: the toolbar's order and hidden buttons, and the buttons this
 +  // hid (shown again only by it).
 +  PrefChangeRegistrar hivey_toolbar_prefs_;
