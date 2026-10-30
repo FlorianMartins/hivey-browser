@@ -1255,7 +1255,8 @@ TOR_BUNDLES = {
 def _stage_tor():
     """tor next to the browser, in <module dir>/tor ("Tor" on Windows, which
     the installer packs): the client, its libraries on Linux, the GeoIP
-    files and its license. Not the pluggable transports (bridges)."""
+    files, its license, and lyrebird with pt_config.json (the bridges:
+    Snowflake, obfs4, meek)."""
     name, sha256 = TOR_BUNDLES[TARGET]
     archive = download(f'https://dist.torproject.org/torbrowser/{TOR_VERSION}/{name}',
                        BUILD / 'download_cache' / name, sha256)
@@ -1263,11 +1264,14 @@ def _stage_tor():
     shutil.rmtree(dest, ignore_errors=True)
     dest.mkdir(parents=True)
     wanted = {'tor/tor.exe', 'tor/tor', 'tor/libcrypto.so.3', 'tor/libssl.so.3', 'tor/libevent-2.1.so.7',
-              'data/geoip', 'data/geoip6', 'docs/tor.txt'}
+              'data/geoip', 'data/geoip6', 'docs/tor.txt', 'tor/pluggable_transports/lyrebird',
+              'tor/pluggable_transports/lyrebird.exe', 'tor/pluggable_transports/pt_config.json',
+              'docs/lyrebird.txt'}
     with tarfile.open(archive) as t:
         for member in t.getmembers():
             if member.isfile() and member.name in wanted:
-                target = dest / ('LICENSE.txt' if member.name == 'docs/tor.txt' else Path(member.name).name)
+                renamed = {'docs/tor.txt': 'LICENSE.txt', 'docs/lyrebird.txt': 'LICENSE-lyrebird.txt'}
+                target = dest / renamed.get(member.name, Path(member.name).name)
                 with t.extractfile(member) as src, open(target, 'wb') as out:
                     shutil.copyfileobj(src, out)
                 if member.mode & 0o111:
