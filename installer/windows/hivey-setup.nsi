@@ -148,6 +148,8 @@ LangString SecBrowserDesc ${LANG_ENGLISH} "The browser. Updates install by thems
 LangString SecBrowserDesc ${LANG_FRENCH} "Le navigateur. Les mises à jour s'installent d'elles-mêmes (Hivey Studio > À propos)."
 LangString GrpAddonsName ${LANG_ENGLISH} "Bundled add-ons"
 LangString GrpAddonsName ${LANG_FRENCH} "Modules intégrés"
+LangString GrpVpnName ${LANG_ENGLISH} "VPN (optional, free with an account)"
+LangString GrpVpnName ${LANG_FRENCH} "VPN (facultatif, gratuit avec un compte)"
 LangString GrpAddonsDesc ${LANG_ENGLISH} "Extensions that ship with the browser. An add-on left out is not installed in your profile."
 LangString GrpAddonsDesc ${LANG_FRENCH} "Extensions livrées avec le navigateur. Un module décoché n'est pas installé dans votre profil."
 LangString SecPrivacyName ${LANG_ENGLISH} "Privacy mode"
@@ -210,6 +212,11 @@ SectionEnd
 
 SectionGroup /e "$(GrpAddonsName)" SecAddons
   !insertmacro HIVEY_ADDON_SECTIONS
+SectionGroupEnd
+
+; Optional add-ons (a VPN): unchecked, the user's choice.
+SectionGroup /e "$(GrpVpnName)" SecVpn
+  !insertmacro HIVEY_ADDON_OPTIONAL_SECTIONS
 SectionGroupEnd
 
 Section "$(SecPrivacyName)" SecPrivacy
@@ -527,6 +534,11 @@ Function WritePrefs
   ${If} $R9 != ""
     StrCpy $R9 $R9 -1  ; trailing comma
   ${EndIf}
+  StrCpy $R8 ""
+  !insertmacro HIVEY_ADDON_SELECTED_OPTIONAL
+  ${If} $R8 != ""
+    StrCpy $R8 $R8 -1  ; trailing comma
+  ${EndIf}
   StrCpy $R1 "true"
   ${If} ${SectionIsSelected} ${SecDesktop}
     StrCpy $R1 "false"
@@ -542,7 +554,8 @@ Function WritePrefs
   FileWrite $0 '    "do_not_create_quick_launch_shortcut": true,$\r$\n'
   FileWrite $0 '    "do_not_create_taskbar_shortcut": $R2$\r$\n'
   FileWrite $0 '  },$\r$\n'
-  FileWrite $0 '  "extensions": { "external_uninstalls": [$R9] }'
+  FileWrite $0 '  "extensions": { "external_uninstalls": [$R9] },$\r$\n'
+  FileWrite $0 '  "hivey": { "optional_addons": [$R8] }'
   ${If} ${SectionIsSelected} ${SecPrivacy}
     FileWrite $0 ',$\r$\n'
     FileWrite $0 '  "profile": {$\r$\n'

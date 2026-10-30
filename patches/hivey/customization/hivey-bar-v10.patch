@@ -1,0 +1,751 @@
+# Hivey 4713: copy links and page addresses without tracking (like Firefox); the location bar's Translate button goes (the server bubble's translates in place); Hivey profile pictures (labels); optional bundled add-ons (Proton VPN): installed only when chosen in the setup wizard or Hivey Studio > Privacy.
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -20687,6 +20687,12 @@
+         <message name="IDS_HIVEY_PICTURE_IN_PICTURE" desc="Tooltip of the location bar button, shown while the page plays a video, that moves the video to a small always-on-top window">
+           Picture in picture: keep watching in another tab
+         </message>
++        <message name="IDS_HIVEY_COPY_CLEAN_LINK" desc="Context menu item on a link: copy its address without the tracking parameters (utm_*, fbclid...)">
++          Copy link without tracking
++        </message>
++        <message name="IDS_HIVEY_COPY_CLEAN_PAGE_URL" desc="Context menu item on a page: copy its address without the tracking parameters (utm_*, fbclid...)">
++          Copy page address without tracking
++        </message>
+         <message name="IDS_HIVEY_OPEN_AS_APP" desc="Tooltip of the location bar button that opens the page as an app, in its own window with its own taskbar icon">
+           Open as an app, in its own window
+         </message>
+--- a/chrome/app/profiles_strings.grdp
++++ b/chrome/app/profiles_strings.grdp
+@@ -465,92 +465,92 @@
+   <message name="IDS_DEFAULT_AVATAR_LABEL_26" desc="The label for the default avatar.">
+     Default avatar
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_27" desc="The label for the cat avatar.">
+-    Cat
++  <message name="IDS_DEFAULT_AVATAR_LABEL_27" desc="The label for the bee profile picture (fun style).">
++    Bee
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_28" desc="The label for the corgi avatar.">
+-    Corgi
++  <message name="IDS_DEFAULT_AVATAR_LABEL_28" desc="The label for the robot profile picture (fun style).">
++    Robot
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_29" desc="The label for the dragon avatar.">
+-    Dragon
++  <message name="IDS_DEFAULT_AVATAR_LABEL_29" desc="The label for the ghost profile picture (fun style).">
++    Ghost
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_30" desc="The label for the elephant avatar.">
+-    Elephant
++  <message name="IDS_DEFAULT_AVATAR_LABEL_30" desc="The label for the alien profile picture (fun style).">
++    Alien
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_31" desc="The label for the fox avatar.">
++  <message name="IDS_DEFAULT_AVATAR_LABEL_31" desc="The label for the fox profile picture (fun style).">
+     Fox
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_32" desc="The label for the monkey avatar.">
+-    Monkey
++  <message name="IDS_DEFAULT_AVATAR_LABEL_32" desc="The label for the cat profile picture (fun style).">
++    Cat
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_33" desc="The label for the panda avatar.">
++  <message name="IDS_DEFAULT_AVATAR_LABEL_33" desc="The label for the panda profile picture (fun style).">
+     Panda
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_34" desc="The label for the penguin avatar.">
+-    Penguin
++  <message name="IDS_DEFAULT_AVATAR_LABEL_34" desc="The label for the frog profile picture (fun style).">
++    Frog
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_35" desc="The label for the butterfly avatar.">
+-    Butterfly
++  <message name="IDS_DEFAULT_AVATAR_LABEL_35" desc="The label for the monster profile picture (fun style).">
++    Monster
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_36" desc="The label for the rabbit avatar.">
+-    Rabbit
++  <message name="IDS_DEFAULT_AVATAR_LABEL_36" desc="The label for the octopus profile picture (fun style).">
++    Octopus
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_37" desc="The label for the unicorn avatar.">
+-    Unicorn
++  <message name="IDS_DEFAULT_AVATAR_LABEL_37" desc="The label for the astronaut profile picture (fun style).">
++    Astronaut
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_38" desc="The label for the basketball avatar.">
+-    Basketball
++  <message name="IDS_DEFAULT_AVATAR_LABEL_38" desc="The label for the hexagon profile picture (serious style).">
++    Hive
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_39" desc="The label for the bike avatar.">
+-    Bike
++  <message name="IDS_DEFAULT_AVATAR_LABEL_39" desc="The label for the briefcase profile picture (serious style).">
++    Work
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_40" desc="The label for the bird avatar.">
+-    Bird
++  <message name="IDS_DEFAULT_AVATAR_LABEL_40" desc="The label for the shield-check profile picture (serious style).">
++    Shield
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_41" desc="The label for the cheese avatar.">
+-    Cheese
++  <message name="IDS_DEFAULT_AVATAR_LABEL_41" desc="The label for the compass profile picture (serious style).">
++    Compass
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_42" desc="The label for the football avatar.">
+-    Football
++  <message name="IDS_DEFAULT_AVATAR_LABEL_42" desc="The label for the mountains profile picture (serious style).">
++    Mountains
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_43" desc="The label for the ramen avatar.">
+-    Ramen
++  <message name="IDS_DEFAULT_AVATAR_LABEL_43" desc="The label for the lightning profile picture (serious style).">
++    Lightning
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_44" desc="The label for the sunglasses avatar.">
+-    Sunglasses
++  <message name="IDS_DEFAULT_AVATAR_LABEL_44" desc="The label for the atom profile picture (serious style).">
++    Atom
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_45" desc="The label for the sushi avatar.">
+-    Sushi
++  <message name="IDS_DEFAULT_AVATAR_LABEL_45" desc="The label for the planet profile picture (serious style).">
++    Planet
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_46" desc="The label for the tamagotchi avatar.">
+-    Tamagotchi
++  <message name="IDS_DEFAULT_AVATAR_LABEL_46" desc="The label for the rocket-launch profile picture (serious style).">
++    Rocket
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_47" desc="The label for the vinyl avatar.">
+-    Vinyl
++  <message name="IDS_DEFAULT_AVATAR_LABEL_47" desc="The label for the terminal-window profile picture (serious style).">
++    Code
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_48" desc="The label for the avocado avatar.">
+-    Avocado
++  <message name="IDS_DEFAULT_AVATAR_LABEL_48" desc="The label for the dot profile picture (sober style).">
++    Dot
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_49" desc="The label for the cappuccino avatar.">
+-    Cappuccino
++  <message name="IDS_DEFAULT_AVATAR_LABEL_49" desc="The label for the ring profile picture (sober style).">
++    Ring
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_50" desc="The label for the icecream avatar.">
+-    Icecream
++  <message name="IDS_DEFAULT_AVATAR_LABEL_50" desc="The label for the split profile picture (sober style).">
++    Two tones
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_51" desc="The label for the icewater avatar.">
+-    Icewater
++  <message name="IDS_DEFAULT_AVATAR_LABEL_51" desc="The label for the stripe profile picture (sober style).">
++    Stripe
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_52" desc="The label for the melon avatar.">
+-    Melon
++  <message name="IDS_DEFAULT_AVATAR_LABEL_52" desc="The label for the waves profile picture (sober style).">
++    Waves
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_53" desc="The label for the onigiri avatar.">
+-    Onigiri
++  <message name="IDS_DEFAULT_AVATAR_LABEL_53" desc="The label for the hex-outline profile picture (sober style).">
++    Outline
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_54" desc="The label for the pizza avatar.">
+-    Pizza
++  <message name="IDS_DEFAULT_AVATAR_LABEL_54" desc="The label for the aurora profile picture (sober style).">
++    Aurora
+   </message>
+-  <message name="IDS_DEFAULT_AVATAR_LABEL_55" desc="The label for the sandwich avatar.">
+-    Sandwich
++  <message name="IDS_DEFAULT_AVATAR_LABEL_55" desc="The label for the night profile picture (sober style).">
++    Night
+   </message>
+ 
+   <message name="IDS_PROFILES_LOCAL_PROFILE_STATE" desc="This is displayed underneath the profile name for profiles that are not signed in to sync.">
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10889,4 +10889,28 @@
+ <translation id="2810925360372147318">Ouvrir comme application, dans sa propre fenêtre</translation>
+ <translation id="5905890467343114573">Incrustation vidéo : continuer de regarder dans un autre onglet</translation>
+ <translation id="5846001751038331366">Importer les favoris d’un autre navigateur...</translation>
++<translation id="7817701337398051306">Copier le lien sans pistage</translation>
++<translation id="6318332830583185708">Copier l’adresse de la page sans pistage</translation>
++<translation id="3234463339046243176">Abeille</translation>
++<translation id="6710022688720561421">Robot</translation>
++<translation id="4617130686132148583">Fantôme</translation>
++<translation id="2563185590376525700">Grenouille</translation>
++<translation id="2610463780583168093">Monstre</translation>
++<translation id="8428234825874480309">Pieuvre</translation>
++<translation id="5072005373809113635">Astronaute</translation>
++<translation id="4638126413930432901">Ruche</translation>
++<translation id="1661166296150256363">Bouclier</translation>
++<translation id="273080288226460212">Boussole</translation>
++<translation id="1048259940085425186">Montagnes</translation>
++<translation id="946189578956498553">Atome</translation>
++<translation id="1578722772070222370">Fusée</translation>
++<translation id="5336126575388085039">Code</translation>
++<translation id="3417226028137100527">Point</translation>
++<translation id="6114506742919564146">Anneau</translation>
++<translation id="1245601811746174855">Deux tons</translation>
++<translation id="5653537958566609044">Bande</translation>
++<translation id="2644819393199991007">Vagues</translation>
++<translation id="6947736787244354378">Contour</translation>
++<translation id="5809090008577139505">Aurore</translation>
++<translation id="1070901266639972381">Nuit</translation>
+ </translationbundle>
+\ No newline at end of file
+--- a/chrome/browser/extensions/external_provider_impl.cc
++++ b/chrome/browser/extensions/external_provider_impl.cc
+@@ -922,7 +922,8 @@
+   // they are acknowledged: no "extension added" prompt. The user can still
+   // disable or remove them.
+   auto hivey_bundled_provider = std::make_unique<ExternalProviderImpl>(
+-      service, base::MakeRefCounted<HiveyBundledExtensionLoader>(), profile,
++      service, base::MakeRefCounted<HiveyBundledExtensionLoader>(profile),
++      profile,
+       ManifestLocation::kExternalPref, ManifestLocation::kExternalPrefDownload,
+       Extension::WAS_INSTALLED_BY_DEFAULT);
+   hivey_bundled_provider->set_auto_acknowledge(true);
+--- a/chrome/browser/extensions/hivey_bundled_extension_loader.cc
++++ b/chrome/browser/extensions/hivey_bundled_extension_loader.cc
+@@ -4,6 +4,11 @@
+ 
+ #include "chrome/browser/extensions/hivey_bundled_extension_loader.h"
+ 
++#include <algorithm>
++#include <string>
++#include <utility>
++#include <vector>
++
+ #include "base/files/file_path.h"
+ #include "base/files/file_util.h"
+ #include "base/functional/bind.h"
+@@ -11,15 +16,18 @@
+ #include "base/task/thread_pool.h"
+ #include "chrome/browser/extensions/external_provider_impl.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
++#include "chrome/browser/profiles/profile.h"
+ #include "chrome/common/chrome_paths.h"
++#include "components/prefs/pref_service.h"
+ 
+ namespace extensions {
+ 
+ namespace {
+ 
+ // Runs on a blocking thread: looks for the bundled .crx files next to the
+-// browser.
+-base::DictValue BuildBundledExtensionPrefs() {
++// browser; the optional ones only if `chosen` lists them.
++base::DictValue BuildBundledExtensionPrefs(std::vector<std::string> chosen) {
+   base::DictValue prefs;
+   base::FilePath dir;
+   if (!base::PathService::Get(chrome::DIR_EXTERNAL_EXTENSIONS, &dir)) {
+@@ -27,7 +35,9 @@
+   }
+   for (const HiveyBundledExtension& extension : kHiveyBundledExtensions) {
+     const base::FilePath crx = dir.AppendASCII(extension.crx);
+-    if (!base::PathExists(crx)) {
++    if ((extension.optional &&
++         !std::ranges::contains(chosen, std::string(extension.id))) ||
++        !base::PathExists(crx)) {
+       continue;
+     }
+     prefs.Set(extension.id,
+@@ -41,14 +51,22 @@
+ 
+ }  // namespace
+ 
+-HiveyBundledExtensionLoader::HiveyBundledExtensionLoader() = default;
++HiveyBundledExtensionLoader::HiveyBundledExtensionLoader(Profile* profile)
++    : profile_(profile) {}
+ 
+ HiveyBundledExtensionLoader::~HiveyBundledExtensionLoader() = default;
+ 
+ void HiveyBundledExtensionLoader::StartLoading() {
++  std::vector<std::string> chosen;
++  for (const base::Value& id :
++       profile_->GetPrefs()->GetList(hivey::kHiveyOptionalAddons)) {
++    if (id.is_string()) {
++      chosen.push_back(id.GetString());
++    }
++  }
+   base::ThreadPool::PostTaskAndReplyWithResult(
+       FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+-      base::BindOnce(&BuildBundledExtensionPrefs),
++      base::BindOnce(&BuildBundledExtensionPrefs, std::move(chosen)),
+       base::BindOnce(&HiveyBundledExtensionLoader::OnPrefsBuilt, this));
+ }
+ 
+--- a/chrome/browser/extensions/hivey_bundled_extension_loader.h
++++ b/chrome/browser/extensions/hivey_bundled_extension_loader.h
+@@ -5,9 +5,15 @@
+ #ifndef CHROME_BROWSER_EXTENSIONS_HIVEY_BUNDLED_EXTENSION_LOADER_H_
+ #define CHROME_BROWSER_EXTENSIONS_HIVEY_BUNDLED_EXTENSION_LOADER_H_
+ 
++#include <string>
++#include <vector>
++
++#include "base/memory/raw_ptr.h"
+ #include "base/values.h"
+ #include "chrome/browser/extensions/external_loader.h"
+ 
++class Profile;
++
+ namespace extensions {
+ 
+ // Hivey: installs the extensions that ship with the browser (uBlock Origin
+@@ -15,10 +21,11 @@
+ // Only the extension IDs compiled into the browser (bundled_extensions.h) are
+ // offered, and Chromium checks each .crx signature against its ID, so files
+ // dropped into that folder cannot install anything else. A user who removes
+-// an extension keeps it removed.
++// an extension keeps it removed. Optional ones (a VPN) only install once
++// the user chose them (hivey.optional_addons).
+ class HiveyBundledExtensionLoader : public ExternalLoader {
+  public:
+-  HiveyBundledExtensionLoader();
++  explicit HiveyBundledExtensionLoader(Profile* profile);
+   HiveyBundledExtensionLoader(const HiveyBundledExtensionLoader&) = delete;
+   HiveyBundledExtensionLoader& operator=(const HiveyBundledExtensionLoader&) =
+       delete;
+@@ -30,6 +37,8 @@
+   ~HiveyBundledExtensionLoader() override;
+ 
+   void OnPrefsBuilt(base::DictValue prefs);
++
++  raw_ptr<Profile> profile_;
+ };
+ 
+ }  // namespace extensions
+--- a/chrome/browser/hivey/hivey_bar_prefs.cc
++++ b/chrome/browser/hivey/hivey_bar_prefs.cc
+@@ -28,6 +28,7 @@
+   registry->RegisterListPref(kHiveyBarHidden);
+   registry->RegisterListPref(kHiveyBarApps);
+   registry->RegisterListPref(kHiveyToolbarOrder);
++  registry->RegisterListPref(kHiveyOptionalAddons);
+   registry->RegisterListPref(kHiveyToolbarHidden);
+   registry->RegisterBooleanPref(kHiveyGoogleDefaultApplied, false);
+ }
+--- a/chrome/browser/hivey/hivey_bar_prefs.h
++++ b/chrome/browser/hivey/hivey_bar_prefs.h
+@@ -52,6 +52,9 @@
+ // The toolbar buttons the user hid ("back", "reload", "extensions",
+ // "pinned"; Forward and Home have Chromium's own settings).
+ inline constexpr char kHiveyToolbarHidden[] = "hivey.toolbar.hidden";
++// Extension ids of the optional bundled add-ons the user chose (Proton
++// VPN...): only these are installed.
++inline constexpr char kHiveyOptionalAddons[] = "hivey.optional_addons";
+ // The user's sites, opened in the side panel: {"id", "title", "url"}.
+ inline constexpr char kHiveyBarApps[] = "hivey.bar.apps";
+ // Whether this profile moved from DuckDuckGo (Hivey's former default search
+--- a/chrome/browser/renderer_context_menu/render_view_context_menu.cc
++++ b/chrome/browser/renderer_context_menu/render_view_context_menu.cc
+@@ -416,6 +416,61 @@
+ 
+ namespace {
+ 
++// Hivey: "Copy link without tracking" (on a link) and "Copy page address
++// without tracking" (on the page), like Firefox's. Local command ids, in the
++// content context range Chromium leaves free.
++constexpr int kHiveyCopyCleanLink = 50198;
++constexpr int kHiveyCopyCleanPageUrl = 50199;
++
++// Query parameters that only follow people around: campaign tags and ad click
++// ids, as stripped by Firefox and the AdGuard URL tracking list.
++constexpr std::string_view kHiveyTrackingParams[] = {
++    "fbclid",  "gclid",    "gclsrc",   "dclid",       "gbraid",  "wbraid",
++    "msclkid", "mc_cid",   "mc_eid",   "yclid",       "ysclid",  "igshid",
++    "igsh",    "twclid",   "ttclid",   "li_fat_id",   "s_cid",   "_openstat",
++    "_hsenc",  "_hsmi",    "__hssc",   "__hstc",      "__hsfp",  "hsctatracking",
++    "mkt_tok", "oly_anon_id", "oly_enc_id", "vero_id", "vero_conv", "rb_clickid",
++    "wickedid", "epik",    "ref_src",  "ref_url",     "srsltid", "si",
++    "spm",     "sc_cid",   "trk",      "trkcampaign", "sr_share", "fb_action_ids",
++    "fb_action_types", "fb_ref", "fb_source", "action_object_map",
++    "action_type_map", "action_ref_map", "gs_l", "zanpid", "cvid", "oicd",
++};
++constexpr std::string_view kHiveyTrackingPrefixes[] = {"utm_", "pk_", "mtm_",
++                                                        "hsa_", "pf_rd_",
++                                                        "pd_rd_"};
++
++bool IsHiveyTrackingParam(std::string_view key) {
++  const std::string lower = base::ToLowerASCII(key);
++  if (std::ranges::contains(kHiveyTrackingParams, lower)) {
++    return true;
++  }
++  return std::ranges::any_of(kHiveyTrackingPrefixes, [&](std::string_view p) {
++    return lower.starts_with(p);
++  });
++}
++
++// `url` without its tracking query parameters (the others keep their order).
++GURL HiveyStripTracking(const GURL& url) {
++  if (!url.has_query()) {
++    return url;
++  }
++  std::vector<std::string> kept;
++  for (net::QueryIterator it(url); !it.IsAtEnd(); it.Advance()) {
++    if (!IsHiveyTrackingParam(it.GetKey())) {
++      kept.push_back(base::StrCat({it.GetKey(), it.GetValue().empty() ? "" : "=",
++                                   it.GetValue()}));
++    }
++  }
++  GURL::Replacements replacements;
++  const std::string query = base::JoinString(kept, "&");
++  if (kept.empty()) {
++    replacements.ClearQuery();
++  } else {
++    replacements.SetQueryStr(query);
++  }
++  return url.ReplaceComponents(replacements);
++}
++
+ constexpr int kMaxContentCustomCommands = 1000;
+ constexpr int IDC_CONTENT_CONTEXT_CUSTOM_LAST =
+     IDC_CONTENT_CONTEXT_CUSTOM_FIRST + kMaxContentCustomCommands;
+@@ -2192,6 +2247,10 @@
+                                   params_.link_url.SchemeIs(url::kMailToScheme)
+                                       ? IDS_CONTENT_CONTEXT_COPYEMAILADDRESS
+                                       : IDS_CONTENT_CONTEXT_COPYLINKLOCATION);
++  if (params_.link_url.SchemeIsHTTPOrHTTPS()) {
++    menu_model_.AddItemWithStringId(kHiveyCopyCleanLink,
++                                    IDS_HIVEY_COPY_CLEAN_LINK);
++  }
+   if (features::IsMenuSimplificationEnabled() && !params_.has_image_contents) {
+     menu_model_.AddItemWithStringIdAndIcon(
+         IDC_CONTENT_CONTEXT_ADD_LINK_TO_READING_LIST,
+@@ -2566,6 +2625,12 @@
+ void RenderViewContextMenu::AppendPageItems() {
+   AppendExitFullscreenItem();
+ 
++  if (params_.page_url.SchemeIsHTTPOrHTTPS()) {
++    menu_model_.AddItemWithStringId(kHiveyCopyCleanPageUrl,
++                                    IDS_HIVEY_COPY_CLEAN_PAGE_URL);
++    menu_model_.AddSeparator(ui::NORMAL_SEPARATOR);
++  }
++
+   const bool glic_below_search =
+       base::FeatureList::IsEnabled(features::kGlicContextMenuBelowSearch);
+ 
+@@ -3514,6 +3579,12 @@
+     case IDC_CONTENT_CONTEXT_COPYLINKLOCATION:
+       return params_.unfiltered_link_url.is_valid();
+ 
++    case kHiveyCopyCleanLink:
++      return params_.link_url.is_valid();
++
++    case kHiveyCopyCleanPageUrl:
++      return params_.page_url.is_valid();
++
+     case IDC_CONTENT_CONTEXT_ADD_LINK_TO_READING_LIST:
+       return params_.link_url.is_valid();
+ 
+@@ -3910,6 +3981,16 @@
+       WriteURLToClipboard(params_.unfiltered_link_url, id);
+       break;
+ 
++    case kHiveyCopyCleanLink:
++      WriteURLToClipboard(HiveyStripTracking(params_.link_url),
++                          IDC_CONTENT_CONTEXT_COPYLINKLOCATION);
++      break;
++
++    case kHiveyCopyCleanPageUrl:
++      WriteURLToClipboard(HiveyStripTracking(params_.page_url),
++                          IDC_CONTENT_CONTEXT_COPYLINKLOCATION);
++      break;
++
+     case IDC_CONTENT_CONTEXT_ADD_LINK_TO_READING_LIST: {
+       ReadingListModel* model =
+           ReadingListModelFactory::GetForBrowserContext(browser_context_);
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -109,6 +109,9 @@
+     hiveyBarAuto: 'Automatic (left with vertical tabs)',
+     importTitle: 'Import bookmarks',
+     navImport: 'Import',
++    vpnTitle: 'VPN',
++    vpnHint: 'A VPN hides your IP address from sites. Proton VPN is free with a Proton account (Switzerland, no logs, open source). Not installed until you add it.',
++    vpnAdd: 'Add', vpnInstalled: 'Installed',
+     toolbarTitle: 'Toolbar',
+     toolbarHint: 'Drag the buttons, the address bar too, to any place; the eye shows or hides one.',
+     toolbarReset: 'Reset the toolbar',
+@@ -372,6 +375,9 @@
+     hiveyBarAuto: 'Automatique (à gauche avec les onglets verticaux)',
+     importTitle: 'Importer des favoris',
+     navImport: 'Importer',
++    vpnTitle: 'VPN',
++    vpnHint: 'Un VPN cache votre adresse IP aux sites. Proton VPN est gratuit avec un compte Proton (Suisse, sans journaux, open source). Rien n’est installé tant que vous ne l’ajoutez pas.',
++    vpnAdd: 'Ajouter', vpnInstalled: 'Installé',
+     toolbarTitle: 'Barre d’outils',
+     toolbarHint: 'Glissez les boutons, la barre d’adresse aussi, où vous voulez ; l’œil en affiche ou masque un.',
+     toolbarReset: 'Rétablir la barre d’outils',
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -894,6 +894,25 @@
+ 
+ // ------------------------------------------------------------------ privacy
+ 
++// Optional add-ons (a VPN): shipped with the browser, installed on demand.
++function vpnCard() {
++  const addons = state.optionalAddons || [];
++  if (!addons.length) {
++    return null;
++  }
++  return card(t('vpnTitle'),
++              el('p', {class: 'muted small', text: t('vpnHint')}),
++              ...addons.map(addon => el('div', {class: 'row'},
++                  el('div', {class: 'row-text'},
++                     el('span', {class: 'row-label'}, addon.name,
++                        addon.installed ? el('span', {class: 'status ok', text: t('vpnInstalled')}) : null)),
++                  addon.installed
++                      ? el('button', {class: 'button ghost', text: t('manage'),
++                                      onclick: () => openUrl(`chrome://extensions/?id=${addon.id}`)})
++                      : el('button', {class: 'button', text: t('vpnAdd'),
++                                      onclick: () => chrome.send('addOptionalAddon', [addon.id])}))));
++}
++
+ function buildPrivacy() {
+   const shield = state.shield;
+   const shieldStatus = !shield.installed ? 'shieldMissing' : (shield.enabled ? 'shieldOn' : 'shieldOff');
+@@ -907,6 +926,7 @@
+                   el('span', {class: 'row-hint', text: t('shieldHint')})),
+                el('button', {class: 'button ghost', text: t('manage'),
+                              onclick: () => openUrl(`chrome://extensions/?id=${shield.id}`)})),
++            vpnCard(),
+             card(null,
+                  flagToggle({flag: 'disable-fingerprinting-noise', invert: true}, 'antiFingerprint', 'antiFingerprintHint'),
+                  prefToggle('https_only_mode_enabled', 'httpsOnly', 'httpsOnlyHint'),
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.cc
+@@ -212,6 +212,20 @@
+       SidePanelOpenTrigger::kExtension);
+ }
+ 
++// The page translated in place by Google Translate, into the browser's
++// language (on demand only); Hivey Tools' translation if it cannot be.
++void TranslatePage(content::WebContents* contents,
++                   BrowserWindowInterface* browser) {
++  ChromeTranslateClient* client =
++      contents ? ChromeTranslateClient::FromWebContents(contents) : nullptr;
++  if (client && client->GetTranslateManager()) {
++    client->GetTranslateManager()->ShowTranslateUI(
++        /*auto_translate=*/true, /*triggered_from_menu=*/true);
++  } else {
++    ShowHiveyTranslation(browser);
++  }
++}
++
+ BrowserWindowInterface* BrowserWithTab(content::WebContents* contents) {
+   return contents
+              ? GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(
+@@ -431,9 +445,9 @@
+         PopupShowAction::kShow, base::DoNothing());
+   }
+ 
+-  // Hivey Tools on its translation workspace, in the side panel.
++  // The page in the browser's language (Google Translate, in place).
+   void Translate() {
+-    ShowHiveyTranslation(GetBrowser());
++    TranslatePage(web_contents(), GetBrowser());
+     GetWidget()->Close();
+   }
+ 
+@@ -659,8 +673,7 @@
+     : IconLabelBubbleView(font_list, parent_delegate), kind_(kind) {
+   SetVisible(false);
+   SetImageModel(ui::ImageModel::FromVectorIcon(
+-      kind == Kind::kTranslate ? vector_icons::kGTranslateIcon
+-      : kind == Kind::kPictureInPicture
++      kind == Kind::kPictureInPicture
+           ? vector_icons::kPictureInPictureAltIcon
+           : (features::IsRoundedIconsEnabled()
+                  ? vector_icons::kInstallDesktopIcon
+@@ -668,9 +681,8 @@
+       kColorOmniboxResultsIcon,
+       GetLayoutConstant(LayoutConstant::kLocationBarTrailingIconSize)));
+   const std::u16string tooltip = l10n_util::GetStringUTF16(
+-      kind == Kind::kTranslate          ? IDS_HIVEY_SERVER_INFO_TRANSLATE
+-      : kind == Kind::kPictureInPicture ? IDS_HIVEY_PICTURE_IN_PICTURE
+-                                        : IDS_HIVEY_OPEN_AS_APP);
++      kind == Kind::kPictureInPicture ? IDS_HIVEY_PICTURE_IN_PICTURE
++                                      : IDS_HIVEY_OPEN_AS_APP);
+   SetTooltipText(tooltip);
+   GetViewAccessibility().SetName(tooltip);
+ }
+@@ -733,17 +745,6 @@
+   if (kind_ == Kind::kPictureInPicture) {
+     // The playing video in its own small window, as from the media controls.
+     content::MediaSession::Get(contents)->EnterPictureInPicture();
+-  } else if (kind_ == Kind::kTranslate) {
+-    // Google Translate, in place, into the browser's language; Hivey Tools'
+-    // translation where the page cannot be translated that way.
+-    ChromeTranslateClient* client =
+-        ChromeTranslateClient::FromWebContents(contents);
+-    if (client && client->GetTranslateManager()) {
+-      client->GetTranslateManager()->ShowTranslateUI(
+-          /*auto_translate=*/true, /*triggered_from_menu=*/true);
+-    } else {
+-      ShowHiveyTranslation(browser);
+-    }
+   } else {
+     // "Install page as app": any site, in its own window and taskbar icon;
+     // a shortcut where that is not offered.
+--- a/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
++++ b/chrome/browser/ui/views/location_bar/hivey_server_info_view.h
+@@ -66,16 +66,16 @@
+   views::ViewTracker bubble_tracker_;
+ };
+ 
+-// A location bar button for the page, beside the server chip: Hivey Tools'
+-// translation in the side panel, or the page as an app in its own window
+-// (with its own taskbar icon). Shown on web pages only.
++// A location bar button for the page, beside the server chip: the page as
++// an app in its own window (with its own taskbar icon), or its playing video
++// in picture-in-picture. Shown on web pages only.
+ class HiveyPageButtonView : public IconLabelBubbleView,
+                             public content::WebContentsObserver {
+   METADATA_HEADER(HiveyPageButtonView, IconLabelBubbleView)
+ 
+  public:
+   // kPictureInPicture: shown while the tab plays a video.
+-  enum class Kind { kTranslate, kApp, kPictureInPicture };
++  enum class Kind { kApp, kPictureInPicture };
+ 
+   HiveyPageButtonView(Kind kind,
+                       IconLabelBubbleView::Delegate* parent_delegate,
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -481,8 +481,6 @@
+   // Hivey: country of the server of the page, from the bundled database.
+   hivey_server_info_view_ = AddChildView(
+       std::make_unique<HiveyServerInfoView>(this, page_action_font_list));
+-  hivey_translate_view_ = AddChildView(std::make_unique<HiveyPageButtonView>(
+-      HiveyPageButtonView::Kind::kTranslate, this, page_action_font_list));
+   hivey_app_view_ = AddChildView(std::make_unique<HiveyPageButtonView>(
+       HiveyPageButtonView::Kind::kApp, this, page_action_font_list));
+   hivey_pip_view_ = AddChildView(std::make_unique<HiveyPageButtonView>(
+@@ -914,9 +912,7 @@
+   add_trailing_decoration(hivey_server_info_view_,
+                           kContentSettingIntraItemPadding,
+                           /*edge_padding=*/trailing_decorations_edge_padding);
+-  // Then translation and "open as an app", evenly spaced.
+-  add_trailing_decoration(hivey_translate_view_, kHiveyTrailingGap,
+-                          /*edge_padding=*/trailing_decorations_edge_padding);
++  // Then "open as an app" and picture-in-picture, evenly spaced.
+   add_trailing_decoration(hivey_app_view_, kHiveyTrailingGap,
+                           /*edge_padding=*/trailing_decorations_edge_padding);
+   add_trailing_decoration(hivey_pip_view_, kHiveyTrailingGap,
+@@ -924,7 +920,6 @@
+   // The page actions keep that gap from the chip and its buttons.
+   const int hivey_page_action_gap =
+       hivey_server_info_view_->GetVisible() ||
+-              hivey_translate_view_->GetVisible() ||
+               hivey_app_view_->GetVisible() || hivey_pip_view_->GetVisible()
+           ? kHiveyTrailingGap
+           : 0;
+@@ -2081,8 +2076,6 @@
+   if (hivey_server_info_view_) {
+     hivey_server_info_view_->Update(GetWebContents(),
+                                     ShouldHidePageActionIcons());
+-    hivey_translate_view_->Update(GetWebContents(),
+-                                  ShouldHidePageActionIcons());
+     hivey_app_view_->Update(GetWebContents(), ShouldHidePageActionIcons());
+     hivey_pip_view_->Update(GetWebContents(), ShouldHidePageActionIcons());
+   }
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.h
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.h
+@@ -592,8 +592,7 @@
+ 
+   // Hivey: the country of the server of the page (offline lookup).
+   raw_ptr<HiveyServerInfoView> hivey_server_info_view_ = nullptr;
+-  // Hivey: translate the page, open it as an app (beside the chip).
+-  raw_ptr<HiveyPageButtonView> hivey_translate_view_ = nullptr;
++  // Hivey: open the page as an app, picture-in-picture (beside the chip).
+   raw_ptr<HiveyPageButtonView> hivey_app_view_ = nullptr;
+   raw_ptr<HiveyPageButtonView> hivey_pip_view_ = nullptr;
+ 
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -62,6 +62,7 @@
+ #include "components/webui/flags/flags_state.h"
+ #include "components/webui/flags/pref_service_flags_storage.h"
+ #include "content/public/browser/web_ui.h"
++#include "chrome/browser/extensions/external_provider_manager.h"
+ #include "extensions/browser/extension_registry.h"
+ #include "third_party/skia/include/core/SkColor.h"
+ #include "ui/base/mojom/themes.mojom.h"
+@@ -388,6 +389,7 @@
+   add("showUI", &HiveyStudioHandler::HandleShowUI);
+   add("setBarLayout", &HiveyStudioHandler::HandleSetBarLayout);
+   add("setToolbarLayout", &HiveyStudioHandler::HandleSetToolbarLayout);
++  add("addOptionalAddon", &HiveyStudioHandler::HandleAddOptionalAddon);
+   add("addBarApp", &HiveyStudioHandler::HandleAddBarApp);
+   add("removeBarApp", &HiveyStudioHandler::HandleRemoveBarApp);
+   add("setSearchEngine", &HiveyStudioHandler::HandleSetSearchEngine);
+@@ -556,6 +558,43 @@
+            registry->enabled_extensions().Contains(HIVEY_BUNDLED_SHIELD_ID));
+ }
+ 
++base::ListValue HiveyStudioHandler::BuildOptionalAddonsState() {
++  extensions::ExtensionRegistry* registry =
++      extensions::ExtensionRegistry::Get(GetProfile());
++  base::ListValue addons;
++  for (const HiveyBundledExtension& extension : kHiveyBundledExtensions) {
++    if (extension.optional) {
++      addons.Append(base::DictValue()
++                        .Set("id", extension.id)
++                        .Set("name", extension.name)
++                        .Set("installed", registry->GetInstalledExtension(
++                                              extension.id) != nullptr));
++    }
++  }
++  return addons;
++}
++
++void HiveyStudioHandler::HandleAddOptionalAddon(const base::ListValue& args) {
++  // [id]: one of the optional bundled add-ons, installed now.
++  const std::string* id = args.size() == 1 ? args[0].GetIfString() : nullptr;
++  if (!id || !std::ranges::any_of(kHiveyBundledExtensions,
++                                  [&](const HiveyBundledExtension& extension) {
++                                    return extension.optional &&
++                                           *id == extension.id;
++                                  })) {
++    return;
++  }
++  PrefService* prefs = GetProfile()->GetPrefs();
++  base::ListValue chosen = prefs->GetList(hivey::kHiveyOptionalAddons).Clone();
++  if (!chosen.contains(*id)) {
++    chosen.Append(*id);
++    prefs->SetList(hivey::kHiveyOptionalAddons, std::move(chosen));
++  }
++  extensions::ExternalProviderManager::Get(GetProfile())
++      ->CheckForExternalUpdates();
++  FireStateChanged();
++}
++
+ base::DictValue HiveyStudioHandler::BuildColorsState() {
+   // The colors the browser actually draws with (after the Material palette,
+   // themes and the user's choices), for the preview and Studio's own look.
+@@ -629,6 +668,7 @@
+       .Set("prefs", BuildPrefsState())
+       .Set("flags", BuildFlagsState())
+       .Set("shield", BuildShieldState())
++      .Set("optionalAddons", BuildOptionalAddonsState())
+       .Set("colors", BuildColorsState())
+       .Set("security", BuildSecurityState())
+       .Set("bar", BuildBarState())
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.h
+@@ -91,6 +91,8 @@
+   void HandleShowUI(const base::ListValue& args);
+   void HandleSetBarLayout(const base::ListValue& args);
+   void HandleSetToolbarLayout(const base::ListValue& args);
++  void HandleAddOptionalAddon(const base::ListValue& args);
++  base::ListValue BuildOptionalAddonsState();
+   void HandleAddBarApp(const base::ListValue& args);
+   void HandleRemoveBarApp(const base::ListValue& args);
+   void HandleSetSearchEngine(const base::ListValue& args);
