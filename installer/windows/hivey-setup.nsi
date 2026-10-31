@@ -78,19 +78,22 @@ OutFile "${OUTFILE}"
 ; The trailing backslash: a folder picked with "Browse" is used as is (no
 ; "\Application" appended); DirectoryLeave adds a subfolder when needed.
 InstallDir "${DEFAULT_DIR}\"
-BrandingText "${PRODUCT_NAME} ${VERSION}"
+; No branding line above the buttons (the version is on the welcome page).
+BrandingText " "
 ShowInstDetails hide
 
 Var IsUpdate      ; 1: already installed, its folder is kept
 Var Params        ; command line
 Var PrefsFile
 Var Verbose
+Var AllowDarkModeForWindow  ; uxtheme ordinal 133, if this Windows has it
 
 ;--------------------------------------------------------------------------
 ; Interface
 
 !define MUI_ICON "${ICON}"
 !define MUI_ABORTWARNING
+!define MUI_CUSTOMFUNCTION_GUIINIT HiveyGuiInit
 ; The browser's colors (Aura): dark ink, light text; the welcome and finish
 ; pages, the header and the progress log follow them.
 !define MUI_BGCOLOR "13141F"
@@ -316,14 +319,33 @@ Function DarkenControls
     ${If} $R7 <> 0
       System::Call 'user32::GetClassNameW(p R7, w .R6, i 64)'
       ${If} $R6 == "Static"
-      ${OrIf} $R6 == "Edit"
-        SetCtlColors $R7 ${HIVEY_TEXT} ${HIVEY_BG}
+        ; The white separator lines (etched statics, at most 2 px tall).
+        Push $0
+        Push $1
+        System::Call '*(i,i,i,i) p .r0'
+        System::Call 'user32::GetWindowRect(p R7, p r0)'
+        System::Call '*$0(i,i .r1,i,i .R5)'
+        System::Free $0
+        IntOp $R5 $R5 - $1
+        Pop $1
+        Pop $0
+        ${If} $R5 <= 2
+          ShowWindow $R7 ${SW_HIDE}
+        ${Else}
+          SetCtlColors $R7 ${HIVEY_TEXT} ${HIVEY_BG}
+        ${EndIf}
+      ${ElseIf} $R6 == "Edit"
       ${ElseIf} $R6 == "Button"
         System::Call 'user32::GetWindowLongW(p R7, i -16) i .R5'
         IntOp $R5 $R5 & 0xF
         ${If} $R5 <= 1
-          ; Push buttons: Windows' own dark style (Windows 10 1809 and later).
+          ; Push buttons: Windows' own dark mode.
+          ${If} $AllowDarkModeForWindow != 0
+            System::Call '::$AllowDarkModeForWindow(p R7, i 1)'
+          ${EndIf}
           System::Call 'uxtheme::SetWindowTheme(p R7, w "DarkMode_Explorer", p 0)'
+          SendMessage $R7 0x031A 0 0  ; WM_THEMECHANGED
+          SetCtlColors $R7 ${HIVEY_TEXT} ${HIVEY_BG}
         ${Else}
           ; Check boxes, radio buttons, group boxes: unthemed, so they take
           ; the colors (themed ones keep black text).
@@ -351,6 +373,7 @@ FunctionEnd
 
 ; MUI_PAGE_CUSTOMFUNCTION_SHOW of every page.
 Function DarkPage
+  Push $R4
   Push $R5
   Push $R6
   Push $R7
@@ -360,15 +383,55 @@ Function DarkPage
   SetCtlColors $HWNDPARENT ${HIVEY_TEXT} ${HIVEY_BG}
   StrCpy $R9 $HWNDPARENT
   Call DarkenControls
-  ; The page itself.
-  FindWindow $R9 "#32770" "" $HWNDPARENT
-  SetCtlColors $R9 ${HIVEY_TEXT} ${HIVEY_BG}
-  Call DarkenControls
+  ; The page itself (every dialog in the window: the welcome and finish
+  ; pages are dialogs of their own).
+  StrCpy $R4 0
+  ${Do}
+    FindWindow $R4 "#32770" "" $HWNDPARENT $R4
+    ${If} $R4 = 0
+      ${Break}
+    ${EndIf}
+    SetCtlColors $R4 ${HIVEY_TEXT} ${HIVEY_BG}
+    StrCpy $R9 $R4
+    Call DarkenControls
+  ${Loop}
+  ; The finish page's "Start Hivey Browser" check box.
+  ${If} $mui.FinishPage.Run != ""
+    System::Call 'uxtheme::SetWindowTheme(p $mui.FinishPage.Run, w " ", w " ")'
+    SetCtlColors $mui.FinishPage.Run ${HIVEY_TEXT} ${HIVEY_BG}
+  ${EndIf}
   Pop $R9
   Pop $R8
   Pop $R7
   Pop $R6
   Pop $R5
+  Pop $R4
+FunctionEnd
+
+; Windows' dark mode for this window: its title bar (DWM), its controls
+; (uxtheme's SetPreferredAppMode / AllowDarkModeForWindow, ordinals 135 and
+; 133, since Windows 10 1903; absent elsewhere: then the classic look).
+Function HiveyGuiInit
+  StrCpy $AllowDarkModeForWindow 0
+  System::Call 'kernel32::LoadLibraryW(w "uxtheme.dll") p .r0'
+  ${If} $0 P<> 0
+    System::Call 'kernel32::GetProcAddress(p r0, p 135) p .r1'
+    ${If} $1 P<> 0
+      System::Call '::$1(i 2)'  ; ForceDark
+    ${EndIf}
+    System::Call 'kernel32::GetProcAddress(p r0, p 133) p .r1'
+    ${If} $1 P<> 0
+      StrCpy $AllowDarkModeForWindow $1
+      System::Call '::$1(p $HWNDPARENT, i 1)'
+    ${EndIf}
+  ${EndIf}
+  ; DWMWA_USE_IMMERSIVE_DARK_MODE: 20 (Windows 10 20H1 and 11), 19 before.
+  System::Call '*(i 1) p .r2'
+  System::Call 'dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 20, p r2, i 4) i .r3'
+  ${If} $3 != 0
+    System::Call 'dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 19, p r2, i 4)'
+  ${EndIf}
+  System::Free $2
 FunctionEnd
 
 Function StrContains

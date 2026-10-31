@@ -1,0 +1,301 @@
+# Hivey 4717: the toolbar's Tor button shows Tor's own color onion, right of the extensions, and Tor leaves the Hivey bar; a Tor window opens Hivey's Tor page (connected, DuckDuckGo search) in its own tab, no extra tab; the Incognito button takes the theme's accent; livelier multicolor icons (Tailwind 400 on dark); modern icons in the theme's color keep its hue.
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -20699,6 +20699,15 @@
+         <message name="IDS_HIVEY_TOR_CONNECTING" desc="Shown in a new Tor window while the browser connects to the Tor network">
+           Connecting to the Tor network...
+         </message>
++        <message name="IDS_HIVEY_TOR_READY" desc="Title of the page a Tor window opens once connected to the Tor network">
++          You are browsing through the Tor network: sites do not see your IP address.
++        </message>
++        <message name="IDS_HIVEY_TOR_READY_NOTE" desc="Note on the page a Tor window opens once connected: what such a window keeps, and that Tor Browser offers more anonymity">
++          Nothing from this window is kept when you close it. For the strongest anonymity, Tor Browser goes further against fingerprinting.
++        </message>
++        <message name="IDS_HIVEY_TOR_SEARCH" desc="Placeholder of the search box on the page a Tor window opens (searches go to DuckDuckGo)">
++          Search with DuckDuckGo
++        </message>
+         <message name="IDS_HIVEY_TOR_FAILED" desc="Shown in a Tor window when the browser could not connect to the Tor network">
+           Tor could not connect. Check your internet connection, then open a new Tor window.
+         </message>
+--- a/chrome/app/resources/generated_resources_fr.xtb
++++ b/chrome/app/resources/generated_resources_fr.xtb
+@@ -10917,4 +10917,7 @@
+ <translation id="2982511483541443728">Connexion au réseau Tor…</translation>
+ <translation id="5574428149758801684">Tor n’a pas pu se connecter. Vérifiez votre connexion à Internet, puis ouvrez une nouvelle fenêtre Tor.</translation>
+ <translation id="3577720797358450269">Ouvrir le lien dans une fenêtre Tor</translation>
++<translation id="6852736579088478564">Vous naviguez par le réseau Tor : les sites ne voient pas votre adresse IP.</translation>
++<translation id="3161929682235400289">Rien de cette fenêtre n’est gardé à sa fermeture. Pour l’anonymat le plus fort, Tor Browser va plus loin contre l’empreinte numérique.</translation>
++<translation id="4371533307685765155">Rechercher avec DuckDuckGo</translation>
+ </translationbundle>
+\ No newline at end of file
+--- a/chrome/browser/hivey/hivey_bar_prefs.h
++++ b/chrome/browser/hivey/hivey_bar_prefs.h
+@@ -74,8 +74,8 @@
+ inline constexpr char kHiveyBarAppPrefix[] = "app:";
+ // Hivey Cyber sits at the top of the bar; these are the bottom buttons
+ // (Settings stays, last).
+-inline constexpr const char* kHiveyBarTools[] = {"tor", "performance",
+-                                                 "bookmarks", "history"};
++inline constexpr const char* kHiveyBarTools[] = {"performance", "bookmarks",
++                                                 "history"};
+ inline constexpr size_t kHiveyBarMaxApps = 30;
+ 
+ enum class HiveyBarIconStyle {
+--- a/chrome/browser/hivey/hivey_colors.cc
++++ b/chrome/browser/hivey/hivey_colors.cc
+@@ -279,6 +279,11 @@
+     set({kColorNewTabButtonCRBackgroundFrameInactive,
+          kColorNewTabButtonBackgroundFrameInactive},
+         Mix(accent, *toolbar, 0.14f));
++    // The "Incognito" button (private and Tor windows): the accent, not gray.
++    set({kColorAvatarButtonHighlightIncognito}, Mix(accent, *toolbar, 0.45f));
++    set({kColorAvatarButtonIncognitoHover}, Mix(accent, *toolbar, 0.6f));
++    set({kColorAvatarButtonHighlightIncognitoForeground},
++        Mix(SK_ColorWHITE, accent, 0.9f));
+     set({kColorToolbarSeparator, kColorBookmarkBarSeparator},
+         Mix(icons, *toolbar, 0.16f));
+     // No line between the toolbar and the page: one surface, as when the
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -591,7 +591,7 @@
+ 
+ // The toolbar, like Firefox's: the buttons in any order (the address bar
+ // too), Back, Reload and the extensions hidden or shown.
+-const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'tor', 'tabsearch', 'extensions', 'pinned',
++const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'tabsearch', 'extensions', 'tor', 'pinned',
+                        'avatar', 'menu'];
+ const TOOLBAR_LABELS = {back: 'tbBack', forward: 'tbForward', reload: 'tbReload', home: 'tbHome',
+                         location: 'tbLocation', extensions: 'tbExtensions', pinned: 'tbPinned',
+--- a/chrome/browser/ui/hivey/hivey_tor.cc
++++ b/chrome/browser/ui/hivey/hivey_tor.cc
+@@ -65,7 +65,9 @@
+ 
+ // The hidden profile Tor windows belong to, in the user data directory.
+ constexpr char kTorProfileDir[] = "Hivey Tor";
+-constexpr char kCheckUrl[] = "https://check.torproject.org/";
++// Searches from the Tor page: DuckDuckGo works with Tor (Google often blocks
++// it).
++constexpr char kTorSearchUrl[] = "https://duckduckgo.com/";
+ // A connection that does not get past this within its time gives up.
+ constexpr base::TimeDelta kBootstrapTimeout = base::Seconds(120);
+ // Automatic mode: a direct connection still at "Connecting to a relay"
+@@ -101,6 +103,33 @@
+   return GURL("data:text/html;base64," + base::Base64Encode(html));
+ }
+ 
++// The page a Tor window opens once connected: it says so, with a search box
++// and what such a window is (and is not: Tor Browser).
++GURL HomePage() {
++  auto text = [](int id) {
++    return base::EscapeForHTML(base::UTF16ToUTF8(l10n_util::GetStringUTF16(id)));
++  };
++  const std::string html = base::StringPrintf(
++      "<!doctype html><meta charset=utf-8><title>Tor</title>"
++      "<body style=\"margin:0;min-height:100vh;display:grid;place-items:center;"
++      "background:radial-gradient(circle at 50%% 0%%,#2a1d4f,#13141f 60%%);"
++      "color:#e6e7ff;font:16px system-ui,sans-serif\">"
++      "<main style=\"max-width:560px;text-align:center;padding:24px\">"
++      "<div style=\"font-size:64px\">&#129477;</div>"
++      "<h1 style=\"font-size:22px;font-weight:600;margin:12px 0 24px\">%s</h1>"
++      "<form action=\"%s\" method=get style=\"display:flex;gap:8px\">"
++      "<input name=q autofocus placeholder=\"%s\" aria-label=\"%s\" "
++      "style=\"flex:1;padding:12px 16px;border-radius:24px;border:1px solid "
++      "#3b3d5c;background:#1b1c2b;color:#e6e7ff;font:inherit;outline:none\">"
++      "</form>"
++      "<p style=\"color:#a3a6c9;font-size:13px;margin-top:24px\">%s</p>"
++      "</main>",
++      text(IDS_HIVEY_TOR_READY).c_str(), kTorSearchUrl,
++      text(IDS_HIVEY_TOR_SEARCH).c_str(), text(IDS_HIVEY_TOR_SEARCH).c_str(),
++      text(IDS_HIVEY_TOR_READY_NOTE).c_str());
++  return GURL("data:text/html;base64," + base::Base64Encode(html));
++}
++
+ // The highest "Bootstrapped N%" in tor's log.
+ int BootstrapProgress(const std::string& log) {
+   int progress = 0;
+@@ -268,16 +297,28 @@
+     if (!window) {
+       return;
+     }
+-    const GURL target = url.is_valid() ? url : GURL(kCheckUrl);
+-    if (state_ == State::kReady) {
+-      chrome::AddTabAt(window, target, -1, /*foreground=*/true);
++    const GURL target = url.is_valid() ? url : HomePage();
++    // The window's own (new tab) tab shows Tor's pages: no extra tab.
++    tabs::TabInterface* tab = window->GetActiveTabInterface();
++    if (!tab) {
++      chrome::AddTabAt(window, GURL(), -1, /*foreground=*/true);
++      tab = window->GetActiveTabInterface();
++    }
++    if (!tab) {
+       return;
+     }
+-    chrome::AddTabAt(window, StatusPage(IDS_HIVEY_TOR_CONNECTING), -1,
+-                     /*foreground=*/true);
+-    if (tabs::TabInterface* tab = window->GetActiveTabInterface()) {
+-      waiting_.emplace_back(tab->GetContents()->GetWeakPtr(), target);
++    content::WebContents* contents = tab->GetContents();
++    auto load = [contents](const GURL& page) {
++      contents->GetController().LoadURL(page, content::Referrer(),
++                                        ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
++                                        std::string());
++    };
++    if (state_ == State::kReady) {
++      load(target);
++      return;
+     }
++    load(StatusPage(IDS_HIVEY_TOR_CONNECTING));
++    waiting_.emplace_back(contents->GetWeakPtr(), target);
+     if (state_ == State::kStopped) {
+       profile_dir_ = profile->GetPath();
+       modes_ = ConnectionModes();
+--- a/chrome/browser/ui/hivey/hivey_tor.h
++++ b/chrome/browser/ui/hivey/hivey_tor.h
+@@ -17,8 +17,8 @@
+ // nothing they see is kept. tor stops with the last of them, or with the
+ // browser.
+ //
+-// Opens such a window on `url` (empty: check.torproject.org), once Tor is
+-// connected; meanwhile the window says it is connecting.
++// Opens such a window on `url` (empty: Hivey's Tor page, with a search
++// box), once Tor is connected; meanwhile the window says it is connecting.
+ void OpenTorWindow(const GURL& url);
+ 
+ // Whether `profile` is Hivey's Tor profile (or its off-the-record profile).
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
+@@ -29,7 +29,6 @@
+ #include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/search_engines/template_url_service_factory.h"
+-#include "chrome/browser/ui/hivey/hivey_tor.h"
+ #include "chrome/browser/ui/browser.h"
+ #include "chrome/browser/ui/browser_commands.h"
+ #include "chrome/browser/ui/browser_tabstrip.h"
+@@ -169,9 +168,9 @@
+ 
+ // Multicolor icons of the user's sites: one of these, by id.
+ constexpr std::pair<unsigned int, unsigned int> kAppColors[] = {
+-    {0x93C5FD, 0x2563EB}, {0xF9A8D4, 0xDB2777}, {0x86EFAC, 0x16A34A},
+-    {0xFDBA74, 0xEA580C}, {0xC4B5FD, 0x7C3AED}, {0x5EEAD4, 0x0D9488},
+-    {0xFCD34D, 0xB45309}, {0xFCA5A5, 0xDC2626},
++    {0x60A5FA, 0x2563EB}, {0xF472B6, 0xDB2777}, {0x4ADE80, 0x16A34A},
++    {0xFB923C, 0xEA580C}, {0xA78BFA, 0x7C3AED}, {0x2DD4BF, 0x0D9488},
++    {0xFBBF24, 0xB45309}, {0xF87171, 0xDC2626},
+ };
+ 
+ // A built-in white icon, drawn at 40 px for 20 DIP (crisp at 2x).
+@@ -224,14 +223,16 @@
+ }
+ 
+ // A modern icon: the solid glyph (`mask`, white, at 2x) filled with a
+-// light diagonal gradient from `base` to a neighboring hue; crisp, no glow.
++// diagonal gradient from `base`: to a livelier neighboring hue for an item's
++// own color (`vivid`), deeper in the same hue for the theme's; crisp.
+ gfx::ImageSkia NeonIcon(const gfx::ImageSkia& mask,
+                         SkColor base,
+-                        bool dark_toolbar) {
++                        bool vivid) {
+   const SkBitmap glyph_bitmap = mask.GetRepresentation(2.0f).GetBitmap();
+   const gfx::ImageSkia glyph = gfx::ImageSkia::CreateFrom1xBitmap(glyph_bitmap);
+   const int size = glyph_bitmap.width();
+-  const SkColor end = ShiftColor(base, 0.06, 0.05, -0.06);
++  const SkColor end =
++      vivid ? ShiftColor(base, 0.06, 0.12, -0.06) : ShiftColor(base, 0, 0, -0.1);
+ 
+   // The glyph in its gradient.
+   gfx::Canvas fill(gfx::Size(size, size), 1.0f, /*is_opaque=*/false);
+@@ -571,10 +572,6 @@
+               },
+               base::Unretained(this)));
+     }
+-  } else if (id == "tor") {
+-    // A private window with Tor.
+-    add_tool(kHiveyBarTorIcon,
+-             base::BindRepeating([] { hivey::OpenTorWindow(GURL()); }));
+   } else if (id == "performance") {
+     performance_button_ = add_tool(
+         kHiveyBarPerformanceIcon,
+@@ -665,9 +662,6 @@
+   if (id == "settings") {
+     return l10n_util::GetStringUTF16(IDS_HIVEY_BAR_SETTINGS);
+   }
+-  if (id == "tor") {
+-    return l10n_util::GetStringUTF16(IDS_HIVEY_TOR_WINDOW);
+-  }
+   if (id == "performance") {
+     return l10n_util::GetStringUTF16(IDS_HIVEY_BAR_PERFORMANCE);
+   }
+@@ -746,7 +740,7 @@
+           own ? (dark_toolbar ? icon.colors->first : icon.colors->second)
+               : theme_color;
+       image = NeonIcon(icon.modern.isNull() ? icon.image : icon.modern, base,
+-                       dark_toolbar);
++                       /*vivid=*/own);
+     } else {
+       image = gfx::ImageSkiaOperations::CreateColorMask(icon.image, color);
+     }
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -9,7 +9,6 @@
+ #include "chrome/browser/ui/hivey/hivey_tor.h"
+ #include "components/vector_icons/vector_icons.h"
+ #include "ui/gfx/codec/png_codec.h"
+-#include "ui/gfx/image/image_skia_operations.h"
+ 
+ #include <algorithm>
+ #include <memory>
+@@ -521,28 +520,8 @@
+     }
+   }
+ 
+-  // Hivey: a private window with Tor, one click away (like Brave's).
++  // Hivey: tab search in the toolbar.
+   if (display_mode_ == DisplayMode::kNormal) {
+-    auto tor = std::make_unique<ToolbarButton>(
+-        base::BindRepeating(&hivey::OpenTorWindow, GURL()));
+-    tor->SetImageModel(
+-        views::Button::STATE_NORMAL,
+-        ui::ImageModel::FromImageGenerator(
+-            base::BindRepeating([](const ui::ColorProvider* colors) {
+-              const gfx::ImageSkia onion = gfx::ImageSkia::CreateFromBitmap(
+-                  gfx::PNGCodec::Decode(base::span(kHiveyBarTorPng)), 2.0f);
+-              return colors ? gfx::ImageSkiaOperations::CreateColorMask(
+-                                  onion,
+-                                  colors->GetColor(kColorToolbarButtonIcon))
+-                            : onion;
+-            }),
+-            gfx::Size(20, 20)));
+-    const std::u16string tooltip =
+-        l10n_util::GetStringUTF16(IDS_HIVEY_TOR_WINDOW);
+-    tor->SetTooltipText(tooltip);
+-    tor->GetViewAccessibility().SetName(tooltip);
+-    hivey_tor_button_ = AddChildView(std::move(tor));
+-
+     // Tab search, as Firefox's "List all tabs": BrowserView gives it its
+     // bubble host (unless tab search is pinned to the tab strip).
+     auto tab_search = std::make_unique<ToolbarButton>();
+@@ -563,6 +542,23 @@
+         std::make_unique<ExtensionsToolbarCoordinator>(extensions_container_);
+   }
+ 
++  // Hivey: a private window with Tor, one click away (like Brave's), right
++  // of the extensions.
++  if (display_mode_ == DisplayMode::kNormal) {
++    auto tor = std::make_unique<ToolbarButton>(
++        base::BindRepeating(&hivey::OpenTorWindow, GURL()));
++    // Tor's own onion, in its colors.
++    tor->SetImageModel(
++        views::Button::STATE_NORMAL,
++        ui::ImageModel::FromImageSkia(gfx::ImageSkia::CreateFromBitmap(
++            gfx::PNGCodec::Decode(base::span(kHiveyTorLogoPng)), 2.0f)));
++    const std::u16string tooltip =
++        l10n_util::GetStringUTF16(IDS_HIVEY_TOR_WINDOW);
++    tor->SetTooltipText(tooltip);
++    tor->GetViewAccessibility().SetName(tooltip);
++    hivey_tor_button_ = AddChildView(std::move(tor));
++  }
++
+   if (toolbar_divider) {
+     toolbar_divider_ = AddChildView(std::move(toolbar_divider));
+   }
