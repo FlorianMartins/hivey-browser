@@ -44,6 +44,22 @@ def grab(hwnd, name):
     ImageGrab.grab(bbox=(rect.left, rect.top, rect.right, rect.bottom), all_screens=True).save(OUT / f'{name}.png')
 
 
+def dump(hwnd):
+    """The page's controls (class, ID, size), to tell what draws what."""
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def each(child, _):
+        if user32.IsWindowVisible(child):
+            name = ctypes.create_unicode_buffer(64)
+            user32.GetClassNameW(child, name, 64)
+            rect = wintypes.RECT()
+            user32.GetWindowRect(child, ctypes.byref(rect))
+            print(f'  {name.value} id={user32.GetDlgCtrlID(child)} '
+                  f'{rect.right - rect.left}x{rect.bottom - rect.top}')
+        return True
+
+    user32.EnumChildWindows(hwnd, each, 0)
+
+
 def press_enter(hwnd):
     user32.SetForegroundWindow(hwnd)
     time.sleep(0.5)
@@ -69,6 +85,7 @@ def main():
         hwnd = wizard_window() or hwnd
         grab(hwnd, page)
         print('page', page)
+        dump(hwnd)
         if page == '6-finish':
             break
         if page == '5-installing':

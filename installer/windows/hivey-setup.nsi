@@ -313,7 +313,8 @@ SectionEnd
 
 ; $R9: a dialog; every control in it (ids 1000-1299) takes the dark colors.
 Function DarkenControls
-  StrCpy $R8 1000
+  ; From 1: the window's own buttons are 1 (Next), 2 (Cancel) and 3 (Back).
+  StrCpy $R8 1
   ${Do}
     GetDlgItem $R7 $R9 $R8
     ${If} $R7 <> 0
