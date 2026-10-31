@@ -891,7 +891,7 @@ WORKSPACE_ICONS = {
     'security': 'shield-check', 'wisebase': 'books', 'benchmark': 'chart-bar', 'mcp': 'plugs-connected',
 }
 TOOL_ICONS = {
-    'Cyber': 'fingerprint', 'Tor': 'onion', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
+    'Cyber': 'fingerprint', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
     'Bookmarks': 'bookmark-simple', 'Settings': 'gear-six', 'App': 'app-window',
 }
 # "Modern" icons: the Phosphor glyph in its fill weight (a different, solid
@@ -908,24 +908,25 @@ WORKSPACE_ORDER = ['chat', 'web', 'agent', 'mcp', 'translate', 'improve', 'image
 # "Multicolor" icons: a color that means something for each item, as
 # (on a dark toolbar, on a light toolbar). Unlisted workspaces use the accent.
 ICON_COLORS = {
-    'chat': ('#a5b4fc', '#4f46e5'),       # indigo: conversation
-    'web': ('#7dd3fc', '#0284c7'),        # sky: the web
-    'agent': ('#c4b5fd', '#7c3aed'),      # violet: autonomous AI
-    'mcp': ('#5eead4', '#0d9488'),        # teal: connected services
-    'translate': ('#fcd34d', '#b45309'),  # amber: languages
-    'improve': ('#f9a8d4', '#db2777'),    # pink: magic wand
-    'image': ('#fdba74', '#ea580c'),      # orange: pictures
-    'pdf': ('#fca5a5', '#dc2626'),        # red: PDF documents
-    'security': ('#86efac', '#16a34a'),   # green: protection
-    'wisebase': ('#fde68a', '#a16207'),   # gold: knowledge
-    'benchmark': ('#a5f3fc', '#0891b2'),  # cyan: measures
-    'Cyber': ('#6ee7b7', '#059669'),      # emerald: investigation
-    'Tor': ('#d8b4fe', '#7d4698'),        # Tor's purple
-    'Performance': ('#bef264', '#65a30d'),  # lime: speed
-    'History': ('#93c5fd', '#2563eb'),    # blue: time
-    'Bookmarks': ('#fda4af', '#e11d48'),  # rose: favorites
-    'Settings': ('#cbd5e1', '#475569'),   # slate: neutral
-    'App': ('#e2e8f0', '#334155'),        # neutral: user sites
+    # Saturated (Tailwind 400 on a dark toolbar, 600 on a light one): lively,
+    # still readable.
+    'chat': ('#818cf8', '#4f46e5'),       # indigo: conversation
+    'web': ('#38bdf8', '#0284c7'),        # sky: the web
+    'agent': ('#a78bfa', '#7c3aed'),      # violet: autonomous AI
+    'mcp': ('#2dd4bf', '#0d9488'),        # teal: connected services
+    'translate': ('#fbbf24', '#b45309'),  # amber: languages
+    'improve': ('#f472b6', '#db2777'),    # pink: magic wand
+    'image': ('#fb923c', '#ea580c'),      # orange: pictures
+    'pdf': ('#f87171', '#dc2626'),        # red: PDF documents
+    'security': ('#4ade80', '#16a34a'),   # green: protection
+    'wisebase': ('#facc15', '#a16207'),   # gold: knowledge
+    'benchmark': ('#22d3ee', '#0891b2'),  # cyan: measures
+    'Cyber': ('#34d399', '#059669'),      # emerald: investigation
+    'Performance': ('#a3e635', '#65a30d'),  # lime: speed
+    'History': ('#60a5fa', '#2563eb'),    # blue: time
+    'Bookmarks': ('#fb7185', '#e11d48'),  # rose: favorites
+    'Settings': ('#94a3b8', '#475569'),   # slate: neutral
+    'App': ('#cbd5e1', '#334155'),        # neutral: user sites
 }
 
 
@@ -1017,26 +1018,34 @@ def _phosphor_duotone_dir():
     return icons
 
 
-# Icons drawn here, in Phosphor's grid (256, 16 px strokes): an onion for
-# private windows with Tor, outlined (duotone) and solid with a layer cut
-# out (fill).
-_ONION_BULB = 'M128 70C90 104 52 134 52 170a76 62 0 0 0 152 0c0-36-38-66-76-100Z'
-_ONION_LAYERS = 'M128 92c-22 26-38 52-38 78a38 46 0 0 0 76 0c0-26-16-52-38-78Z'
-_ONION_SPROUT = ('<path d="M128 70V36"/><path d="M128 50c10-14 26-20 44-18"/>')
-OWN_GLYPHS = {
-    ('onion', 'duotone'): (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'
-        f'<path d="{_ONION_BULB}" fill="currentColor" opacity="0.2"/>'
-        '<g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">'
-        f'<path d="{_ONION_BULB}"/><path d="{_ONION_LAYERS}"/>{_ONION_SPROUT}</g></svg>'),
-    ('onion', 'fill'): (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'
-        # The bulb, minus a band around its heart (even-odd: bulb, layer, heart).
-        f'<path fill-rule="evenodd" fill="currentColor" d="{_ONION_BULB}{_ONION_LAYERS}'
-        'M128 114c-14 20-24 40-24 56a24 30 0 0 0 48 0c0-16-10-36-24-56Z"/>'
-        '<g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round">'
-        f'{_ONION_SPROUT}</g></svg>'),
-}
+# The Tor Project's color logo (its onion, for the toolbar's Tor button):
+# https://gitlab.torproject.org/tpo/web/styleguide, sha256-pinned.
+TOR_LOGO_URL = ('https://gitlab.torproject.org/tpo/web/styleguide/-/raw/main/assets/static/images/'
+                'tor-logo/color.svg')
+TOR_LOGO_SHA256 = '6131ca987563a395c9d035d3f0f9856de4f8508ea5a138d2e9322789a3238d65'
+OWN_GLYPHS = {}
+
+
+def _tor_onion_png(px=40):
+    """The onion of Tor's logo (between the 'T' and the 'r'), square, in
+    color, at `px` (20 DIP at 2x)."""
+    import io
+    import cairosvg
+    from PIL import Image, ImageDraw
+    svg = download(TOR_LOGO_URL, BUILD / 'download_cache' / 'tor-logo-color.svg', TOR_LOGO_SHA256)
+    logo = Image.open(io.BytesIO(cairosvg.svg2png(url=str(svg), output_width=1204))).convert('RGBA')
+    keep = Image.new('L', logo.size, 255)
+    ImageDraw.Draw(keep).rectangle((0, 0, 498, 268), fill=0)  # the T's crossbar
+    onion = Image.new('RGBA', logo.size, (0, 0, 0, 0))
+    onion.paste(logo, (0, 0), keep)
+    onion = onion.crop((390, 0, 890, 728))
+    onion = onion.crop(onion.getbbox())
+    side = max(onion.size) + 8
+    square = Image.new('RGBA', (side, side), (0, 0, 0, 0))
+    square.paste(onion, ((side - onion.width) // 2, (side - onion.height) // 2))
+    out = io.BytesIO()
+    square.resize((px, px), Image.LANCZOS).save(out, 'PNG', optimize=True)
+    return out.getvalue()
 
 
 def _glyph_svg(phosphor_duotone, name, weight):
@@ -1174,6 +1183,8 @@ def _write_bar_assets(src):
         '  const unsigned char* modern_png;\n  size_t modern_size;\n};\n'
         'inline constexpr HiveyBarWorkspace kHiveyBarWorkspaces[] = {\n' + '\n'.join(workspaces) + '\n};\n\n'
         + '\n'.join(tools) + '\n\n'
+        '// The Tor Project\'s onion (its color logo), for the toolbar\'s Tor button.\n'
+        + _c_bytes('kHiveyTorLogoPng', _tor_onion_png()) + '\n'
         '// Sites Hivey Tools shows in frames (its web chats).\n'
         'inline constexpr const char* kHiveyAiFrameHosts[] = {\n'
         + ''.join(f'    {_c_string(h)},\n' for h in hosts) + '};\n\n'

@@ -3,6 +3,26 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4717 — 31 octobre 2026
+
+### Tor
+- Le bouton Tor a la **vraie icône de Tor** (l'oignon en couleur) et se
+  trouve **à droite des extensions** ; il quitte la barre Hivey.
+- Une fenêtre Tor s'ouvre sur une **page Hivey** (« Vous naviguez par le
+  réseau Tor », recherche DuckDuckGo) au lieu de check.torproject.org, et
+  **sans onglet privé en plus**.
+- Le bouton « Navigation privée » prend la couleur du thème.
+
+### Barre Hivey
+- **Couleurs plus vives** pour les icônes en couleur.
+- En « couleur du thème », les icônes modernes ont **exactement la teinte**
+  des icônes classiques (elles viraient au rose).
+
+### Installation (Windows)
+- Barre de titre sombre, boutons en mode sombre de Windows, plus de lignes
+  blanches ni de texte de version en bas, case « Lancer Hivey Browser »
+  lisible.
+
 ## 156.0.8078.4716 — 31 octobre 2026
 
 ### Installation (Windows)
