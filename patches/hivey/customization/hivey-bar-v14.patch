@@ -1,4 +1,4 @@
-# Hivey 4717: the toolbar's Tor button shows Tor's own color onion, right of the extensions, and Tor leaves the Hivey bar; a Tor window opens Hivey's Tor page (connected, DuckDuckGo search) in its own tab, no extra tab; the Incognito button takes the theme's accent; livelier multicolor icons (Tailwind 400 on dark); modern icons in the theme's color keep its hue.
+# Hivey 4717: Tor's onion right of the extensions, Hivey's Tor page in the window's own tab, themed Incognito button, livelier icons
 --- a/chrome/app/generated_resources.grd
 +++ b/chrome/app/generated_resources.grd
 @@ -20699,6 +20699,15 @@
@@ -299,3 +299,15 @@
    if (toolbar_divider) {
      toolbar_divider_ = AddChildView(std::move(toolbar_divider));
    }
+@@ -2224,10 +2220,9 @@
+       {"reload", reload_},
+       {"home", home_},
+       {"location", location_bar_view_},
+-      {"tor", hivey_tor_button_},
+-      {"tabsearch", hivey_tab_search_button_},
+       {"tabsearch", hivey_tab_search_button_},
+       {"extensions", extensions_container_},
++      {"tor", hivey_tor_button_},
+       {"pinned", pinned_toolbar_actions_container_},
+       {"avatar", avatar_},
+       {"menu", app_menu_button_},
