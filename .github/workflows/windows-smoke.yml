@@ -152,6 +152,10 @@ jobs:
           $code = $LASTEXITCODE
           Stop-Process -Id $browser.Id -Force -ErrorAction SilentlyContinue
           exit $code
+      - name: Typed addresses (real key presses in the address bar)
+        if: steps.release.outputs.skip == 'false'
+        continue-on-error: true
+        run: python tests/omnibox_typed.py "$env:BROWSER" out/omnibox
       - name: UI screenshots (themes, vertical tabs, Hivey bar)
         if: steps.release.outputs.skip == 'false'
         run: python tests/ui_shots.py "$env:BROWSER" out/ui
