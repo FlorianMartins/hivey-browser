@@ -335,6 +335,7 @@ Function DarkenControls
           SetCtlColors $R7 ${HIVEY_TEXT} ${HIVEY_BG}
         ${EndIf}
       ${ElseIf} $R6 == "Edit"
+        SetCtlColors $R7 ${HIVEY_TEXT} ${HIVEY_BG}
       ${ElseIf} $R6 == "Button"
         System::Call 'user32::GetWindowLongW(p R7, i -16) i .R5'
         IntOp $R5 $R5 & 0xF
@@ -346,6 +347,7 @@ Function DarkenControls
           System::Call 'uxtheme::SetWindowTheme(p R7, w "DarkMode_Explorer", p 0)'
           SendMessage $R7 0x031A 0 0  ; WM_THEMECHANGED
           SetCtlColors $R7 ${HIVEY_TEXT} ${HIVEY_BG}
+          System::Call 'user32::InvalidateRect(p R7, p 0, i 1)'
         ${Else}
           ; Check boxes, radio buttons, group boxes: unthemed, so they take
           ; the colors (themed ones keep black text).
@@ -364,6 +366,7 @@ Function DarkenControls
         SendMessage $R7 0x0409 0 ${HIVEY_ACCENT_REF}  ; PBM_SETBARCOLOR
       ${ElseIf} $R6 == "RichEdit20W"
       ${OrIf} $R6 == "RichEdit20A"
+      ${OrIf} $R6 == "RICHEDIT50W"
         SendMessage $R7 0x0443 0 ${HIVEY_BG_REF}  ; EM_SETBKGNDCOLOR
       ${EndIf}
     ${EndIf}
@@ -418,6 +421,12 @@ Function HiveyGuiInit
     System::Call 'kernel32::GetProcAddress(p r0, p 135) p .r1'
     ${If} $1 P<> 0
       System::Call '::$1(i 2)'  ; ForceDark
+      ; RefreshImmersiveColorPolicyState: the windows already there (the
+      ; buttons around the pages) follow it too.
+      System::Call 'kernel32::GetProcAddress(p r0, p 104) p .r1'
+      ${If} $1 P<> 0
+        System::Call '::$1()'
+      ${EndIf}
     ${EndIf}
     System::Call 'kernel32::GetProcAddress(p r0, p 133) p .r1'
     ${If} $1 P<> 0
