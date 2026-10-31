@@ -891,7 +891,7 @@ WORKSPACE_ICONS = {
     'security': 'shield-check', 'wisebase': 'books', 'benchmark': 'chart-bar', 'mcp': 'plugs-connected',
 }
 TOOL_ICONS = {
-    'Cyber': 'fingerprint', 'Tor': 'detective', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
+    'Cyber': 'fingerprint', 'Tor': 'onion', 'Performance': 'gauge', 'History': 'clock-counter-clockwise',
     'Bookmarks': 'bookmark-simple', 'Settings': 'gear-six', 'App': 'app-window',
 }
 # "Modern" icons: the Phosphor glyph in its fill weight (a different, solid
@@ -1017,13 +1017,42 @@ def _phosphor_duotone_dir():
     return icons
 
 
+# Icons drawn here, in Phosphor's grid (256, 16 px strokes): an onion for
+# private windows with Tor, outlined (duotone) and solid with a layer cut
+# out (fill).
+_ONION_BULB = 'M128 70C90 104 52 134 52 170a76 62 0 0 0 152 0c0-36-38-66-76-100Z'
+_ONION_LAYERS = 'M128 92c-22 26-38 52-38 78a38 46 0 0 0 76 0c0-26-16-52-38-78Z'
+_ONION_SPROUT = ('<path d="M128 70V36"/><path d="M128 50c10-14 26-20 44-18"/>')
+OWN_GLYPHS = {
+    ('onion', 'duotone'): (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'
+        f'<path d="{_ONION_BULB}" fill="currentColor" opacity="0.2"/>'
+        '<g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">'
+        f'<path d="{_ONION_BULB}"/><path d="{_ONION_LAYERS}"/>{_ONION_SPROUT}</g></svg>'),
+    ('onion', 'fill'): (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'
+        # The bulb, minus a band around its heart (even-odd: bulb, layer, heart).
+        f'<path fill-rule="evenodd" fill="currentColor" d="{_ONION_BULB}{_ONION_LAYERS}'
+        'M128 114c-14 20-24 40-24 56a24 30 0 0 0 48 0c0-16-10-36-24-56Z"/>'
+        '<g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round">'
+        f'{_ONION_SPROUT}</g></svg>'),
+}
+
+
+def _glyph_svg(phosphor_duotone, name, weight):
+    """A glyph's SVG: Hivey's own, or Phosphor's in that weight."""
+    if (name, weight) in OWN_GLYPHS:
+        return OWN_GLYPHS[(name, weight)]
+    return (phosphor_duotone.parent / weight / f'{name}-{weight}.svg').read_text()
+
+
 def _modern_png(phosphor, key, name):
     """The modern glyph for `key` (Phosphor glyph `name`, fill weight), white
     at MODERN_PX, or None when the item has no color of its own."""
     import cairosvg
     if not name or key not in ICON_COLORS:
         return None
-    glyph = (phosphor.parent / 'fill' / f'{name}-fill.svg').read_text()
+    glyph = _glyph_svg(phosphor, name, 'fill')
     glyph = re.sub(r'^.*?<svg[^>]*>|</svg>\s*$', '', glyph, flags=re.S).replace('currentColor', '#ffffff')
     return cairosvg.svg2png(bytestring=MODERN_GLYPH_SVG.format(glyph=glyph).encode(),
                             output_width=MODERN_PX, output_height=MODERN_PX)
@@ -1111,14 +1140,14 @@ def _write_bar_assets(src):
     arrays, workspaces, tools = [], [], []
     for i, tab in enumerate(tabs):
         name = WORKSPACE_ICONS.get(tab['mode'])
-        svg = (phosphor / f'{name}-duotone.svg').read_text() if name else tab['svg']
+        svg = _glyph_svg(phosphor, name, 'duotone') if name else tab['svg']
         arrays.append(_c_bytes(f'kHiveyBarWorkspacePng{i}', _white_png(svg)))
         workspaces.append(f'    {{{_c_string(tab["mode"])}, {_c_string(tab["title"]["en"])}, '
                           f'{_c_string(tab["title"]["fr"])}, kHiveyBarWorkspacePng{i}, '
                           f'sizeof(kHiveyBarWorkspacePng{i}), {_icon_colors(tab["mode"])}, '
                           f'{_modern(arrays, phosphor, f"kHiveyBarWorkspaceModernPng{i}", tab["mode"], name)}}},')
     for tool, name in TOOL_ICONS.items():
-        arrays.append(_c_bytes(f'kHiveyBar{tool}Png', _white_png((phosphor / f'{name}-duotone.svg').read_text())))
+        arrays.append(_c_bytes(f'kHiveyBar{tool}Png', _white_png(_glyph_svg(phosphor, name, 'duotone'))))
         tools.append(f'inline constexpr HiveyBarIcon kHiveyBar{tool}Icon = {{kHiveyBar{tool}Png, '
                      f'sizeof(kHiveyBar{tool}Png), {_icon_colors(tool)}, '
                      f'{_modern(arrays, phosphor, f"kHiveyBar{tool}ModernPng", tool, name)}}};')
@@ -1560,6 +1589,25 @@ def _make_setup_bitmaps(out_dir):
     return welcome, header
 
 
+def _license_rtf(dest):
+    """The license for the wizard's dark license page: RTF in light text."""
+    text = (ROOT / 'LICENSE').read_text()
+    escaped = []
+    for ch in text:
+        if ch in '\\{}':
+            escaped.append('\\' + ch)
+        elif ch == '\n':
+            escaped.append('\\par\n')
+        elif ord(ch) > 127:
+            escaped.append(f'\\u{ord(ch)}?')
+        else:
+            escaped.append(ch)
+    dest.write_text('{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Segoe UI;}}'
+                    '{\\colortbl;\\red230\\green231\\blue255;}\\cf1\\f0\\fs18 '
+                    + ''.join(escaped) + '}\n')
+    return dest
+
+
 def _make_setup_wizard(version, mini_installer, dest):
     """The setup wizard, embedding the mini_installer (makensis, from the
     nsis package, runs on Linux)."""
@@ -1570,7 +1618,8 @@ def _make_setup_wizard(version, mini_installer, dest):
     _write_setup_addons(addons)
     welcome, header = _make_setup_bitmaps(BUILD)
     run([makensis, '-V2', '-INPUTCHARSET', 'UTF8', f'-DVERSION={version}', f'-DMINI_INSTALLER={mini_installer}',
-         f'-DICON={SRC / "chrome/installer/mini_installer/mini_installer.ico"}', f'-DLICENSE_FILE={ROOT / "LICENSE"}',
+         f'-DICON={SRC / "chrome/installer/mini_installer/mini_installer.ico"}',
+         f'-DLICENSE_FILE={_license_rtf(BUILD / "setup-license.rtf")}',
          f'-DADDONS_NSH={addons}', f'-DWELCOME_BMP={welcome}', f'-DHEADER_BMP={header}',
          f'-DOUTFILE={dest}', WINDOWS_SETUP_NSI])
 
