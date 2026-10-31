@@ -97,6 +97,13 @@ Var Verbose
 !define MUI_TEXTCOLOR "F2F3FF"
 !define MUI_HEADER_TRANSPARENT_TEXT
 !define MUI_LICENSEPAGE_BGCOLOR "1B1C2B"
+; Every other control is darkened when its page shows (DarkPage).
+!define HIVEY_BG "1B1C2B"
+!define HIVEY_TEXT "E6E7FF"
+; The same as Windows COLORREFs (0x00BBGGRR).
+!define HIVEY_BG_REF 0x2B1C1B
+!define HIVEY_TEXT_REF 0xFFE7E6
+!define HIVEY_ACCENT_REF 0xF16663
 !define MUI_INSTFILESPAGE_COLORS "E6E7FF 1B1C2B"
 !define MUI_INSTFILESPAGE_PROGRESSBAR "colored"
 !define MUI_WELCOMEFINISHPAGE_BITMAP_STRETCH "FitControl"
@@ -113,23 +120,29 @@ Var Verbose
 
 !define MUI_WELCOMEPAGE_TITLE "$(WelcomeTitle)"
 !define MUI_WELCOMEPAGE_TEXT "$(WelcomeText)"
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW DarkPage
 !insertmacro MUI_PAGE_WELCOME
 
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW DarkPage
 !insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"
 
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfUpdate
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE ComponentsLeave
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW DarkPage
 !insertmacro MUI_PAGE_COMPONENTS
 
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfUpdate
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE DirectoryLeave
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW DarkPage
 !insertmacro MUI_PAGE_DIRECTORY
 
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW DarkPage
 !insertmacro MUI_PAGE_INSTFILES
 
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "$(RunText)"
 !define MUI_FINISHPAGE_RUN_FUNCTION LaunchBrowser
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW DarkPage
 !insertmacro MUI_PAGE_FINISH
 
 ; The first language is the fallback for every other Windows language.
@@ -291,6 +304,73 @@ SectionEnd
 
 ; Push haystack, push needle; pops 1 if needle is in haystack (any case).
 ; Registers are kept.
+;--------------------------------------------------------------------------
+; Dark controls: Windows draws most of them itself, so each page darkens its
+; own (and the window's) when it shows.
+
+; $R9: a dialog; every control in it (ids 1000-1299) takes the dark colors.
+Function DarkenControls
+  StrCpy $R8 1000
+  ${Do}
+    GetDlgItem $R7 $R9 $R8
+    ${If} $R7 <> 0
+      System::Call 'user32::GetClassNameW(p R7, w .R6, i 64)'
+      ${If} $R6 == "Static"
+      ${OrIf} $R6 == "Edit"
+        SetCtlColors $R7 ${HIVEY_TEXT} ${HIVEY_BG}
+      ${ElseIf} $R6 == "Button"
+        System::Call 'user32::GetWindowLongW(p R7, i -16) i .R5'
+        IntOp $R5 $R5 & 0xF
+        ${If} $R5 <= 1
+          ; Push buttons: Windows' own dark style (Windows 10 1809 and later).
+          System::Call 'uxtheme::SetWindowTheme(p R7, w "DarkMode_Explorer", p 0)'
+        ${Else}
+          ; Check boxes, radio buttons, group boxes: unthemed, so they take
+          ; the colors (themed ones keep black text).
+          System::Call 'uxtheme::SetWindowTheme(p R7, w " ", w " ")'
+          SetCtlColors $R7 ${HIVEY_TEXT} ${HIVEY_BG}
+        ${EndIf}
+      ${ElseIf} $R6 == "SysTreeView32"
+        System::Call 'uxtheme::SetWindowTheme(p R7, w "DarkMode_Explorer", p 0)'
+        SendMessage $R7 0x111D 0 ${HIVEY_BG_REF}    ; TVM_SETBKCOLOR
+        SendMessage $R7 0x111E 0 ${HIVEY_TEXT_REF}  ; TVM_SETTEXTCOLOR
+      ${ElseIf} $R6 == "SysListView32"
+        System::Call 'uxtheme::SetWindowTheme(p R7, w "DarkMode_Explorer", p 0)'
+      ${ElseIf} $R6 == "msctls_progress32"
+        System::Call 'uxtheme::SetWindowTheme(p R7, w " ", w " ")'
+        SendMessage $R7 0x2001 0 ${HIVEY_BG_REF}      ; PBM_SETBKCOLOR
+        SendMessage $R7 0x0409 0 ${HIVEY_ACCENT_REF}  ; PBM_SETBARCOLOR
+      ${ElseIf} $R6 == "RichEdit20W"
+      ${OrIf} $R6 == "RichEdit20A"
+        SendMessage $R7 0x0443 0 ${HIVEY_BG_REF}  ; EM_SETBKGNDCOLOR
+      ${EndIf}
+    ${EndIf}
+    IntOp $R8 $R8 + 1
+  ${LoopUntil} $R8 > 1299
+FunctionEnd
+
+; MUI_PAGE_CUSTOMFUNCTION_SHOW of every page.
+Function DarkPage
+  Push $R5
+  Push $R6
+  Push $R7
+  Push $R8
+  Push $R9
+  ; The window around the pages (bottom bar, branding line, buttons).
+  SetCtlColors $HWNDPARENT ${HIVEY_TEXT} ${HIVEY_BG}
+  StrCpy $R9 $HWNDPARENT
+  Call DarkenControls
+  ; The page itself.
+  FindWindow $R9 "#32770" "" $HWNDPARENT
+  SetCtlColors $R9 ${HIVEY_TEXT} ${HIVEY_BG}
+  Call DarkenControls
+  Pop $R9
+  Pop $R8
+  Pop $R7
+  Pop $R6
+  Pop $R5
+FunctionEnd
+
 Function StrContains
   Exch $R1  ; needle
   Exch

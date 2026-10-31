@@ -3,6 +3,27 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4716 — 31 octobre 2026
+
+### Installation (Windows)
+- L'assistant est **sombre de bout en bout**, aux couleurs du navigateur :
+  plus de zones blanches, licence lisible (texte clair), liste des
+  composants, dossier, installation et fin d'installation sombres.
+
+### Barre Hivey
+- **Icônes modernes nettes** : plus d'effet de flou ; en « couleur du
+  thème », exactement la couleur des icônes du thème.
+- Les onglets de la barre passent **en icônes modernes colorées** par
+  défaut (modifiable dans Paramètres > Disposition).
+- **Tor** a une nouvelle icône (un oignon).
+
+### Barre de navigation
+- **Bouton Tor** à droite, comme Brave : une fenêtre privée avec Tor en un
+  clic (masquable ou déplaçable dans Paramètres > Disposition > Barre
+  d'outils).
+- Plus de bandeau « indicateur de ligne de commande non pris en charge
+  (--translate-security-origin) » au démarrage.
+
 ## 156.0.8078.4715 — 30 octobre 2026
 
 ### Confidentialité

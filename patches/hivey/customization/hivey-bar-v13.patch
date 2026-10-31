@@ -1,0 +1,246 @@
+# Hivey 4716: no bad-flag warning for Google Translate's security origin; modern icons crisp (no glow), in the theme's own color, Hivey Tools' tabs in modern multicolor once; a Tor button in the toolbar (onion icon, in the toolbar editor).
+--- a/chrome/browser/hivey/hivey_bar_prefs.cc
++++ b/chrome/browser/hivey/hivey_bar_prefs.cc
+@@ -31,6 +31,7 @@
+   registry->RegisterListPref(kHiveyOptionalAddons);
+   registry->RegisterListPref(kHiveyToolbarHidden);
+   registry->RegisterBooleanPref(kHiveyGoogleDefaultApplied, false);
++  registry->RegisterBooleanPref(kHiveyBarModernDefaultApplied, false);
+ }
+ 
+ bool IsHiveyBarOnLeft(const PrefService& prefs) {
+--- a/chrome/browser/hivey/hivey_bar_prefs.h
++++ b/chrome/browser/hivey/hivey_bar_prefs.h
+@@ -57,6 +57,10 @@
+ inline constexpr char kHiveyOptionalAddons[] = "hivey.optional_addons";
+ // The user's sites, opened in the side panel: {"id", "title", "url"}.
+ inline constexpr char kHiveyBarApps[] = "hivey.bar.apps";
++// Whether Hivey Tools' tabs were set once to the modern multicolor style
++// (the default since 156.0.8078.4716).
++inline constexpr char kHiveyBarModernDefaultApplied[] =
++    "hivey.bar.modern_default_applied";
+ // Whether this profile moved from DuckDuckGo (Hivey's former default search
+ // engine) to Google, the default since 156.0.8078.4707.
+ inline constexpr char kHiveyGoogleDefaultApplied[] =
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -123,6 +123,7 @@
+     toolbarReset: 'Reset the toolbar',
+     tbBack: 'Back', tbForward: 'Forward', tbReload: 'Reload', tbHome: 'Home', tbLocation: 'Address bar',
+     tbExtensions: 'Extensions', tbPinned: 'Pinned buttons', tbAvatar: 'Profile', tbMenu: 'Menu',
++    tbTor: 'Private window with Tor',
+     importSectionHint: 'Bring your bookmarks from the browser you used before.',
+     importHint: 'From Chrome, Edge, Brave, Vivaldi, Opera or Chromium on this computer: each profile goes to a folder of Other bookmarks.',
+     importFind: 'Browsers on this computer',
+@@ -395,6 +396,7 @@
+     toolbarReset: 'Rétablir la barre d’outils',
+     tbBack: 'Retour', tbForward: 'Avancer', tbReload: 'Actualiser', tbHome: 'Accueil', tbLocation: 'Barre d’adresse',
+     tbExtensions: 'Extensions', tbPinned: 'Boutons épinglés', tbAvatar: 'Profil', tbMenu: 'Menu',
++    tbTor: 'Fenêtre privée avec Tor',
+     importSectionHint: 'Récupérez les favoris du navigateur que vous utilisiez avant.',
+     importHint: 'Depuis Chrome, Edge, Brave, Vivaldi, Opera ou Chromium sur cet ordinateur : chaque profil va dans un dossier des Autres favoris.',
+     importFind: 'Navigateurs sur cet ordinateur',
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -591,10 +591,11 @@
+ 
+ // The toolbar, like Firefox's: the buttons in any order (the address bar
+ // too), Back, Reload and the extensions hidden or shown.
+-const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'extensions', 'pinned', 'avatar', 'menu'];
++const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'tor', 'extensions', 'pinned', 'avatar',
++                       'menu'];
+ const TOOLBAR_LABELS = {back: 'tbBack', forward: 'tbForward', reload: 'tbReload', home: 'tbHome',
+                         location: 'tbLocation', extensions: 'tbExtensions', pinned: 'tbPinned',
+-                        avatar: 'tbAvatar', menu: 'tbMenu'};
++                        avatar: 'tbAvatar', menu: 'tbMenu', tor: 'tbTor'};
+ // Forward and Home have Chromium's own settings.
+ const TOOLBAR_PREFS = {forward: 'browser.show_forward_button', home: 'browser.show_home_button'};
+ 
+--- a/chrome/browser/ui/startup/bad_flags_prompt.cc
++++ b/chrome/browser/ui/startup/bad_flags_prompt.cc
+@@ -103,7 +103,7 @@
+     switches::kSingleProcess,
+ 
+     // These flags disable or undermine the Same Origin Policy.
+-    translate::switches::kTranslateSecurityOrigin,
++    // (Hivey sets --translate-security-origin itself, for Google Translate.)
+ 
+     // These flags undermine HTTPS / connection security.
+     switches::kDisableWebRtcEncryption,
+--- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
++++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
+@@ -82,8 +82,6 @@
+ #include "ui/compositor/paint_recorder.h"
+ #include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
+ #include "ui/events/event.h"
+-#include "cc/paint/color_filter.h"
+-#include "cc/paint/paint_filter.h"
+ #include "cc/paint/paint_shader.h"
+ #include "third_party/skia/include/core/SkRRect.h"
+ #include "ui/gfx/canvas.h"
+@@ -225,18 +223,15 @@
+   return color_utils::HSLToSkColor(hsl, SK_AlphaOPAQUE);
+ }
+ 
+-// A modern icon, "neon": the glyph (`mask`, white, at 2x) filled with a
+-// diagonal gradient from `base` to a neighboring hue, over a soft glow of its
+-// own color. Everything stays inside the mask's square (it has a margin).
++// A modern icon: the solid glyph (`mask`, white, at 2x) filled with a
++// light diagonal gradient from `base` to a neighboring hue; crisp, no glow.
+ gfx::ImageSkia NeonIcon(const gfx::ImageSkia& mask,
+                         SkColor base,
+                         bool dark_toolbar) {
+   const SkBitmap glyph_bitmap = mask.GetRepresentation(2.0f).GetBitmap();
+   const gfx::ImageSkia glyph = gfx::ImageSkia::CreateFrom1xBitmap(glyph_bitmap);
+   const int size = glyph_bitmap.width();
+-  const SkColor end = ShiftColor(base, 0.12, 0.15, dark_toolbar ? -0.05 : -0.08);
+-  const SkColor glow = SkColorSetA(ShiftColor(base, 0.06, 0, 0),
+-                                   dark_toolbar ? 0xC0 : 0x70);
++  const SkColor end = ShiftColor(base, 0.06, 0.05, -0.06);
+ 
+   // The glyph in its gradient.
+   gfx::Canvas fill(gfx::Size(size, size), 1.0f, /*is_opaque=*/false);
+@@ -252,19 +247,7 @@
+   cc::PaintFlags keep;
+   keep.setBlendMode(SkBlendMode::kDstIn);
+   fill.DrawImageInt(glyph, 0, 0, keep);
+-
+-  // Its glow, then the glyph over it.
+-  gfx::Canvas canvas(gfx::Size(size, size), 1.0f, /*is_opaque=*/false);
+-  cc::PaintFlags halo;
+-  halo.setAntiAlias(true);
+-  halo.setColorFilter(cc::ColorFilter::MakeBlend(SkColor4f::FromColor(glow),
+-                                                 SkBlendMode::kSrcIn));
+-  halo.setImageFilter(sk_make_sp<cc::BlurPaintFilter>(
+-      size / 12.f, size / 12.f, SkTileMode::kDecal, nullptr));
+-  canvas.DrawImageInt(glyph, 0, 0, halo);
+-  canvas.DrawImageInt(gfx::ImageSkia::CreateFrom1xBitmap(fill.GetBitmap()), 0,
+-                      0);
+-  return gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f);
++  return gfx::ImageSkia::CreateFromBitmap(fill.GetBitmap(), 2.0f);
+ }
+ 
+ // The bar's icons take the theme's accent, a little lighter on a dark
+@@ -411,6 +394,14 @@
+     corner->SetVisible(false);
+     (left ? corner_left_ : corner_right_).SetView(corner);
+   }
++  // Hivey Tools' tabs in the modern multicolor style, the default since
++  // 156.0.8078.4716: applied once to every profile (the user can change it).
++  if (!profile->GetPrefs()->GetBoolean(hivey::kHiveyBarModernDefaultApplied)) {
++    profile->GetPrefs()->SetBoolean(hivey::kHiveyBarModernDefaultApplied, true);
++    profile->GetPrefs()->SetInteger(
++        hivey::kHiveyBarIconStyle,
++        static_cast<int>(hivey::HiveyBarIconStyle::kModern));
++  }
+   Rebuild();
+ 
+   // Google is the default search engine: a profile still on DuckDuckGo
+@@ -742,15 +733,12 @@
+       continue;
+     }
+     if (modern) {
+-      // Neon: the item's color (or the theme's accent), light on a dark
+-      // toolbar and deep on a light one.
+-      const SkColor accent = colors->GetColor(ui::kColorSysPrimary);
++      // The item's color, or exactly the theme's icon color (that of the
++      // classic icons).
+       const bool own = icon.colors && style == hivey::HiveyBarIconStyle::kModern;
+       const SkColor base =
+           own ? (dark_toolbar ? icon.colors->first : icon.colors->second)
+-              : (dark_toolbar
+-                     ? color_utils::AlphaBlend(SK_ColorWHITE, accent, 0.35f)
+-                     : accent);
++              : theme_color;
+       image = NeonIcon(icon.modern.isNull() ? icon.image : icon.modern, base,
+                        dark_toolbar);
+     } else {
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -4,7 +4,11 @@
+ 
+ #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
+ 
++#include "chrome/browser/hivey/hivey_bar_assets.h"
+ #include "chrome/browser/hivey/hivey_bar_prefs.h"
++#include "chrome/browser/ui/hivey/hivey_tor.h"
++#include "ui/gfx/codec/png_codec.h"
++#include "ui/gfx/image/image_skia_operations.h"
+ 
+ #include <algorithm>
+ #include <memory>
+@@ -516,6 +520,29 @@
+     }
+   }
+ 
++  // Hivey: a private window with Tor, one click away (like Brave's).
++  if (display_mode_ == DisplayMode::kNormal) {
++    auto tor = std::make_unique<ToolbarButton>(
++        base::BindRepeating(&hivey::OpenTorWindow, GURL()));
++    tor->SetImageModel(
++        views::Button::STATE_NORMAL,
++        ui::ImageModel::FromImageGenerator(
++            base::BindRepeating([](const ui::ColorProvider* colors) {
++              const gfx::ImageSkia onion = gfx::ImageSkia::CreateFromBitmap(
++                  gfx::PNGCodec::Decode(base::span(kHiveyBarTorPng)), 2.0f);
++              return colors ? gfx::ImageSkiaOperations::CreateColorMask(
++                                  onion,
++                                  colors->GetColor(kColorToolbarButtonIcon))
++                            : onion;
++            }),
++            gfx::Size(20, 20)));
++    const std::u16string tooltip =
++        l10n_util::GetStringUTF16(IDS_HIVEY_TOR_WINDOW);
++    tor->SetTooltipText(tooltip);
++    tor->GetViewAccessibility().SetName(tooltip);
++    hivey_tor_button_ = AddChildView(std::move(tor));
++  }
++
+   if (extensions_container) {
+     extensions_container_ = AddChildView(std::move(extensions_container));
+     extensions_toolbar_coordinator_ =
+@@ -2182,6 +2209,7 @@
+       {"reload", reload_},
+       {"home", home_},
+       {"location", location_bar_view_},
++      {"tor", hivey_tor_button_},
+       {"extensions", extensions_container_},
+       {"pinned", pinned_toolbar_actions_container_},
+       {"avatar", avatar_},
+@@ -2218,8 +2246,8 @@
+   const base::ListValue& hidden = prefs->GetList(hivey::kHiveyToolbarHidden);
+   for (const auto& [name, view] : items) {
+     if (!view ||
+-        !(name == "back" || name == "reload" || name == "extensions" ||
+-          name == "pinned")) {
++        !(name == "back" || name == "reload" || name == "tor" ||
++          name == "extensions" || name == "pinned")) {
+       continue;
+     }
+     const std::string id(name);
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.h
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.h
+@@ -489,6 +489,8 @@
+   // Hivey: the toolbar's order and hidden buttons, and the buttons this
+   // hid (shown again only by it).
+   PrefChangeRegistrar hivey_toolbar_prefs_;
++  // Hivey: opens a private window with Tor.
++  raw_ptr<ToolbarButton> hivey_tor_button_ = nullptr;
+   std::set<std::string> hivey_hidden_;
+ 
+   BooleanPrefMember show_chrome_labs_button_;
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -1143,9 +1143,9 @@
+   if (args.size() != 2 || !args[0].is_list() || !args[1].is_list()) {
+     return;
+   }
+-  constexpr std::string_view kIds[] = {"back",       "forward", "reload",
+-                                       "home",       "location", "extensions",
+-                                       "pinned",     "avatar",  "menu"};
++  constexpr std::string_view kIds[] = {
++      "back", "forward", "reload", "home",   "location",
++      "tor",  "extensions", "pinned", "avatar", "menu"};
+   auto ids = [&](const base::ListValue& list) {
+     base::ListValue clean;
+     for (const base::Value& id : list) {
