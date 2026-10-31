@@ -1,17 +1,18 @@
-# Hivey 4716: no bad-flag warning for Google Translate's security origin; modern icons crisp (no glow), in the theme's own color, Hivey Tools' tabs in modern multicolor once; a Tor button in the toolbar (onion icon, in the toolbar editor).
+# Hivey 4716: no bad-flag warning for Google Translate's security origin; modern icons crisp (no glow), in the theme's own color, Hivey Tools' tabs in modern multicolor once; Tor and tab search (Firefox's list of tabs) buttons in the toolbar, in the toolbar editor; tab search no longer in the tab strip by default.
 --- a/chrome/browser/hivey/hivey_bar_prefs.cc
 +++ b/chrome/browser/hivey/hivey_bar_prefs.cc
-@@ -31,6 +31,7 @@
+@@ -31,6 +31,8 @@
    registry->RegisterListPref(kHiveyOptionalAddons);
    registry->RegisterListPref(kHiveyToolbarHidden);
    registry->RegisterBooleanPref(kHiveyGoogleDefaultApplied, false);
 +  registry->RegisterBooleanPref(kHiveyBarModernDefaultApplied, false);
++  registry->RegisterBooleanPref(kHiveyTabSearchMoved, false);
  }
  
  bool IsHiveyBarOnLeft(const PrefService& prefs) {
 --- a/chrome/browser/hivey/hivey_bar_prefs.h
 +++ b/chrome/browser/hivey/hivey_bar_prefs.h
-@@ -57,6 +57,10 @@
+@@ -57,6 +57,13 @@
  inline constexpr char kHiveyOptionalAddons[] = "hivey.optional_addons";
  // The user's sites, opened in the side panel: {"id", "title", "url"}.
  inline constexpr char kHiveyBarApps[] = "hivey.bar.apps";
@@ -19,6 +20,9 @@
 +// (the default since 156.0.8078.4716).
 +inline constexpr char kHiveyBarModernDefaultApplied[] =
 +    "hivey.bar.modern_default_applied";
++// Whether tab search was moved once from the tab strip to the toolbar (the
++// default since 156.0.8078.4716).
++inline constexpr char kHiveyTabSearchMoved[] = "hivey.toolbar.tab_search_moved";
  // Whether this profile moved from DuckDuckGo (Hivey's former default search
  // engine) to Google, the default since 156.0.8078.4707.
  inline constexpr char kHiveyGoogleDefaultApplied[] =
@@ -28,7 +32,7 @@
      toolbarReset: 'Reset the toolbar',
      tbBack: 'Back', tbForward: 'Forward', tbReload: 'Reload', tbHome: 'Home', tbLocation: 'Address bar',
      tbExtensions: 'Extensions', tbPinned: 'Pinned buttons', tbAvatar: 'Profile', tbMenu: 'Menu',
-+    tbTor: 'Private window with Tor',
++    tbTor: 'Private window with Tor', tbTabSearch: 'List all tabs',
      importSectionHint: 'Bring your bookmarks from the browser you used before.',
      importHint: 'From Chrome, Edge, Brave, Vivaldi, Opera or Chromium on this computer: each profile goes to a folder of Other bookmarks.',
      importFind: 'Browsers on this computer',
@@ -36,7 +40,7 @@
      toolbarReset: 'Rétablir la barre d’outils',
      tbBack: 'Retour', tbForward: 'Avancer', tbReload: 'Actualiser', tbHome: 'Accueil', tbLocation: 'Barre d’adresse',
      tbExtensions: 'Extensions', tbPinned: 'Boutons épinglés', tbAvatar: 'Profil', tbMenu: 'Menu',
-+    tbTor: 'Fenêtre privée avec Tor',
++    tbTor: 'Fenêtre privée avec Tor', tbTabSearch: 'Liste de tous les onglets',
      importSectionHint: 'Récupérez les favoris du navigateur que vous utilisiez avant.',
      importHint: 'Depuis Chrome, Edge, Brave, Vivaldi, Opera ou Chromium sur cet ordinateur : chaque profil va dans un dossier des Autres favoris.',
      importFind: 'Navigateurs sur cet ordinateur',
@@ -47,12 +51,12 @@
  // The toolbar, like Firefox's: the buttons in any order (the address bar
  // too), Back, Reload and the extensions hidden or shown.
 -const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'extensions', 'pinned', 'avatar', 'menu'];
-+const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'tor', 'extensions', 'pinned', 'avatar',
-+                       'menu'];
++const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'tor', 'tabsearch', 'extensions', 'pinned',
++                       'avatar', 'menu'];
  const TOOLBAR_LABELS = {back: 'tbBack', forward: 'tbForward', reload: 'tbReload', home: 'tbHome',
                          location: 'tbLocation', extensions: 'tbExtensions', pinned: 'tbPinned',
 -                        avatar: 'tbAvatar', menu: 'tbMenu'};
-+                        avatar: 'tbAvatar', menu: 'tbMenu', tor: 'tbTor'};
++                        avatar: 'tbAvatar', menu: 'tbMenu', tor: 'tbTor', tabsearch: 'tbTabSearch'};
  // Forward and Home have Chromium's own settings.
  const TOOLBAR_PREFS = {forward: 'browser.show_forward_button', home: 'browser.show_home_button'};
  
@@ -67,6 +71,65 @@
  
      // These flags undermine HTTPS / connection security.
      switches::kDisableWebRtcEncryption,
+--- a/chrome/browser/ui/tabs/tab_strip_prefs.cc
++++ b/chrome/browser/ui/tabs/tab_strip_prefs.cc
+@@ -20,7 +20,8 @@
+ namespace tabs {
+ 
+ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
+-  registry->RegisterBooleanPref(prefs::kTabSearchPinnedToTabstrip, true);
++  // Hivey: tab search is in the toolbar.
++  registry->RegisterBooleanPref(prefs::kTabSearchPinnedToTabstrip, false);
+   registry->RegisterBooleanPref(prefs::kOrganizerPanelPinnedToTabstrip, true);
+   registry->RegisterBooleanPref(prefs::kEverythingMenuPinnedToTabstrip, true);
+   registry->RegisterBooleanPref(prefs::kTabScrollButtonsPinnedToTabstrip, true);
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -1125,6 +1125,7 @@
+   SetLayoutManager(nullptr);
+ 
+   tab_search_bubble_host_.reset();
++  hivey_toolbar_tab_search_host_.reset();
+ 
+   global_error_observation_.Reset();
+ 
+@@ -1363,6 +1364,12 @@
+ }
+ 
+ TabSearchBubbleHost* BrowserView::GetTabSearchBubbleHost() {
++  // Hivey: tab search from the toolbar, unless pinned to the tab strip.
++  if (hivey_toolbar_tab_search_host_ &&
++      !GetProfile()->GetPrefs()->GetBoolean(
++          prefs::kTabSearchPinnedToTabstrip)) {
++    return hivey_toolbar_tab_search_host_.get();
++  }
+   return tab_search_bubble_host_.get();
+ }
+ 
+@@ -4319,6 +4326,12 @@
+     return;
+   }
+ 
++  if (!hivey_toolbar_tab_search_host_ && toolbar_ &&
++      toolbar_->hivey_tab_search_button()) {
++    hivey_toolbar_tab_search_host_ = std::make_unique<TabSearchBubbleHost>(
++        toolbar_->hivey_tab_search_button(), browser_.get());
++  }
++
+   auto* vertical_tab_strip_state_controller =
+       tabs::VerticalTabStripStateController::From(browser_);
+   if (vertical_tab_strip_state_controller &&
+--- a/chrome/browser/ui/views/frame/browser_view.h
++++ b/chrome/browser/ui/views/frame/browser_view.h
+@@ -1207,6 +1207,8 @@
+   raw_ptr<BookmarkBarView> bookmark_bar_view_ = nullptr;
+ 
+   std::unique_ptr<TabSearchBubbleHost> tab_search_bubble_host_;
++  // Hivey: tab search's bubble from the toolbar (as in Firefox).
++  std::unique_ptr<TabSearchBubbleHost> hivey_toolbar_tab_search_host_;
+ 
+   // Separator between top container and contents.
+   // Note: when `SideBySide` feature is disabled, this separator is also
 --- a/chrome/browser/ui/views/frame/hivey_bar_view.cc
 +++ b/chrome/browser/ui/views/frame/hivey_bar_view.cc
 @@ -82,8 +82,6 @@
@@ -121,7 +184,7 @@
  }
  
  // The bar's icons take the theme's accent, a little lighter on a dark
-@@ -411,6 +394,14 @@
+@@ -411,6 +394,20 @@
      corner->SetVisible(false);
      (left ? corner_left_ : corner_right_).SetView(corner);
    }
@@ -133,10 +196,16 @@
 +        hivey::kHiveyBarIconStyle,
 +        static_cast<int>(hivey::HiveyBarIconStyle::kModern));
 +  }
++  // Tab search in the toolbar, not the tab strip (the default since
++  // 156.0.8078.4716): moved once.
++  if (!profile->GetPrefs()->GetBoolean(hivey::kHiveyTabSearchMoved)) {
++    profile->GetPrefs()->SetBoolean(hivey::kHiveyTabSearchMoved, true);
++    profile->GetPrefs()->SetBoolean(prefs::kTabSearchPinnedToTabstrip, false);
++  }
    Rebuild();
  
    // Google is the default search engine: a profile still on DuckDuckGo
-@@ -742,15 +733,12 @@
+@@ -742,15 +739,12 @@
        continue;
      }
      if (modern) {
@@ -157,19 +226,20 @@
      } else {
 --- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
 +++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
-@@ -4,7 +4,11 @@
+@@ -4,7 +4,12 @@
  
  #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
  
 +#include "chrome/browser/hivey/hivey_bar_assets.h"
  #include "chrome/browser/hivey/hivey_bar_prefs.h"
 +#include "chrome/browser/ui/hivey/hivey_tor.h"
++#include "components/vector_icons/vector_icons.h"
 +#include "ui/gfx/codec/png_codec.h"
 +#include "ui/gfx/image/image_skia_operations.h"
  
  #include <algorithm>
  #include <memory>
-@@ -516,6 +520,29 @@
+@@ -516,6 +521,42 @@
      }
    }
  
@@ -194,38 +264,91 @@
 +    tor->SetTooltipText(tooltip);
 +    tor->GetViewAccessibility().SetName(tooltip);
 +    hivey_tor_button_ = AddChildView(std::move(tor));
++
++    // Tab search, as Firefox's "List all tabs": BrowserView gives it its
++    // bubble host (unless tab search is pinned to the tab strip).
++    auto tab_search = std::make_unique<ToolbarButton>();
++    const gfx::VectorIcon& arrow = features::IsRoundedIconsEnabled()
++                                       ? vector_icons::kKeyboardArrowDownIcon
++                                       : vector_icons::kExpandMoreOldIcon;
++    tab_search->SetVectorIcons(arrow, arrow);
++    const std::u16string search_tooltip =
++        l10n_util::GetStringUTF16(IDS_TOOLTIP_TAB_SEARCH);
++    tab_search->SetTooltipText(search_tooltip);
++    tab_search->GetViewAccessibility().SetName(search_tooltip);
++    hivey_tab_search_button_ = AddChildView(std::move(tab_search));
 +  }
 +
    if (extensions_container) {
      extensions_container_ = AddChildView(std::move(extensions_container));
      extensions_toolbar_coordinator_ =
-@@ -2182,6 +2209,7 @@
+@@ -698,7 +739,8 @@
+ 
+   hivey_toolbar_prefs_.Init(prefs);
+   for (const char* pref :
+-       {hivey::kHiveyToolbarOrder, hivey::kHiveyToolbarHidden}) {
++       {hivey::kHiveyToolbarOrder, hivey::kHiveyToolbarHidden,
++        ::prefs::kTabSearchPinnedToTabstrip}) {
+     hivey_toolbar_prefs_.Add(
+         pref, base::BindRepeating(&ToolbarView::ApplyHiveyToolbarLayout,
+                                   base::Unretained(this)));
+@@ -2182,6 +2224,9 @@
        {"reload", reload_},
        {"home", home_},
        {"location", location_bar_view_},
 +      {"tor", hivey_tor_button_},
++      {"tabsearch", hivey_tab_search_button_},
++      {"tabsearch", hivey_tab_search_button_},
        {"extensions", extensions_container_},
        {"pinned", pinned_toolbar_actions_container_},
        {"avatar", avatar_},
-@@ -2218,8 +2246,8 @@
+@@ -2218,8 +2263,8 @@
    const base::ListValue& hidden = prefs->GetList(hivey::kHiveyToolbarHidden);
    for (const auto& [name, view] : items) {
      if (!view ||
 -        !(name == "back" || name == "reload" || name == "extensions" ||
 -          name == "pinned")) {
 +        !(name == "back" || name == "reload" || name == "tor" ||
-+          name == "extensions" || name == "pinned")) {
++          name == "tabsearch" || name == "extensions" || name == "pinned")) {
        continue;
      }
      const std::string id(name);
+@@ -2230,6 +2275,12 @@
+       view->SetVisible(true);
+     }
+   }
++  // Tab search: in the tab strip when pinned there, here otherwise.
++  if (hivey_tab_search_button_) {
++    hivey_tab_search_button_->SetVisible(
++        !prefs->GetBoolean(::prefs::kTabSearchPinnedToTabstrip) &&
++        !hidden.contains("tabsearch"));
++  }
+   InvalidateLayout();
+ }
+ 
 --- a/chrome/browser/ui/views/toolbar/toolbar_view.h
 +++ b/chrome/browser/ui/views/toolbar/toolbar_view.h
-@@ -489,6 +489,8 @@
+@@ -375,6 +375,12 @@
+   // order, the hidden ones hidden.
+   void ApplyHiveyToolbarLayout();
+ 
++ public:
++  // Hivey: tab search in the toolbar (null in app and popup windows).
++  views::Button* hivey_tab_search_button() { return hivey_tab_search_button_; }
++
++ private:
++
+   void OnTouchUiChanged();
+ 
+   void InitGlicContainer();
+@@ -489,6 +495,10 @@
    // Hivey: the toolbar's order and hidden buttons, and the buttons this
    // hid (shown again only by it).
    PrefChangeRegistrar hivey_toolbar_prefs_;
 +  // Hivey: opens a private window with Tor.
 +  raw_ptr<ToolbarButton> hivey_tor_button_ = nullptr;
++  // Hivey: tab search (BrowserView gives it its bubble host).
++  raw_ptr<ToolbarButton> hivey_tab_search_button_ = nullptr;
    std::set<std::string> hivey_hidden_;
  
    BooleanPrefMember show_chrome_labs_button_;
@@ -239,8 +362,8 @@
 -                                       "home",       "location", "extensions",
 -                                       "pinned",     "avatar",  "menu"};
 +  constexpr std::string_view kIds[] = {
-+      "back", "forward", "reload", "home",   "location",
-+      "tor",  "extensions", "pinned", "avatar", "menu"};
++      "back", "forward", "reload", "home",   "location",  "tor",
++      "tabsearch", "extensions", "pinned", "avatar", "menu"};
    auto ids = [&](const base::ListValue& list) {
      base::ListValue clean;
      for (const base::Value& id : list) {

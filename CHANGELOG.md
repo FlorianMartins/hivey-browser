@@ -21,6 +21,9 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
 - **Bouton Tor** à droite, comme Brave : une fenêtre privée avec Tor en un
   clic (masquable ou déplaçable dans Paramètres > Disposition > Barre
   d'outils).
+- **Recherche d'onglets** dans la barre de navigation (la flèche à droite,
+  comme « Lister tous les onglets » de Firefox) au lieu de la bande
+  d'onglets ; on peut la remettre dans la bande (Paramètres > Onglets).
 - Plus de bandeau « indicateur de ligne de commande non pris en charge
   (--translate-security-origin) » au démarrage.
 
