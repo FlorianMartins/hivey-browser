@@ -166,3 +166,65 @@ jobs:
           name: windows-smoke-${{ steps.release.outputs.tag }}
           path: out/
           if-no-files-found: ignore
+
+  wizard:
+    # The setup wizard as a user sees it (Windows themes, DPI): every page,
+    # for the record. A job of its own: it installs interactively.
+    name: setup wizard screens
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      # Draft release assets are only visible with write access.
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Release to test
+        id: release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          $tag = $env:INPUT_TAG
+          if (-not $tag) {
+            $chromium = (Get-Content third_party/ungoogled-chromium/chromium_version.txt).Trim().Split('.')
+            $revision = [int](Get-Content HIVEY_REVISION).Trim()
+            $tag = "v$($chromium[0]).$($chromium[1]).$($chromium[2]).$([int]$chromium[3] * 100 + $revision)"
+          }
+          gh release view "$tag" --repo "$env:GITHUB_REPOSITORY" --json tagName *> $null
+          if ($LASTEXITCODE -ne 0) {
+            "skip=true" | Out-File $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+          "tag=$tag" | Out-File $env:GITHUB_OUTPUT -Append
+          "skip=false" | Out-File $env:GITHUB_OUTPUT -Append
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.release.outputs.skip == 'false'
+        with:
+          python-version: "3.12"
+      - name: Test dependencies
+        if: steps.release.outputs.skip == 'false'
+        run: python -m pip install pillow==11.3.0
+      - name: Download the wizard
+        if: steps.release.outputs.skip == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern "*-windows-x64-installer.exe" --dir dist
+      - name: Every page
+        if: steps.release.outputs.skip == 'false'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist -Filter *-windows-x64-installer.exe | Select-Object -First 1
+          python tests/setup_shots.py $setup.FullName out/wizard
+      - name: Keep the pictures
+        if: always() && steps.release.outputs.skip == 'false'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: setup-wizard-${{ steps.release.outputs.tag }}
+          path: out/
+          if-no-files-found: ignore
