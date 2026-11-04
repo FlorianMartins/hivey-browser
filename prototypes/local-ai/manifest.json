@@ -1,0 +1,66 @@
+{
+  "engine": {
+    "version": "b12081",
+    "linux": {
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12081/llama-b12081-bin-ubuntu-x64.tar.gz",
+      "sha256": "2a773dcda8b301e3650e5832d3e7b014afcdffdb6364d4d4e5cf3a12bcbc2eeb"
+    },
+    "windows-cpu": {
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12081/llama-b12081-bin-win-cpu-x64.zip",
+      "sha256": "563d4800833c364be0a0ffc99bb90597c57c9c1b67a85fee593538ea0be8b347"
+    },
+    "windows-vulkan": {
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12081/llama-b12081-bin-win-vulkan-x64.zip",
+      "sha256": "3acd5ef61102e61cb46a01a7ef29b15bbabac916e9af38f52a57fdeb322801f0"
+    }
+  },
+  "presentmon": {
+    "version": "2.6.0",
+    "url": "https://github.com/GameTechDev/PresentMon/releases/download/v2.6.0/PresentMon-2.6.0-x64.exe",
+    "sha256": "b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af"
+  },
+  "models": {
+    "qwen2.5-1.5b": {
+      "repo": "bartowski/Qwen2.5-1.5B-Instruct-GGUF",
+      "revision": "9eadc66189c7641e1ddd226b8267a9119b2ce2d4",
+      "file": "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
+      "sha256": "1adf0b11065d8ad2e8123ea110d1ec956dab4ab038eab665614adba04b6c3370",
+      "license": "apache-2.0"
+    },
+    "qwen3-1.7b": {
+      "repo": "unsloth/Qwen3-1.7B-GGUF",
+      "revision": "d7f544eead698dbd1f15126ef60b45a1e1933222",
+      "file": "Qwen3-1.7B-Q4_K_M.gguf",
+      "sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+      "license": "apache-2.0"
+    },
+    "smollm3-3b": {
+      "repo": "unsloth/SmolLM3-3B-GGUF",
+      "revision": "a7bc17204c8a326d6bd6e466e076959eddae2025",
+      "file": "SmolLM3-3B-Q4_K_M.gguf",
+      "sha256": "4de907d2d388a5508fb7cb443a06effe14cce3518b0a78d3bdd9e74d9edce989",
+      "license": "apache-2.0"
+    },
+    "ministral3-3b": {
+      "repo": "unsloth/Ministral-3-3B-Instruct-2512-GGUF",
+      "revision": "7564922f37fa5bbb62b87f09a55c12f1f91d7a6a",
+      "file": "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf",
+      "sha256": "fd46fc371ff0509bfa8657ac956b7de8534d7d9baaa4947975c0648c3aa397f4",
+      "license": "apache-2.0"
+    },
+    "granite4-micro": {
+      "repo": "unsloth/granite-4.0-micro-GGUF",
+      "revision": "3fd2564a260668ade578e8f035000066e61a634e",
+      "file": "granite-4.0-micro-Q4_K_M.gguf",
+      "sha256": "3ed0a9f397bab63eb93231449086ce5dc3f309598d007825fc01cfd32c4b93e1",
+      "license": "apache-2.0"
+    },
+    "llama3.2-3b": {
+      "repo": "unsloth/Llama-3.2-3B-Instruct-GGUF",
+      "revision": "e7d0997e49c9cb00d88b4c1a6a16aa894b0bbc31",
+      "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "sha256": "6c99cc00ae910f6a532a80022cb4bc1939094527a089c29294b841c0bd87f74d",
+      "license": "llama3.2"
+    }
+  }
+}
