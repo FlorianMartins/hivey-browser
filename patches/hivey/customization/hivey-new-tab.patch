@@ -1,0 +1,1130 @@
+# Hivey 4718: the mock-up's design, Hivey's new tab, no Hivey bar (the AI sidebar is an extension), Graphite theme, narrow vertical tabs, floating page, lower toolbar, resources button
+--- a/chrome/browser/browser_resources.grd
++++ b/chrome/browser/browser_resources.grd
+@@ -99,6 +99,9 @@
+         <include name="IDR_HIVEY_STUDIO_JS" file="resources\hivey_studio\studio.js" type="BINDATA" />
+         <include name="IDR_HIVEY_STUDIO_I18N_JS" file="resources\hivey_studio\i18n.js" type="BINDATA" />
+         <include name="IDR_HIVEY_STUDIO_LOGO_JS" file="resources\hivey_studio\logo.js" type="BINDATA" />
++        <include name="IDR_HIVEY_HOME_HTML" file="resources\hivey_studio\home.html" type="BINDATA" />
++        <include name="IDR_HIVEY_HOME_CSS" file="resources\hivey_studio\home.css" type="BINDATA" />
++        <include name="IDR_HIVEY_HOME_JS" file="resources\hivey_studio\home.js" type="BINDATA" />
+       </if>
+       <if expr="is_win or is_macosx or is_linux">
+         <!-- First Run audio resources -->
+--- a/chrome/browser/chrome_content_browser_client.cc
++++ b/chrome/browser/chrome_content_browser_client.cc
+@@ -938,29 +938,9 @@
+     ntp_location = base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII("custom-ntp");
+   if (profile->IsOffTheRecord() && ntp_location.find("chrome://") != std::string::npos) return false;
+   if (ntp_location.empty()) {
+-    // Hivey: without a page of the user's own (Hivey Settings > Layout), the
+-    // new tab page is the default search engine's home page (Google unless
+-    // the user picked another).
+-    if (profile->IsOffTheRecord()) {
+-      return false;
+-    }
+-    TemplateURLService* search =
+-        TemplateURLServiceFactory::GetForProfile(profile);
+-    const TemplateURL* engine =
+-        search ? search->GetDefaultSearchProvider() : nullptr;
+-    if (!engine) {
+-      return false;
+-    }
+-    const GURL home =
+-        GURL(engine->url_ref().ReplaceSearchTerms(
+-                 TemplateURLRef::SearchTermsArgs(std::u16string()),
+-                 search->search_terms_data()))
+-            .GetWithEmptyPath();
+-    if (!home.is_valid() || !home.SchemeIsHTTPOrHTTPS()) {
+-      return false;
+-    }
+-    *url = home;
+-    return true;
++    // Hivey: without a page of the user's own (Hivey Settings > Layout), Hivey's
++    // new tab.
++    return false;
+   }
+   url::Component scheme;
+   if (!url::ExtractScheme(ntp_location, &scheme)) {
+--- a/chrome/browser/hivey/hivey_bar_prefs.cc
++++ b/chrome/browser/hivey/hivey_bar_prefs.cc
+@@ -7,15 +7,34 @@
+ #include <algorithm>
+ 
+ #include "base/strings/strcat.h"
++#include "base/values.h"
+ #include "chrome/browser/hivey/hivey_bar_assets.h"
++#include "chrome/browser/hivey/hivey_colors.h"
+ #include "chrome/common/pref_names.h"
+ #include "components/pref_registry/pref_registry_syncable.h"
+ #include "components/prefs/pref_service.h"
+ 
+ namespace hivey {
+ 
++void ApplyHiveyDesign(PrefService& prefs, PrefService* local_state) {
++  prefs.SetBoolean(kHiveyBarVisible, false);
++  if (prefs.GetBoolean(kHiveyDesign4718Applied)) {
++    return;
++  }
++  prefs.SetBoolean(kHiveyDesign4718Applied, true);
++  prefs.SetBoolean(::prefs::kVerticalTabsEnabled, true);
++  prefs.SetBoolean(::prefs::kVerticalTabsCollapsedState, true);
++  // Aura, the former default, untouched by the user, becomes Graphite.
++  if (local_state && local_state->GetString(kHiveyTheme) == "aura" &&
++      local_state->GetDict(kHiveyColors).empty()) {
++    local_state->SetString(kHiveyTheme, "graphite");
++  }
++}
++
+ void RegisterHiveyBarProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
+-  registry->RegisterBooleanPref(kHiveyBarVisible, true);
++  registry->RegisterBooleanPref(kHiveyBarVisible, false);
++  registry->RegisterBooleanPref(kHiveyDesign4718Applied, false);
++  registry->RegisterBooleanPref(kHiveySidebarPinned, false);
+   registry->RegisterIntegerPref(kHiveyBarSide,
+                                 static_cast<int>(HiveyBarSide::kAuto));
+   registry->RegisterBooleanPref(kHiveyVerticalTabsRight, false);
+--- a/chrome/browser/hivey/hivey_bar_prefs.h
++++ b/chrome/browser/hivey/hivey_bar_prefs.h
+@@ -90,6 +90,13 @@
+   kModernTheme = 3,
+ };
+ 
++// The design of the 4718 release, once on a profile from before it (the
++// user's choices stay theirs from then on), and no Hivey bar any more.
++inline constexpr char kHiveyDesign4718Applied[] = "hivey.design_4718_applied";
++// The AI sidebar's button was pinned next to the extensions, once.
++inline constexpr char kHiveySidebarPinned[] = "hivey.sidebar_pinned";
++void ApplyHiveyDesign(PrefService& prefs, PrefService* local_state);
++
+ void RegisterHiveyBarProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
+ 
+ // Whether the Hivey bar is at the left edge of the window.
+--- a/chrome/browser/hivey/hivey_colors.cc
++++ b/chrome/browser/hivey/hivey_colors.cc
+@@ -51,6 +51,24 @@
+     {"page_text", "#f4f2fc"},
+ };
+ 
++// Graphite: neutral surfaces, the color kept for what is active.
++constexpr ColorEntry kGraphite[] = {
++    {"frame", "#0a0a0c"},
++    {"toolbar", "#101013"},
++    {"tab_inactive", "#0a0a0c"},
++    {"tab_text", "#f4f4f6"},
++    {"omnibox", "#1a1a1e"},
++    {"omnibox_text", "#f4f4f6"},
++    {"icons", "#a3a3ad"},
++    {"accent", "#7c6cf6"},
++    {"menu", "#151518"},
++    {"menu_text", "#f4f4f6"},
++    {"panel", "#151518"},
++    {"panel_text", "#f4f4f6"},
++    {"page", "#0f111a"},
++    {"page_text", "#f4f4f6"},
++};
++
+ constexpr ColorEntry kAmberNight[] = {
+     {"frame", "#0e0c09"},
+     {"toolbar", "#1a1610"},
+@@ -161,7 +179,8 @@
+ 
+ // "material": no override, Chromium's palette from the user color alone.
+ const Preset kPresets[] = {
+-    {"aura", kAura},         {"midnight", kMidnight},
++    {"graphite", kGraphite}, {"aura", kAura},
++    {"midnight", kMidnight},
+     {"ocean", kOcean},       {"forest", kForest},
+     {"rose", kRose},         {"amber_night", kAmberNight},
+     {"daylight", kDaylight}, {"material", {}},
+@@ -217,7 +236,7 @@
+ }
+ 
+ void RegisterHiveyColorsPrefs(PrefRegistrySimple* registry) {
+-  registry->RegisterStringPref(kHiveyTheme, "aura");
++  registry->RegisterStringPref(kHiveyTheme, "graphite");
+   registry->RegisterDictionaryPref(kHiveyColors);
+   registry->RegisterBooleanPref(kHiveyWelcomeShown, false);
+ }
+--- a/chrome/browser/resources/hivey_studio/home.css
++++ b/chrome/browser/resources/hivey_studio/home.css
+@@ -0,0 +1,184 @@
++/* Copyright 2026 The Hivey Browser contributors
++ * Use of this source code is governed by the MIT license that can be found in
++ * the LICENSE file of the Hivey Browser repository. */
++
++/* Hivey's new tab: one search field on Hivey Settings' gradient, in the
++ * browser's colors. Things move when the page opens and when the user acts;
++ * at rest nothing runs. */
++
++:root {
++  --bg: var(--color-new-tab-page-background, #0f111a);
++  --text: var(--color-new-tab-page-text, #f4f2fc);
++  --accent: var(--color-sys-primary, #7c6cf6);
++  --accent-2: color-mix(in oklch, var(--accent) 60%, #a855f7);
++  --accent-3: color-mix(in oklch, var(--accent) 60%, #3b82f6);
++  --muted: color-mix(in srgb, var(--text) 62%, var(--bg));
++  --line: color-mix(in srgb, var(--text) 18%, transparent);
++  --ease: cubic-bezier(.16, 1, .3, 1);
++}
++
++html,
++body {
++  height: 100%;
++  margin: 0;
++  background: var(--bg);
++  color: var(--text);
++  font: 15px/1.5 system-ui, 'Segoe UI Variable Text', 'Segoe UI', Ubuntu, Cantarell, sans-serif;
++  -webkit-font-smoothing: antialiased;
++}
++
++/* The same gradient as Hivey Settings. */
++.aura {
++  position: fixed;
++  inset: 0;
++  pointer-events: none;
++  background:
++    radial-gradient(620px circle at 0% 0%, color-mix(in srgb, var(--accent-2) 22%, transparent), transparent 60%),
++    radial-gradient(520px circle at 100% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%);
++}
++
++main {
++  position: relative;
++  min-height: 100%;
++  box-sizing: border-box;
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  justify-content: center;
++  gap: 22px;
++  padding: 24px 16px 12vh;
++}
++
++.mark {
++  width: 64px;
++  height: 64px;
++  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--accent-2) 70%, transparent));
++}
++.mark rect {
++  transform-box: fill-box;
++  transform-origin: center;
++  animation: bar-in .9s var(--ease) backwards;
++}
++.mark rect:nth-child(2) { animation-delay: .07s; }
++.mark rect:nth-child(3) { animation-delay: .14s; }
++.mark rect:nth-child(4) { animation-delay: .21s; }
++
++form {
++  width: min(640px, 100%);
++  display: grid;
++  gap: 12px;
++}
++
++/* A colored ring lights up around the field, and turns once when focused. */
++.field {
++  position: relative;
++  overflow: hidden;
++  isolation: isolate;
++  padding: 1.5px;
++  border-radius: 30px;
++  background: var(--line);
++  box-shadow: 0 8px 40px -14px color-mix(in srgb, var(--accent-2) 70%, transparent);
++  animation: rise .7s var(--ease) .1s backwards;
++}
++.field::before {
++  content: "";
++  position: absolute;
++  left: 50%;
++  top: 50%;
++  width: 110%;
++  aspect-ratio: 1;
++  z-index: -1;
++  opacity: 0;
++  transform: translate(-50%, -50%);
++  background: conic-gradient(var(--accent-3), var(--accent), var(--accent-2), var(--accent-3));
++  transition: opacity .3s;
++}
++.field:hover::before { opacity: .55; }
++.field:focus-within::before {
++  opacity: 1;
++  animation: spin 1.6s var(--ease);
++}
++.field-in {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  min-height: 56px;
++  padding: 6px 8px 6px 20px;
++  border-radius: 29px;
++  background: color-mix(in srgb, var(--bg) 90%, #000);
++}
++.glass {
++  flex: none;
++  color: var(--muted);
++}
++#q {
++  flex: 1;
++  min-width: 0;
++  min-height: 40px;
++  border: 0;
++  outline: none;
++  background: none;
++  color: var(--text);
++  font: inherit;
++  font-size: 18px;
++}
++#q::placeholder { color: var(--muted); }
++.go {
++  flex: none;
++  width: 44px;
++  height: 44px;
++  display: grid;
++  place-items: center;
++  border: 0;
++  border-radius: 50%;
++  color: #fff;
++  background: linear-gradient(135deg, var(--accent-3), var(--accent), var(--accent-2));
++  cursor: pointer;
++  transition: transform .2s var(--ease);
++}
++.go:hover { transform: scale(1.06); }
++
++.modes {
++  display: flex;
++  flex-wrap: wrap;
++  justify-content: center;
++  gap: 6px;
++  animation: rise .7s var(--ease) .18s backwards;
++}
++.chip {
++  min-height: 36px;
++  padding: 4px 14px;
++  border: 0;
++  border-radius: 18px;
++  color: var(--muted);
++  background: none;
++  box-shadow: inset 0 0 0 1px var(--line);
++  font: inherit;
++  font-size: 13px;
++  cursor: pointer;
++  transition: color .15s;
++}
++.chip:hover { color: var(--text); }
++.chip[aria-pressed="true"] {
++  color: #fff;
++  background: linear-gradient(90deg, var(--accent-3), var(--accent), var(--accent-2));
++  box-shadow: none;
++}
++:focus-visible {
++  outline: 2px solid var(--text);
++  outline-offset: 2px;
++}
++#q:focus-visible { outline: none; }
++
++@keyframes bar-in { from { transform: scaleX(.2); opacity: 0; } }
++@keyframes rise { from { transform: translateY(8px); opacity: 0; } }
++@keyframes spin {
++  from { transform: translate(-50%, -50%) rotate(0); }
++  to { transform: translate(-50%, -50%) rotate(360deg); }
++}
++@media (prefers-reduced-motion: reduce) {
++  *, *::before {
++    animation: none !important;
++    transition: none !important;
++  }
++}
+--- a/chrome/browser/resources/hivey_studio/home.html
++++ b/chrome/browser/resources/hivey_studio/home.html
+@@ -0,0 +1,53 @@
++<!doctype html>
++<html dir="ltr" lang="en">
++<head>
++  <meta charset="utf-8">
++  <meta name="color-scheme" content="dark light">
++  <meta name="viewport" content="width=device-width, initial-scale=1">
++  <title>New Tab</title>
++  <link rel="stylesheet" href="chrome://theme/colors.css?sets=ui,chrome">
++  <link rel="stylesheet" href="hivey_home.css">
++  <script type="module" src="hivey_home.js"></script>
++</head>
++<body>
++  <div class="aura" aria-hidden="true"></div>
++  <main>
++    <svg class="mark" viewBox="0 0 96 96" aria-hidden="true">
++      <defs>
++        <linearGradient id="hive" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse">
++          <stop offset="0" stop-color="#d946ef"/>
++          <stop offset="0.5" stop-color="#8b5cf6"/>
++          <stop offset="1" stop-color="#3b82f6"/>
++        </linearGradient>
++      </defs>
++      <g fill="url(#hive)">
++        <rect x="17" y="9" width="62" height="14" rx="7"/>
++        <rect x="8" y="30" width="80" height="14" rx="7"/>
++        <rect x="12" y="51" width="72" height="14" rx="7"/>
++        <rect x="23" y="72" width="50" height="14" rx="7"/>
++      </g>
++    </svg>
++    <form id="form" autocomplete="off">
++      <div class="field">
++        <div class="field-in">
++          <svg class="glass" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
++            <circle cx="9" cy="9" r="6"/>
++            <path d="m14 14 4 4"/>
++          </svg>
++          <input id="q" type="text" spellcheck="false">
++          <button id="go" class="go" type="submit">
++            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
++              <path d="M3 9h12M10 4l5 5-5 5"/>
++            </svg>
++          </button>
++        </div>
++      </div>
++      <div id="modes" class="modes" role="group">
++        <button type="button" class="chip" data-mode="web" aria-pressed="true"></button>
++        <button type="button" class="chip" data-mode="ask" aria-pressed="false"></button>
++        <button type="button" class="chip" data-mode="agent" aria-pressed="false"></button>
++      </div>
++    </form>
++  </main>
++</body>
++</html>
+--- a/chrome/browser/resources/hivey_studio/home.js
++++ b/chrome/browser/resources/hivey_studio/home.js
+@@ -0,0 +1,111 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++// Hivey's new tab: what is typed goes to the web, to the assistant's chat or
++// to its agent. The assistant's panel opens only for those two.
++
++import {sendWithPromise} from 'chrome://resources/js/cr.js';
++
++const STRINGS = {
++  en: {
++    title: 'New Tab',
++    web: 'Search',
++    ask: 'Ask the AI',
++    agent: 'Give to the agent',
++    go: 'Go',
++    modes: 'What to do with what you type',
++    placeholder_web: 'Search the web or type an address',
++    placeholder_ask: 'Ask the AI a question',
++    placeholder_agent: 'Describe a task for the agent',
++  },
++  fr: {
++    title: 'Nouvel onglet',
++    web: 'Rechercher',
++    ask: 'Demander à l\'IA',
++    agent: 'Confier à l\'agent',
++    go: 'Lancer',
++    modes: 'Que faire de ta saisie',
++    placeholder_web: 'Rechercher sur le web ou saisir une adresse',
++    placeholder_ask: 'Poser une question à l\'IA',
++    placeholder_agent: 'Décrire une tâche à confier à l\'agent',
++  },
++};
++const lang = navigator.language.toLowerCase().startsWith('fr') ? 'fr' : 'en';
++const t = STRINGS[lang];
++const QUERY = 'HIVEYQUERY';
++// Only if the browser has no search engine to give.
++const FALLBACK_SEARCH = `https://duckduckgo.com/?q=${QUERY}`;
++
++const input = document.getElementById('q');
++const chips = [...document.querySelectorAll('.chip')];
++let mode = 'web';
++let searchUrl = FALLBACK_SEARCH;
++
++// An address goes straight to its site; anything else is a search. Only http
++// and https: "javascript:..." and the like are searched for.
++function addressOf(text) {
++  if (/\s/.test(text)) {
++    return null;
++  }
++  let candidate = null;
++  if (/^https?:\/\//i.test(text)) {
++    candidate = text;
++  } else if (/^(localhost|\d{1,3}(\.\d{1,3}){3})(:\d+)?([/?#].*)?$/i.test(text)) {
++    candidate = `http://${text}`;
++  } else if (/^([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?([/?#].*)?$/i.test(text)) {
++    candidate = `https://${text}`;
++  }
++  if (!candidate) {
++    return null;
++  }
++  try {
++    return new URL(candidate).href;
++  } catch {
++    return null;
++  }
++}
++
++function setMode(next) {
++  mode = next;
++  for (const chip of chips) {
++    chip.setAttribute('aria-pressed', String(chip.dataset.mode === next));
++  }
++  input.placeholder = t[`placeholder_${next}`];
++  input.setAttribute('aria-label', t[`placeholder_${next}`]);
++}
++
++document.documentElement.lang = lang;
++document.title = t.title;
++document.getElementById('go').setAttribute('aria-label', t.go);
++document.getElementById('modes').setAttribute('aria-label', t.modes);
++for (const chip of chips) {
++  chip.textContent = t[chip.dataset.mode];
++  chip.addEventListener('click', () => {
++    setMode(chip.dataset.mode);
++    input.focus();
++  });
++}
++setMode('web');
++
++document.getElementById('form').addEventListener('submit', event => {
++  event.preventDefault();
++  const text = input.value.trim();
++  if (!text) {
++    input.focus();
++    return;
++  }
++  if (mode !== 'web') {
++    chrome.send('askAssistant', [mode, text]);
++    input.value = '';
++    return;
++  }
++  location.assign(addressOf(text) ||
++                  searchUrl.replace(QUERY, encodeURIComponent(text)));
++});
++
++sendWithPromise('getHomeInfo').then(url => {
++  if (url && url.includes(QUERY)) {
++    searchUrl = url;
++  }
++});
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -8,6 +8,8 @@
+ const STRINGS = {
+   en: {
+     themes: "Themes",
++    theme_graphite: "Graphite",
++    theme_graphite_hint: "Neutral and sober, color only where it matters",
+     theme_aura: "Aura",
+     theme_aura_hint: "Deep ink and indigo, like the Hivey AI sidebar",
+     theme_amber_night: "Amber night",
+@@ -123,7 +125,7 @@
+     toolbarReset: 'Reset the toolbar',
+     tbBack: 'Back', tbForward: 'Forward', tbReload: 'Reload', tbHome: 'Home', tbLocation: 'Address bar',
+     tbExtensions: 'Extensions', tbPinned: 'Pinned buttons', tbAvatar: 'Profile', tbMenu: 'Menu',
+-    tbTor: 'Private window with Tor', tbTabSearch: 'List all tabs',
++    tbPerformance: 'Resources and Gaming mode', tbTor: 'Private window with Tor', tbTabSearch: 'List all tabs',
+     importSectionHint: 'Bring your bookmarks from the browser you used before.',
+     importHint: 'From Chrome, Edge, Brave, Vivaldi, Opera or Chromium on this computer: each profile goes to a folder of Other bookmarks.',
+     importFind: 'Browsers on this computer',
+@@ -171,7 +173,7 @@
+     customizeToolbar: 'Choose toolbar buttons…',
+     customizeToolbarHint: 'Pin or unpin buttons (downloads, history, print, task manager…).',
+     newTabPage: 'New tab page',
+-    newTabPageHint: 'Any address; empty: your search engine\u2019s home page (chrome://new-tab-page for the built-in page).',
++    newTabPageHint: 'Any address; empty: Hivey\u2019s new tab, with its search field.',
+     apply: 'Apply',
+     fonts: 'Fonts…',
+     fontsHint: 'Default fonts and minimum size for web pages.',
+@@ -281,6 +283,8 @@
+   },
+   fr: {
+     themes: "Thèmes",
++    theme_graphite: "Graphite",
++    theme_graphite_hint: "Neutre et sobre, la couleur seulement où elle compte",
+     theme_aura: "Aura",
+     theme_aura_hint: "Encre profonde et indigo, comme la sidebar Hivey AI",
+     theme_amber_night: "Nuit ambrée",
+@@ -396,7 +400,7 @@
+     toolbarReset: 'Rétablir la barre d’outils',
+     tbBack: 'Retour', tbForward: 'Avancer', tbReload: 'Actualiser', tbHome: 'Accueil', tbLocation: 'Barre d’adresse',
+     tbExtensions: 'Extensions', tbPinned: 'Boutons épinglés', tbAvatar: 'Profil', tbMenu: 'Menu',
+-    tbTor: 'Fenêtre privée avec Tor', tbTabSearch: 'Liste de tous les onglets',
++    tbPerformance: 'Ressources et mode Gaming', tbTor: 'Fenêtre privée avec Tor', tbTabSearch: 'Liste de tous les onglets',
+     importSectionHint: 'Récupérez les favoris du navigateur que vous utilisiez avant.',
+     importHint: 'Depuis Chrome, Edge, Brave, Vivaldi, Opera ou Chromium sur cet ordinateur : chaque profil va dans un dossier des Autres favoris.',
+     importFind: 'Navigateurs sur cet ordinateur',
+@@ -444,7 +448,7 @@
+     customizeToolbar: 'Choisir les boutons de la barre d’outils…',
+     customizeToolbarHint: 'Épingler ou retirer des boutons (téléchargements, historique, impression, gestionnaire de tâches…).',
+     newTabPage: 'Page Nouvel onglet',
+-    newTabPageHint: 'N\u2019importe quelle adresse ; vide : l\u2019accueil de votre moteur de recherche (chrome://new-tab-page pour la page intégrée).',
++    newTabPageHint: 'N\u2019importe quelle adresse ; vide : le nouvel onglet Hivey, avec sa zone de recherche.',
+     apply: 'Appliquer',
+     fonts: 'Polices…',
+     fontsHint: 'Polices par défaut et taille minimale des pages web.',
+--- a/chrome/browser/resources/hivey_studio/studio.js
++++ b/chrome/browser/resources/hivey_studio/studio.js
+@@ -26,6 +26,7 @@
+ // Whole-browser color themes (chrome/browser/hivey/hivey_colors.cc), with the
+ // frame, toolbar and accent colors shown on their card.
+ const THEMES = [
++  {id: 'graphite', swatch: ['#0a0a0c', '#101013', '#7c6cf6']},
+   {id: 'aura', swatch: ['#0b0c14', '#151726', '#7c6cf6']},
+   {id: 'midnight', swatch: ['#000000', '#0a0a0f', '#8b5cf6']},
+   {id: 'ocean', swatch: ['#08121c', '#0f1d2b', '#0ea5e9']},
+@@ -439,7 +440,7 @@
+                  el('div', {class: 'actions'},
+                     el('button', {class: 'button ghost', text: t('resetTheme'), onclick: () => {
+                       chrome.send('resetTheme');
+-                      chrome.send('applyPreset', ['aura']);
++                      chrome.send('applyPreset', ['graphite']);
+                     }}))));
+ }
+ 
+@@ -591,11 +592,11 @@
+ 
+ // The toolbar, like Firefox's: the buttons in any order (the address bar
+ // too), Back, Reload and the extensions hidden or shown.
+-const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'tabsearch', 'extensions', 'tor', 'pinned',
++const TOOLBAR_ITEMS = ['back', 'forward', 'reload', 'home', 'location', 'tabsearch', 'performance', 'extensions', 'tor', 'pinned',
+                        'avatar', 'menu'];
+ const TOOLBAR_LABELS = {back: 'tbBack', forward: 'tbForward', reload: 'tbReload', home: 'tbHome',
+                         location: 'tbLocation', extensions: 'tbExtensions', pinned: 'tbPinned',
+-                        avatar: 'tbAvatar', menu: 'tbMenu', tor: 'tbTor', tabsearch: 'tbTabSearch'};
++                        avatar: 'tbAvatar', menu: 'tbMenu', tor: 'tbTor', tabsearch: 'tbTabSearch', performance: 'tbPerformance'};
+ // Forward and Home have Chromium's own settings.
+ const TOOLBAR_PREFS = {forward: 'browser.show_forward_button', home: 'browser.show_home_button'};
+ 
+@@ -721,20 +722,12 @@
+                  prefToggle('vertical_tabs.enabled', 'verticalTabs', 'verticalTabsHint'),
+                  vertical ? prefToggle('vertical_tabs.expand_on_hover', 'expandOnHover') : null,
+                  vertical ? prefToggle('hivey.vertical_tabs.right', 'tabsRight', 'tabsRightHint') : null,
+-                 prefToggle('hivey.bar.visible', 'hiveyBar', 'hiveyBarHint'),
+-                 hasPref('hivey.bar.side') && pref('hivey.bar.visible') ? selectRow({
+-                   label: t('hiveyBarSide'), value: pref('hivey.bar.side'),
+-                   options: [{value: 0, label: t('hiveyBarAuto')}, {value: 1, label: t('left')},
+-                             {value: 2, label: t('right')}],
+-                   onChange: v => setPref('hivey.bar.side', Number(v)),
+-                 }) : null,
+                  flagToggle({flag: 'hivey-compact-ui'}, 'compactMode', 'compactModeHint'),
+                  hasPref('side_panel.is_right_aligned') ? selectRow({
+                    label: t('sidePanel'), value: pref('side_panel.is_right_aligned') ? 1 : 0,
+                    options: [{value: 0, label: t('left')}, {value: 1, label: t('right')}],
+                    onChange: v => setPref('side_panel.is_right_aligned', Number(v) === 1),
+                  }) : null),
+-            pref('hivey.bar.visible') ? barCard() : null,
+             toolbarCard(),
+             card(null,
+                  prefToggle('browser.show_home_button', 'homeButton'),
+--- a/chrome/browser/search/search.cc
++++ b/chrome/browser/search/search.cc
+@@ -172,7 +172,8 @@
+       return NewTabURLDetails(GURL(), NEW_TAB_URL_INCOGNITO);
+     }
+ 
+-    const bool default_is_google = DefaultSearchProviderIsGoogle(profile);
++    [[maybe_unused]] const bool default_is_google =
++        DefaultSearchProviderIsGoogle(profile);
+ 
+ #if BUILDFLAG(IS_ANDROID)
+     const bool is_desktop_android = IsWebUiNtpEnabledForDesktopAndroid();
+@@ -191,9 +192,9 @@
+       }
+     }
+ #else
+-    const GURL local_url(default_is_google
+-                             ? chrome::ChromeUINewTabPageURLAsGURL()
+-                             : GURL(chrome::kChromeUINewTabPageThirdPartyURL));
++    // Hivey: its own new tab, whatever the search engine. The third party page
++    // shows the engine's site, which would then be contacted by every new tab.
++    const GURL local_url(chrome::ChromeUINewTabPageURLAsGURL());
+ #endif
+     return NewTabURLDetails(local_url, NEW_TAB_URL_VALID);
+   }
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -2309,6 +2309,8 @@
+       "views/frame/hivey_bar_view.h",
+       "views/toolbar/hivey_resources_coordinator.cc",
+       "views/toolbar/hivey_resources_coordinator.h",
++      "webui/hivey/hivey_home_handler.cc",
++      "webui/hivey/hivey_home_handler.h",
+       "webui/hivey/hivey_resources_ui.cc",
+       "webui/hivey/hivey_resources_ui.h",
+       "webui/hivey/hivey_studio_handler.cc",
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -80,7 +80,7 @@
+     case LayoutConstant::kLocationBarTrailingDecorationInnerPadding:
+       return touch_ui ? 3 : 8;
+     case LayoutConstant::kLocationBarHeight:
+-      return touch_ui ? 36 : 34;
++      return touch_ui ? 36 : 30;
+     // LINT.IfChange(LocationBarIconSize)
+     case LayoutConstant::kLocationBarIconSize:
+       return touch_ui ? 20 : 16;
+@@ -125,7 +125,7 @@
+     case LayoutConstant::kTabstripToolbarOverlap:
+       return 1;
+     case LayoutConstant::kToolbarButtonHeight:
+-      return touch_ui ? 48 : 34;
++      return touch_ui ? 48 : 30;
+     case LayoutConstant::kToolbarButtonIconSize:
+       return touch_ui ? kDefaultTouchableIconSize
+                       : kDefaultIconSizeChromeRefresh;
+--- a/chrome/browser/ui/startup/startup_browser_creator_impl.cc
++++ b/chrome/browser/ui/startup/startup_browser_creator_impl.cc
+@@ -23,6 +23,7 @@
+ #include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
+ #include "chrome/browser/defaults.h"
+ #include "chrome/browser/first_run/first_run.h"
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "chrome/browser/hivey/hivey_colors.h"
+ #include "chrome/browser/headless/headless_command_processor.h"
+ #include "chrome/browser/lifetime/application_lifetime_desktop.h"
+@@ -618,6 +619,10 @@
+     bool whats_new_enabled) {
+   StartupTabs tabs =
+       provider.GetCommandLineTabs(*command_line_, cur_dir_, profile_);
++  if (!is_incognito_or_guest) {
++    hivey::ApplyHiveyDesign(*profile_->GetPrefs(),
++                            g_browser_process->local_state());
++  }
+   // Hivey: the first start after installing opens Hivey Settings (on the
+   // first run, the first run tabs do; on a profile from before, it opens
+   // with the restored tabs).
+--- a/chrome/browser/ui/tabs/tab_strip_prefs.cc
++++ b/chrome/browser/ui/tabs/tab_strip_prefs.cc
+@@ -25,12 +25,12 @@
+   registry->RegisterBooleanPref(prefs::kOrganizerPanelPinnedToTabstrip, true);
+   registry->RegisterBooleanPref(prefs::kEverythingMenuPinnedToTabstrip, true);
+   registry->RegisterBooleanPref(prefs::kTabScrollButtonsPinnedToTabstrip, true);
+-  registry->RegisterBooleanPref(prefs::kVerticalTabsEnabled, false);
++  registry->RegisterBooleanPref(prefs::kVerticalTabsEnabled, true);
+   registry->RegisterBooleanPref(
+       prefs::kVerticalTabsExpandOnHoverEnabled,
+       tabs::kVerticalTabsExpandOnHoverDefaultEnabled.Get());
+   registry->RegisterBooleanPref(prefs::kVerticalTabsEnabledFirstTime, false);
+-  registry->RegisterBooleanPref(prefs::kVerticalTabsCollapsedState, false);
++  registry->RegisterBooleanPref(prefs::kVerticalTabsCollapsedState, true);
+   registry->RegisterIntegerPref(prefs::kVerticalTabsUncollapsedWidth,
+                                 kVerticalTabStripDefaultUncollapsedWidth);
+ }
+--- a/chrome/browser/ui/toolbar/toolbar_actions_model.cc
++++ b/chrome/browser/ui/toolbar/toolbar_actions_model.cc
+@@ -20,6 +20,7 @@
+ #include "base/observer_list.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
+ #include "chrome/browser/hivey/hivey_bar_assets.h"
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "extensions/browser/permissions/scripting_permissions_modifier.h"
+ #include "extensions/common/manifest_handlers/permissions_parser.h"
+ #include "extensions/common/url_pattern.h"
+@@ -260,6 +261,18 @@
+   }
+ }
+ 
++// Hivey: the AI sidebar is an extension like the others, its button pinned once
++// (the user can unpin it).
++void ToolbarActionsModel::PinHiveySidebarOnce() {
++  PrefService* prefs = profile_->GetPrefs();
++  if (!actions_initialized_ || prefs->GetBoolean(hivey::kHiveySidebarPinned) ||
++      !HasAction(HIVEY_BUNDLED_AI_ID)) {
++    return;
++  }
++  prefs->SetBoolean(hivey::kHiveySidebarPinned, true);
++  SetActionVisibility(HIVEY_BUNDLED_AI_ID, true);
++}
++
+ void ToolbarActionsModel::OnExtensionLoaded(
+     content::BrowserContext* browser_context,
+     const extensions::Extension* extension) {
+@@ -274,6 +287,9 @@
+   if (!HasAction(extension->id()) && ShouldAddExtension(extension)) {
+     AddAction(extension->id());
+   }
++  if (extension->id() == HIVEY_BUNDLED_AI_ID) {
++    PinHiveySidebarOnce();
++  }
+ }
+ 
+ void ToolbarActionsModel::OnExtensionUnloaded(
+@@ -416,6 +432,9 @@
+   for (Observer& observer : observers_) {
+     observer.OnToolbarModelInitialized();
+   }
++
++  // Hivey: at startup it may already be there (else OnExtensionLoaded()).
++  PinHiveySidebarOnce();
+ }
+ 
+ bool ToolbarActionsModel::ShouldAddExtension(
+--- a/chrome/browser/ui/toolbar/toolbar_actions_model.h
++++ b/chrome/browser/ui/toolbar/toolbar_actions_model.h
+@@ -157,6 +157,7 @@
+  private:
+   // Callback when actions are ready.
+   void OnReady();
++  void PinHiveySidebarOnce();
+ 
+   // ExtensionRegistryObserver:
+   void OnExtensionInstalled(content::BrowserContext* browser_context,
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -982,11 +982,6 @@
+ 
+   side_panel_ = AddChildView(std::make_unique<SidePanel>(this));
+ 
+-  // Hivey: the Hivey bar (normal browser windows only).
+-  if (browser_->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
+-    hivey_bar_ = AddChildView(std::make_unique<HiveyBarView>(this));
+-  }
+-
+   // Tabstrip comes basically last because it should be before toolbar in the
+   // focus order but also needs to paint on top of everything.
+   horizontal_tab_strip_region_view_ =
+--- a/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
++++ b/chrome/browser/ui/views/frame/layout/browser_view_tabbed_layout_impl.cc
+@@ -1169,6 +1169,21 @@
+     }
+   }
+ 
++  // Hivey: the page floats in the browser's surface, also without a side panel
++  // (which has its own margins, above).
++  if (!layout_data_->separator_info.shadow_box &&
++      !is_fullscreen(layout_data_->window_state)) {
++    constexpr int kPageMargin = 8;
++    const bool vertical =
++        layout_data_->tab_strip_type == TabStripType::kVertical;
++    const bool tabs_on_leading = VerticalTabsLeading(views());
++    const gfx::Insets page_insets = gfx::Insets::TLBR(
++        0, vertical && tabs_on_leading ? 0 : kPageMargin, kPageMargin,
++        vertical && !tabs_on_leading ? 0 : kPageMargin);
++    params.Inset(page_insets);
++    unclipped_contents_region.Inset(page_insets);
++  }
++
+   // Lay out the shadow overlay.
+   layout.AddChild(views().main_shadow_overlay, params.visual_client_area,
+                   layout_data_->separator_info.shadow_box);
+@@ -1324,33 +1339,13 @@
+     }
+   }
+ 
+-  // Hivey: with vertical tabs, the toolbar and the strip are one surface
+-  // around the page, whose top leading corner is rounded (the bottom one is
+-  // square), with or without glass.
++  // Hivey: the page floats in the browser's surface, its four corners rounded.
+   {
+     gfx::RoundedCornersF content_corners;
+-    if (layout_data_->tab_strip_type == TabStripType::kVertical &&
+-        !is_fullscreen(layout_data_->window_state)) {
+-      const int radius =
+-          views().vertical_tab_strip_top_corner->GetCornerRadius();
+-      // The corner next to the strip.
+-      if (base::i18n::IsRTL() == VerticalTabsLeading(views())) {
+-        content_corners.set_upper_right(radius);
+-      } else {
+-        content_corners.set_upper_left(radius);
+-      }
+-    }
+-    // Hivey: the page's top corner next to the Hivey bar is rounded too
+-    // (the bar and the toolbar are one surface around it).
+-    if (views().hivey_bar && views().hivey_bar->ShouldShow() &&
+-        !is_fullscreen(layout_data_->window_state)) {
+-      const int radius = views::LayoutProvider::Get()->GetCornerRadiusMetric(
+-          views::ShapeContextTokens::kContentSeparatorRadius);
+-      if (views().hivey_bar->IsOnLeft()) {
+-        content_corners.set_upper_left(radius);
+-      } else {
+-        content_corners.set_upper_right(radius);
+-      }
++    if (!is_fullscreen(layout_data_->window_state)) {
++      content_corners = gfx::RoundedCornersF(
++          views::LayoutProvider::Get()->GetCornerRadiusMetric(
++              views::ShapeContextTokens::kContentSeparatorRadius));
+     }
+     views().multi_contents_view->SetBackgroundRadii(content_corners);
+ 
+--- a/chrome/browser/ui/views/frame/system_menu_model_builder.cc
++++ b/chrome/browser/ui/views/frame/system_menu_model_builder.cc
+@@ -276,10 +276,6 @@
+ 
+   // Hivey: the Hivey bar can be hidden from its own menu; it comes back from
+   // here.
+-  if (browser()->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL) {
+-    model->AddCheckItemWithStringId(IDC_HIVEY_BAR_TOGGLE, IDS_HIVEY_BAR_SHOW);
+-  }
+-
+   if (chrome::CanOpenTaskManager()) {
+     model->AddSeparator(ui::NORMAL_SEPARATOR);
+     const int task_manager_string_id =
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -6,6 +6,7 @@
+ 
+ #include "chrome/browser/hivey/hivey_bar_assets.h"
+ #include "chrome/browser/hivey/hivey_bar_prefs.h"
++#include "chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h"
+ #include "chrome/browser/ui/hivey/hivey_tor.h"
+ #include "components/vector_icons/vector_icons.h"
+ #include "ui/gfx/codec/png_codec.h"
+@@ -536,6 +537,25 @@
+     hivey_tab_search_button_ = AddChildView(std::move(tab_search));
+   }
+ 
++  // Hivey: resources and Gaming mode.
++  if (display_mode_ == DisplayMode::kNormal) {
++    auto performance = std::make_unique<ToolbarButton>(base::BindRepeating(
++        [](ToolbarView* toolbar) {
++          if (auto* coordinator =
++                  HiveyResourcesCoordinator::From(toolbar->browser())) {
++            coordinator->ShowAnchoredTo(toolbar->hivey_performance_button_,
++                                        views::BubbleBorder::TOP_RIGHT);
++          }
++        },
++        base::Unretained(this)));
++    performance->SetVectorIcons(kSpeedIcon, kSpeedIcon);
++    const std::u16string performance_tooltip =
++        l10n_util::GetStringUTF16(IDS_HIVEY_BAR_PERFORMANCE);
++    performance->SetTooltipText(performance_tooltip);
++    performance->GetViewAccessibility().SetName(performance_tooltip);
++    hivey_performance_button_ = AddChildView(std::move(performance));
++  }
++
+   if (extensions_container) {
+     extensions_container_ = AddChildView(std::move(extensions_container));
+     extensions_toolbar_coordinator_ =
+@@ -2221,6 +2241,7 @@
+       {"home", home_},
+       {"location", location_bar_view_},
+       {"tabsearch", hivey_tab_search_button_},
++      {"performance", hivey_performance_button_},
+       {"extensions", extensions_container_},
+       {"tor", hivey_tor_button_},
+       {"pinned", pinned_toolbar_actions_container_},
+@@ -2259,6 +2280,7 @@
+   for (const auto& [name, view] : items) {
+     if (!view ||
+         !(name == "back" || name == "reload" || name == "tor" ||
++          name == "performance" ||
+           name == "tabsearch" || name == "extensions" || name == "pinned")) {
+       continue;
+     }
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.h
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.h
+@@ -498,6 +498,7 @@
+   // Hivey: opens a private window with Tor.
+   raw_ptr<ToolbarButton> hivey_tor_button_ = nullptr;
+   // Hivey: tab search (BrowserView gives it its bubble host).
++  raw_ptr<ToolbarButton> hivey_performance_button_ = nullptr;
+   raw_ptr<ToolbarButton> hivey_tab_search_button_ = nullptr;
+   std::set<std::string> hivey_hidden_;
+ 
+--- a/chrome/browser/ui/webui/hivey/hivey_home_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_home_handler.cc
+@@ -0,0 +1,112 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/ui/webui/hivey/hivey_home_handler.h"
++
++#include <utility>
++
++#include "base/functional/bind.h"
++#include "base/memory/scoped_refptr.h"
++#include "base/time/time.h"
++#include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/search_engines/template_url_service_factory.h"
++#include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
++#include "chrome/browser/ui/extensions/extension_side_panel_coordinator.h"
++#include "chrome/browser/ui/extensions/extension_side_panel_manager.h"
++#include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
++#include "chrome/browser/ui/side_panel/side_panel_entry_key.h"
++#include "chrome/browser/ui/side_panel/side_panel_enums.h"
++#include "chrome/browser/ui/side_panel/side_panel_ui.h"
++#include "components/search_engines/template_url.h"
++#include "components/search_engines/template_url_service.h"
++#include "content/public/browser/web_contents.h"
++#include "content/public/browser/web_ui.h"
++#include "extensions/browser/api/storage/storage_area_namespace.h"
++#include "extensions/browser/extension_registry.h"
++#include "extensions/common/extension.h"
++
++HiveyHomeHandler::HiveyHomeHandler() = default;
++HiveyHomeHandler::~HiveyHomeHandler() = default;
++
++void HiveyHomeHandler::RegisterMessages() {
++  web_ui()->RegisterMessageCallback(
++      "getHomeInfo", base::BindRepeating(&HiveyHomeHandler::HandleGetHomeInfo,
++                                         base::Unretained(this)));
++  web_ui()->RegisterMessageCallback(
++      "askAssistant", base::BindRepeating(&HiveyHomeHandler::HandleAskAssistant,
++                                          base::Unretained(this)));
++}
++
++void HiveyHomeHandler::HandleGetHomeInfo(const base::ListValue& args) {
++  AllowJavascript();
++  std::string url;
++  TemplateURLService* service = TemplateURLServiceFactory::GetForProfile(
++      Profile::FromWebUI(web_ui()));
++  const TemplateURL* engine =
++      service ? service->GetDefaultSearchProvider() : nullptr;
++  if (engine &&
++      engine->url_ref().SupportsReplacement(service->search_terms_data())) {
++    // The page puts what is typed in place of this word.
++    url = engine->url_ref().ReplaceSearchTerms(
++        TemplateURLRef::SearchTermsArgs(u"HIVEYQUERY"),
++        service->search_terms_data());
++  }
++  ResolveJavascriptCallback(args[0], base::Value(url));
++}
++
++void HiveyHomeHandler::HandleAskAssistant(const base::ListValue& args) {
++  if (args.size() != 2 || !args[0].is_string() || !args[1].is_string()) {
++    return;
++  }
++  const std::string& mode = args[0].GetString();
++  if (mode != "ask" && mode != "agent") {
++    return;
++  }
++  Profile* profile = Profile::FromWebUI(web_ui());
++  const extensions::Extension* extension =
++      extensions::ExtensionRegistry::Get(profile)->enabled_extensions().GetByID(
++          HIVEY_BUNDLED_AI_ID);
++  if (!extension) {
++    return;
++  }
++  // The sidebar takes it from there, whether its panel is open or not yet.
++  base::DictValue action;
++  action.Set("action", mode);
++  action.Set("text", args[1].GetString());
++  action.Set("ts", base::Time::Now().InMillisecondsFSinceUnixEpoch());
++  base::DictValue values;
++  values.Set("pendingAction", std::move(action));
++  extensions::StorageFrontend::Get(profile)->Set(
++      base::WrapRefCounted(extension), extensions::StorageAreaNamespace::kLocal,
++      std::move(values),
++      base::BindOnce(&HiveyHomeHandler::ShowPanel, weak_factory_.GetWeakPtr(),
++                     mode));
++}
++
++void HiveyHomeHandler::ShowPanel(
++    const std::string& mode,
++    extensions::StorageFrontend::ResultStatus status) {
++  if (!status.success) {
++    return;
++  }
++  BrowserWindowInterface* browser =
++      GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(
++          web_ui()->GetWebContents());
++  if (!browser) {
++    return;
++  }
++  SidePanelUI* side_panel = SidePanelUI::From(browser);
++  extensions::ExtensionSidePanelManager* manager =
++      extensions::ExtensionSidePanelManager::From(browser);
++  extensions::ExtensionSidePanelCoordinator* coordinator =
++      manager ? manager->GetCoordinator(HIVEY_BUNDLED_AI_ID) : nullptr;
++  if (!side_panel || !coordinator) {
++    return;
++  }
++  coordinator->ShowHiveyMode(mode == "agent" ? "agent" : "chat");
++  side_panel->Show(
++      SidePanelEntryKey(SidePanelEntryId::kExtension, HIVEY_BUNDLED_AI_ID),
++      SidePanelOpenTrigger::kExtension);
++}
+--- a/chrome/browser/ui/webui/hivey/hivey_home_handler.h
++++ b/chrome/browser/ui/webui/hivey/hivey_home_handler.h
+@@ -0,0 +1,36 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_HOME_HANDLER_H_
++#define CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_HOME_HANDLER_H_
++
++#include <string>
++
++#include "base/memory/weak_ptr.h"
++#include "base/values.h"
++#include "content/public/browser/web_ui_message_handler.h"
++#include "extensions/browser/api/storage/storage_frontend.h"
++
++// Hivey's new tab: the default search engine for its field, and what it sends
++// to the assistant's panel.
++class HiveyHomeHandler : public content::WebUIMessageHandler {
++ public:
++  HiveyHomeHandler();
++  HiveyHomeHandler(const HiveyHomeHandler&) = delete;
++  HiveyHomeHandler& operator=(const HiveyHomeHandler&) = delete;
++  ~HiveyHomeHandler() override;
++
++  // content::WebUIMessageHandler:
++  void RegisterMessages() override;
++
++ private:
++  void HandleGetHomeInfo(const base::ListValue& args);
++  void HandleAskAssistant(const base::ListValue& args);
++  void ShowPanel(const std::string& mode,
++                 extensions::StorageFrontend::ResultStatus status);
++
++  base::WeakPtrFactory<HiveyHomeHandler> weak_factory_{this};
++};
++
++#endif  // CHROME_BROWSER_UI_WEBUI_HIVEY_HIVEY_HOME_HANDLER_H_
+--- a/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
++++ b/chrome/browser/ui/webui/hivey/hivey_studio_handler.cc
+@@ -1145,7 +1145,7 @@
+   }
+   constexpr std::string_view kIds[] = {
+       "back", "forward", "reload", "home",   "location",  "tor",
+-      "tabsearch", "extensions", "pinned", "avatar", "menu"};
++      "tabsearch", "performance", "extensions", "pinned", "avatar", "menu"};
+   auto ids = [&](const base::ListValue& list) {
+     base::ListValue clean;
+     for (const base::Value& id : list) {
+--- a/chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.cc
++++ b/chrome/browser/ui/webui/new_tab_page/new_tab_page_ui.cc
+@@ -80,7 +80,9 @@
+ #include "chrome/common/pref_names.h"
+ #include "chrome/common/search/instant_types.h"
+ #include "chrome/common/url_constants.h"
++#include "chrome/browser/ui/webui/hivey/hivey_home_handler.h"
+ #include "chrome/grit/branded_strings.h"
++#include "chrome/grit/browser_resources.h"
+ #include "chrome/grit/generated_resources.h"
+ #include "chrome/grit/new_tab_page_resources.h"
+ #include "chrome/grit/new_tab_page_resources_map.h"
+@@ -829,6 +831,11 @@
+ 
+   webui::SetupWebUIDataSource(source, kNewTabPageResources,
+                               IDR_NEW_TAB_PAGE_NEW_TAB_PAGE_HTML);
++  // Hivey's own page in place of Chromium's: same URL, so the browser treats
++  // it as the new tab everywhere.
++  source->AddResourcePath("", IDR_HIVEY_HOME_HTML);
++  source->AddResourcePath("hivey_home.css", IDR_HIVEY_HOME_CSS);
++  source->AddResourcePath("hivey_home.js", IDR_HIVEY_HOME_JS);
+ 
+ #if !BUILDFLAG(OPTIMIZE_WEBUI)
+   source->AddResourcePaths(kNewTabSharedResources);
+@@ -919,6 +926,7 @@
+         session_handle->CheckSearchContentSharingSettings(profile_->GetPrefs());
+   }
+ 
++  web_ui->AddMessageHandler(std::make_unique<HiveyHomeHandler>());
+   auto* source = CreateAndAddNewTabPageUiHtmlSource(
+       profile_, session_allows_drag_and_drop);
+ // TODO(b/502297163): Implement for Android.
+--- a/components/omnibox/browser/aim_eligibility_service.cc
++++ b/components/omnibox/browser/aim_eligibility_service.cc
+@@ -458,6 +458,10 @@
+ }
+ 
+ bool AimEligibilityService::IsAimLocallyEligible() const {
++  // Hivey: no Google AI Mode, in the address bar or elsewhere.
++  if (true) {
++    return false;
++  }
+   // Check core baseline eligibility and Google DSE requirement.
+   return IsAimAllowedByFeatureAndPolicy() && IsAimAllowedByDse();
+ }

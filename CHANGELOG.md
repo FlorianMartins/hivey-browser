@@ -3,6 +3,32 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4718 — 4 novembre 2026
+
+### Nouveau design
+- **Thème Graphite** par défaut : surfaces neutres et sobres, tes autres thèmes
+  restent dans les Paramètres.
+- **Onglets verticaux réduits** à une colonne étroite, **barre d'outils plus
+  basse**, et la page **flotte avec ses quatre coins arrondis**.
+- Si tu avais gardé le thème par défaut, ce design s'applique une seule fois ;
+  tout reste modifiable ensuite.
+
+### Nouvel onglet
+- **Une grande zone de saisie** sur le dégradé des Paramètres, pour rechercher,
+  aller à une adresse, **demander à l'IA** ou **confier une tâche à l'agent**.
+- Il ne charge plus la page d'accueil du moteur de recherche : ouvrir un onglet
+  ne contacte plus Google. Tu peux toujours choisir ta propre page dans les
+  Paramètres.
+- « AI Mode » de Google n'apparaît plus dans la barre d'adresse.
+
+### Plus de barre Hivey
+- La barre latérale Hivey est retirée. L'assistant est maintenant **une extension
+  comme les autres** : son icône est à côté des extensions, et son panneau ne
+  s'ouvre que quand tu en as besoin.
+- **Ressources et mode Gaming** sont dans un bouton de la barre d'outils.
+- Les sites que tu avais ajoutés à la barre Hivey ne sont plus accessibles depuis
+  cette barre : ajoute-les à tes favoris si tu y tiens.
+
 ## 156.0.8078.4717 — 31 octobre 2026
 
 ### Tor
