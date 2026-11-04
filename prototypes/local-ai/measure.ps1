@@ -115,9 +115,10 @@ function Start-Load($ai, $out) {
     param($port, $key, $body, $out)
     $bytes = [Text.Encoding]::UTF8.GetBytes($body)
     while ($true) {
-      $r = Invoke-RestMethod "http://127.0.0.1:$port/completion" -Method Post -Body $bytes -ContentType 'application/json' `
-        -Headers @{ Authorization = "Bearer $key" } -TimeoutSec 600
-      Add-Content $out "$($r.timings.predicted_per_second)"
+      # The raw text: Windows PowerShell's JSON reader refuses this response.
+      $r = Invoke-WebRequest "http://127.0.0.1:$port/completion" -UseBasicParsing -Method Post -Body $bytes `
+        -ContentType 'application/json' -Headers @{ Authorization = "Bearer $key" } -TimeoutSec 600
+      if ($r.Content -match '"predicted_per_second"\s*:\s*([0-9.eE+-]+)') { Add-Content $out $Matches[1] }
     }
   }
 }
@@ -216,7 +217,7 @@ for ($round = 0; $round -lt $Rounds; $round++) {
       }
       $signals = Sample-Signals
       $row = Capture "$name-$round"
-      $tps = if (Test-Path $speeds) { Get-Content $speeds | ForEach-Object { [double]::Parse($_) } } else { $null }
+      $tps = if (Test-Path $speeds) { Get-Content $speeds | ForEach-Object { [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) } } else { $null }
       $out = [ordered]@{
         profile = $name; round = $round; fps = $row.fps; one_pct_low_fps = $row.one_pct_low_fps
         ai_tok_s = if ($tps) { [math]::Round(($tps | Measure-Object -Average).Average, 1) } else { $null }
