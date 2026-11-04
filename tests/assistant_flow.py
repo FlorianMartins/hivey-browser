@@ -101,9 +101,9 @@ def wait_answer(panel, before, timeout):
 
 def send(panel, text):
     before = panel.js(COUNT)
-    panel.js(f"const i = document.getElementById('input'); i.value = {json.dumps(text)};"
+    panel.js(f"(() => {{ const i = document.getElementById('input'); i.value = {json.dumps(text)};"
              "i.dispatchEvent(new Event('input', {bubbles: true}));"
-             "i.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true}))")
+             "i.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true})); })()")
     return before
 
 
@@ -158,7 +158,14 @@ def run(args):
     settings = Target(new_tab('chrome://hivey-assistant/'))
     wait_for('the test page', lambda: settings.js("!!document.getElementById('feed')"), 20)
     before = send(panel, 'Sans chercher sur le web, écris un long texte sur le fonctionnement d\'un navigateur web.')
-    wait_for('the writing', lambda: panel.js(f"{COUNT} > {before} && ({LAST}).length > 30"), 300, 0.5)
+    try:
+        wait_for('the writing', lambda: panel.js(f"{COUNT} > {before} && ({LAST}).length > 30"), 300, 0.5)
+    except TimeoutError:
+        panel.shot(args.out / 'assistant-writing-timeout.png')
+        print('      before', before, 'count', panel.js(COUNT), 'idle', panel.js(IDLE), flush=True)
+        print('      messages:', (panel.js("document.getElementById('messages').innerText") or '')[-400:].replace('\n', ' '), flush=True)
+        print('      input:', repr(panel.js("document.getElementById('input').value")), flush=True)
+        raise
     settings.js("chrome.send('setGameForTesting', [true])")
     time.sleep(4)
     first = len(panel.js(LAST) or '')
@@ -171,7 +178,6 @@ def run(args):
     check('Game over: the answer resumes', True, f'{second} -> {len(panel.js(LAST) or "")} characters')
     panel.js("document.getElementById('stop').click()")
     wait_for('the stop', lambda: panel.js(IDLE), 30)
-    settings.call('Page.close') if False else None
 
     # The agent on a new tab: music.
     tabs_before = len([t for t in targets() if t['type'] == 'page'])
@@ -187,13 +193,30 @@ def run(args):
     check('Agent: goes to the music, from the new tab', bool(playing), playing['url'][:70] if playing else 'no player page')
     print('      panel:', (panel.js(LAST) or '')[:200].replace('\n', ' '), flush=True)
     print(f"      tabs: {tabs_before} -> {len([t for t in targets() if t['type'] == 'page'])}")
-    if playing:
-        player = Target(playing)
-        def video():
-            return player.js("(() => { const v = document.querySelector('video');"
-                             " return v ? {t: v.currentTime, paused: v.paused, muted: v.muted} : null; })()")
-        time.sleep(15)
-        print('      video:', video(), flush=True)
+    # What was asked: a video that plays, not a list of results.
+    def watch_page():
+        for info in targets():
+            if '/watch' in info.get('url', '') and info['type'] == 'page':
+                return info
+        return None
+    watch = None
+    try:
+        watch = wait_for('a video page', watch_page, 600, 3)
+    except TimeoutError:
+        pass
+    check('Agent: opens a video', bool(watch), watch['url'][:70] if watch else 'still on the results')
+    if watch:
+        player = Target(watch)
+        video = ("(() => { const v = document.querySelector('video');"
+                 " return v ? {t: v.currentTime, paused: v.paused, muted: v.muted} : null; })()")
+        time.sleep(8)
+        first_state = player.js(video)
+        time.sleep(8)
+        second_state = player.js(video)
+        print(f'      video: {first_state} -> {second_state}', flush=True)
+        moving = bool(first_state and second_state and second_state['t'] > first_state['t'] and not second_state['muted'])
+        check('Agent: the music plays, with sound', moving or args.no_play_check, f'{first_state} -> {second_state}')
+    print('      panel at the end:', (panel.js(LAST) or '')[:200].replace('\n', ' '), flush=True)
     panel.shot(args.out / 'assistant-4-agent.png')
 
 
@@ -203,6 +226,8 @@ def main():
     parser.add_argument('browser')
     parser.add_argument('out', type=Path)
     parser.add_argument('--model-from', type=Path)
+    # For a machine where the site itself refuses to play (this project's server).
+    parser.add_argument('--no-play-check', action='store_true')
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     profile = Path(tempfile.mkdtemp(prefix='hivey-ai-'))
