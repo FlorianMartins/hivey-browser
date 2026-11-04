@@ -3,6 +3,29 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4719 — 4 novembre 2026
+
+### L'IA locale est dans le navigateur
+- **Un vrai modèle sur ton PC** : au premier usage, le panneau propose de
+  télécharger Qwen3 1.7B (environ 1,1 Go, une seule fois, vérifié). Plus aucune
+  clé ni fournisseur à configurer.
+- **Un panneau assistant** (l'icône Hivey de la barre d'outils, ou « Demander à
+  l'IA » dans le nouvel onglet) : les étapes, les sources, une réponse citée et
+  une ligne d'état qui dit ce que fait l'IA. Il ne s'ouvre que quand tu le demandes.
+- **Web, Cette page ou Sans source** : le Web lit des pages sans tes cookies ni
+  ta session, et seule ta recherche quitte le PC (via DuckDuckGo). « Cette page »
+  lit l'onglet ouvert.
+- **Une lumière colorée** fait le tour de la barre d'adresse et de la page pendant
+  que l'IA travaille, à vitesse constante.
+- **Pause pendant les jeux** : quand un jeu occupe l'écran sous Windows, l'IA ne
+  calcule plus rien, puis reprend là où elle s'était arrêtée. Le moteur démarre à
+  la demande et s'arrête après 5 minutes sans question, ce qui rend toute sa mémoire.
+
+### À savoir
+- Un petit modèle peut se tromper : vérifie les sources, elles sont cliquables.
+- **Le mode agent n'est plus proposé dans le nouvel onglet** tant qu'il ne fonctionne
+  pas avec ce modèle. Hivey Tools reste disponible dans le menu des extensions.
+
 ## 156.0.8078.4718 — 4 novembre 2026
 
 ### Nouveau design
