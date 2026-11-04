@@ -290,9 +290,10 @@ try:
     p.goto('chrome://hivey/#layout', settle=2)
     switches = "document.querySelectorAll('.switch-input').length"
     before = p.eval(switches)
+    start = p.eval(STUDIO_STATE + ".then(s => s.prefs['vertical_tabs.enabled'])")
     other = Page()
     other.goto('chrome://hivey/', settle=2)
-    other.eval("chrome.send('setPref', ['vertical_tabs.enabled', true])")
+    other.eval(f"chrome.send('setPref', ['vertical_tabs.enabled', {str(not start).lower()}])")
     time.sleep(2)
     after = p.eval(switches)
     vertical = p.eval(STUDIO_STATE + ".then(s => s.prefs['vertical_tabs.enabled'])")
@@ -300,11 +301,11 @@ try:
     urllib.request.urlopen(f'{BASE}/json/activate/{p.id}')  # a background tab draws no frames
     time.sleep(1)
     p.shot('hivey-studio-vertical-tabs')
-    p.eval("chrome.send('setPref', ['vertical_tabs.enabled', false])")
+    p.eval(f"chrome.send('setPref', ['vertical_tabs.enabled', {str(start).lower()}])")
     time.sleep(1)
-    check('Hivey Studio refreshes live', vertical is True and isinstance(before, int) and isinstance(after, int)
-          and after > before,
-          f'vertical tabs {vertical} from another tab: {before} -> {after} switches (vertical tab options shown)')
+    check('Hivey Studio refreshes live', vertical is (not start) and isinstance(before, int) and isinstance(after, int)
+          and after != before,
+          f'vertical tabs {start} -> {vertical} from another tab: {before} -> {after} switches (vertical tab options)')
 
     # Hivey Studio, end to end: a preset changes the browser color (handler
     # and ThemeService), and the network limiter slows a download down.
