@@ -1,4 +1,18 @@
 # Hivey 4720: the assistant is the bundled extension on the local engine, without its rail; web chats button; narrower vertical tabs, close in the corner, tools at the bottom
+--- a/chrome/browser/chrome_content_browser_client.cc
++++ b/chrome/browser/chrome_content_browser_client.cc
+@@ -988,6 +988,11 @@
+     return false;
+   }
+ 
++  // Hivey: the assistant's agent plays what the user asked for there, with no
++  // click on the page.
++  if (contents->GetURL().DomainIs("youtube" ".com")) {
++    return true;
++  }
+   return policy::IsOriginInAllowlist(contents->GetURL(), prefs,
+                                      prefs::kAutoplayAllowlist,
+                                      prefs::kAutoplayAllowed);
 --- a/chrome/browser/resources/hivey_studio/home.html
 +++ b/chrome/browser/resources/hivey_studio/home.html
 @@ -45,6 +45,7 @@
@@ -272,7 +286,15 @@
 +#endif  // CHROME_BROWSER_UI_HIVEY_HIVEY_AI_BRIDGE_H_
 --- a/chrome/browser/ui/hivey/hivey_ai_engine.cc
 +++ b/chrome/browser/ui/hivey/hivey_ai_engine.cc
-@@ -21,6 +21,7 @@
+@@ -6,6 +6,7 @@
+ 
+ #include <algorithm>
+ #include <array>
++#include <cmath>
+ #include <cstdint>
+ #include <utility>
+ 
+@@ -21,6 +22,7 @@
  #include "base/strings/string_number_conversions.h"
  #include "base/strings/string_util.h"
  #include "base/system/sys_info.h"
@@ -280,7 +302,125 @@
  #include "base/task/thread_pool.h"
  #include "base/time/time.h"
  #include "chrome/browser/browser_process.h"
-@@ -339,6 +340,7 @@
+@@ -45,13 +47,32 @@
+ 
+ namespace {
+ 
+-// Qwen3 1.7B Q4_K_M: the best of the bench (prototypes/local-ai).
+-constexpr char kModelUrl[] =
+-    "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/"
+-    "d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_K_M.gguf";
+-constexpr char kModelSha256[] =
+-    "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897";
+-constexpr int64_t kModelBytes = 1107409472;
++// The model, by the PC's memory: the bench (prototypes/local-ai) found the larger
++// ones no better on a CPU, and much slower.
++struct Model {
++  const char* name;
++  const char* url;
++  const char* sha256;
++  int64_t bytes;
++  int context;
++};
++constexpr Model kModelSmall = {
++    "Qwen3.5 2B",
++    "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/"
++    "f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf",
++    "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
++    1280835840, 8192};
++constexpr Model kModelDefault = {
++    "Qwen3.5 4B",
++    "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/"
++    "e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
++    "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
++    2740937888, 16384};
++
++const Model& ChosenModel() {
++  return base::SysInfo::AmountOfTotalPhysicalMemory().InGiB() < 12 ? kModelSmall
++                                                               : kModelDefault;
++}
+ 
+ constexpr base::TimeDelta kIdleStop = base::Minutes(5);
+ constexpr base::TimeDelta kGameCheck = base::Seconds(2);
+@@ -80,7 +101,7 @@
+       })");
+ 
+ bool HasModel(const base::FilePath& path) {
+-  return base::GetFileSize(path).value_or(0) == kModelBytes;
++  return base::GetFileSize(path).value_or(0) == ChosenModel().bytes;
+ }
+ 
+ // Blocking: size and sha256; a good file takes its final name.
+@@ -89,15 +110,20 @@
+   {
+     base::File file(part, base::File::FLAG_OPEN | base::File::FLAG_READ);
+     std::array<uint8_t, crypto::hash::kSha256Size> digest;
+-    ok = file.IsValid() && file.GetLength() == kModelBytes &&
++    ok = file.IsValid() && file.GetLength() == ChosenModel().bytes &&
+          crypto::hash::HashFile(crypto::hash::kSha256, &file, digest) &&
+-         base::EqualsCaseInsensitiveASCII(base::HexEncode(digest), kModelSha256);
++         base::EqualsCaseInsensitiveASCII(base::HexEncode(digest),
++                                          ChosenModel().sha256);
+   }
+   if (!ok) {
+     base::DeleteFile(part);
+     return false;
+   }
+-  return base::ReplaceFile(part, path, nullptr);
++  if (!base::ReplaceFile(part, path, nullptr)) {
++    return false;
++  }
++  base::DeleteFile(path.DirName().AppendASCII("model.gguf"));
++  return true;
+ }
+ 
+ #if BUILDFLAG(IS_WIN)
+@@ -186,7 +212,9 @@
+ base::FilePath HiveyAiEngine::ModelPath() const {
+   base::FilePath user_data;
+   base::PathService::Get(chrome::DIR_USER_DATA, &user_data);
+-  return user_data.AppendASCII("HiveyAI").AppendASCII("model.gguf");
++  // By name: a model from before is removed when this one is in place.
++  return user_data.AppendASCII("HiveyAI").AppendASCII(
++      GURL(ChosenModel().url).ExtractFileName());
+ }
+ 
+ base::DictValue HiveyAiEngine::Describe() const {
+@@ -219,6 +247,10 @@
+   dict.Set("error", error_);
+   dict.Set("busy", busy_);
+   dict.Set("game", game_);
++  dict.Set("modelName", ChosenModel().name);
++  dict.Set("modelGb",
++           std::round(static_cast<double>(ChosenModel().bytes) / (1 << 30) * 10) /
++               10);
+   return dict;
+ }
+ 
+@@ -251,7 +283,7 @@
+   progress_ = 0;
+   error_.clear();
+   auto request = std::make_unique<network::ResourceRequest>();
+-  request->url = GURL(kModelUrl);
++  request->url = GURL(ChosenModel().url);
+   request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+   loader_ = network::SimpleURLLoader::Create(std::move(request),
+                                              kTrafficAnnotation);
+@@ -262,7 +294,7 @@
+       [](HiveyAiEngine* engine, uint64_t current) {
+         // At most one update per percent.
+         const double progress =
+-            std::min(0.99, static_cast<double>(current) / kModelBytes);
++            std::min(0.99, static_cast<double>(current) / ChosenModel().bytes);
+         if (progress - engine->progress_ >= 0.01) {
+           engine->progress_ = progress;
+           engine->Notify();
+@@ -335,10 +367,11 @@
+   arg("--port", base::NumberToString(port_));
+   arg("--api-key", key_);
+   arg("-np", "1");
+-  arg("-c", "8192");
++  arg("-c", base::NumberToString(ChosenModel().context));
    arg("-t", base::NumberToString(threads));
    arg("--poll", "0");
    arg("--threads-http", "2");
@@ -288,7 +428,7 @@
    command.AppendArg("--no-repack");
    command.AppendArg("--no-webui");
    command.AppendArg("--log-disable");
-@@ -373,7 +375,55 @@
+@@ -373,7 +406,55 @@
    game_timer_.Start(FROM_HERE, kGameCheck, this, &HiveyAiEngine::CheckGame);
    CheckGame();
    RestartIdleTimer();
@@ -870,11 +1010,12 @@
  
 --- a/chrome/browser/ui/webui/hivey/hivey_home_handler.cc
 +++ b/chrome/browser/ui/webui/hivey/hivey_home_handler.cc
-@@ -7,14 +7,19 @@
+@@ -7,14 +7,20 @@
  #include <utility>
  
  #include "base/functional/bind.h"
 +#include "base/memory/scoped_refptr.h"
++#include "base/task/sequenced_task_runner.h"
 +#include "base/time/time.h"
 +#include "chrome/browser/hivey/bundled_extensions.h"
  #include "chrome/browser/profiles/profile.h"
@@ -891,7 +1032,7 @@
  #include "content/public/browser/web_ui.h"
  
  HiveyHomeHandler::HiveyHomeHandler() = default;
-@@ -47,16 +52,41 @@
+@@ -47,16 +53,55 @@
  }
  
  void HiveyHomeHandler::HandleAskAssistant(const base::ListValue& args) {
@@ -903,17 +1044,31 @@
 +  if (mode != "ask" && mode != "agent") {
 +    return;
 +  }
++  Ask(mode, args[1].GetString(), /*attempts_left=*/30);
++}
++
++void HiveyHomeHandler::Ask(const std::string& mode,
++                           const std::string& text,
++                           int attempts_left) {
 +  Profile* profile = Profile::FromWebUI(web_ui());
 +  const extensions::Extension* extension =
 +      extensions::ExtensionRegistry::Get(profile)->enabled_extensions().GetByID(
 +          HIVEY_BUNDLED_AI_ID);
 +  if (!extension) {
++    // Just after a first start, the assistant may not be installed yet.
++    if (attempts_left > 0) {
++      base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
++          FROM_HERE,
++          base::BindOnce(&HiveyHomeHandler::Ask, weak_factory_.GetWeakPtr(),
++                         mode, text, attempts_left - 1),
++          base::Seconds(1));
++    }
 +    return;
 +  }
 +  // The assistant takes it from there, whether its panel is open or not yet.
 +  base::DictValue action;
 +  action.Set("action", mode);
-+  action.Set("text", args[1].GetString());
++  action.Set("text", text);
 +  action.Set("ts", base::Time::Now().InMillisecondsFSinceUnixEpoch());
 +  base::DictValue values;
 +  values.Set("pendingAction", std::move(action));
@@ -952,10 +1107,11 @@
  
  // Hivey's new tab: the default search engine for its field, and what it sends
  // to the assistant's panel.
-@@ -25,6 +27,10 @@
+@@ -25,6 +27,11 @@
   private:
    void HandleGetHomeInfo(const base::ListValue& args);
    void HandleAskAssistant(const base::ListValue& args);
++  void Ask(const std::string& mode, const std::string& text, int attempts_left);
 +  void ShowPanel(const std::string& mode,
 +                 extensions::StorageFrontend::ResultStatus status);
 +

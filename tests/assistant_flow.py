@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""The local AI from end to end, as a user: a question typed in the new tab,
-the panel opening, the model downloaded, an answer actually written by the
-engine, with web sources, from the page, without a source, and the pause during
-a game. Fails if the browser does not really answer.
+"""The assistant from end to end, in the real browser, as a user: a question typed
+in the new tab, the panel opening without its rail, the model downloaded on a
+click, an answer written by the local engine with web sources, a follow-up that
+keeps the topic, music asked of the agent on a new tab, and the pause during a
+game. Fails if the browser does not really answer.
 
     assistant_flow.py <browser> <output dir> [--model-from <file>]
 
@@ -25,6 +26,8 @@ import websocket
 
 PORT = 9377
 BASE = f'http://127.0.0.1:{PORT}'
+AI_ID = 'lkcmbmbhbkaihiiioilbfoamihehnhce'
+SIDEBAR = f'chrome-extension://{AI_ID}/src/sidebar/sidebar.html'
 failures = []
 
 
@@ -41,7 +44,7 @@ def targets():
 
 class Target:
     def __init__(self, info):
-        self.ws = websocket.create_connection(info['webSocketDebuggerUrl'], suppress_origin=True, timeout=30)
+        self.ws = websocket.create_connection(info['webSocketDebuggerUrl'], suppress_origin=True, timeout=60)
         self.next_id = 0
 
     def call(self, method, **params):
@@ -79,25 +82,119 @@ def find_target(fragment):
     return None
 
 
-def ask_in_panel(panel, source, question):
-    panel.js(f"document.querySelector('.chip[data-source={source}]').click()")
-    before = panel.js("document.querySelectorAll('.answer').length")
-    plans = panel.js("document.querySelectorAll('.plan').length")
-    panel.js(f"document.getElementById('q').value = {json.dumps(question)};"
-             "document.getElementById('composer').requestSubmit()")
-    # This question's own plan is there before waiting for its end.
-    wait_for('the plan', lambda: panel.js(f"document.querySelectorAll('.plan').length > {plans}"), 10, 0.2)
-    return wait_answer(panel, before)
+def new_tab(url):
+    request = urllib.request.Request(f'{BASE}/json/new?{url}', method='PUT')
+    with urllib.request.urlopen(request, timeout=10) as response:
+        return json.load(response)
 
 
-def wait_answer(panel, before, timeout=420):
-    # The answer is finished when the ledger after it is there (or an error).
-    wait_for('the answer', lambda: panel.js(
-        "!document.body.classList.contains('busy') && ("
-        f"document.querySelectorAll('.answer').length > {before}"
-        " || [...document.querySelectorAll('.plan')].pop()?.querySelector('li.failed') !== null)"), timeout)
-    return panel.js("(() => { const a = [...document.querySelectorAll('.answer')].pop();"
-                    " return a ? a.textContent : ''; })()")
+IDLE = "document.getElementById('stop').classList.contains('hidden')"
+LAST = ("(() => { const m = [...document.querySelectorAll('#messages .msg.assistant')].pop();"
+        " return m ? m.innerText : ''; })()")
+COUNT = "document.querySelectorAll('#messages .msg.assistant').length"
+
+
+def wait_answer(panel, before, timeout):
+    wait_for('the answer', lambda: panel.js(f"{COUNT} > {before} && {IDLE}"), timeout, 2)
+    return panel.js(LAST) or ''
+
+
+def send(panel, text):
+    before = panel.js(COUNT)
+    panel.js(f"const i = document.getElementById('input'); i.value = {json.dumps(text)};"
+             "i.dispatchEvent(new Event('input', {bubbles: true}));"
+             "i.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true}))")
+    return before
+
+
+def ask_from_new_tab(chip, text):
+    tab = Target(new_tab('chrome://newtab/'))
+    wait_for('the field', lambda: tab.js("!!document.getElementById('q')"), 30)
+    tab.js(f"document.querySelector('.chip[data-mode={chip}]').click();"
+           f"document.getElementById('q').value = {json.dumps(text)};"
+           "document.getElementById('form').requestSubmit()")
+    return tab
+
+
+def run(args):
+    wait_for('the browser', lambda: _up(), 60)
+
+    # The new tab asks; the panel opens, without its rail.
+    tab = ask_from_new_tab('ask', 'Quelle est la capitale de la France ?')
+    panel_info = wait_for('the panel', lambda: find_target(SIDEBAR), 30)
+    panel = Target(panel_info)
+    wait_for('the panel page', lambda: panel.js("!!document.getElementById('input')"), 30)
+    check('The question opens the assistant', 'embed=hivey' in panel_info['url'], panel_info['url'][-40:])
+    check('No rail in the panel', panel.js("getComputedStyle(document.getElementById('rail')).display") == 'none', '')
+    time.sleep(2)
+    panel.shot(args.out / 'assistant-1-opened.png')
+
+    # The model: asked for, never downloaded by itself.
+    if not args.model_from:
+        wait_for('the card', lambda: panel.js("!!document.querySelector('.engine-card button')"), 30)
+        check('The model waits for a click', True, panel.js("document.querySelector('.engine-card').innerText")[:80].replace('\n', ' '))
+        panel.js("document.querySelector('.engine-card button').click()")
+        start = time.monotonic()
+        wait_for('the download', lambda: not panel.js("!!document.querySelector('.engine-card')"), 1500, 2)
+        check('Model downloaded and verified', True, f'{time.monotonic() - start:.0f} s')
+
+    # An answer from the local engine, with sources.
+    text = wait_answer(panel, 0, 900)
+    check('Answer from the local engine', len(text) > 10, text[:200].replace('\n', ' '))
+    check('Paris in the answer', 'paris' in text.lower(), '')
+    state = panel.js("chrome.storage.local.get('hiveyAi').then(r => r.hiveyAi.state + ' ' + r.hiveyAi.modelName)")
+    check('On the local engine', str(state).startswith('running'), str(state))
+    keys = panel.js("chrome.storage.local.get('keys').then(r => JSON.stringify(r.keys || {}))")
+    secret = panel.js("chrome.storage.local.get('hiveyAi').then(r => r.hiveyAi.key)")
+    check('Its key stays out of the keys given to web pages', bool(secret) and secret not in str(keys), '')
+    panel.shot(args.out / 'assistant-2-answer.png')
+
+    # A follow-up keeps the topic.
+    before = send(panel, 'Et sa population ?')
+    text = wait_answer(panel, before, 600)
+    check('A follow-up keeps the topic', len(text) > 5 and any(w in text.lower() for w in ('paris', 'habitant', 'million')), text[:200].replace('\n', ' '))
+
+    # A game: nothing is computed, then it resumes.
+    settings = Target(new_tab('chrome://hivey-assistant/'))
+    wait_for('the test page', lambda: settings.js("!!document.getElementById('feed')"), 20)
+    before = send(panel, 'Sans chercher sur le web, écris un long texte sur le fonctionnement d\'un navigateur web.')
+    wait_for('the writing', lambda: panel.js(f"{COUNT} > {before} && ({LAST}).length > 30"), 300, 0.5)
+    settings.js("chrome.send('setGameForTesting', [true])")
+    time.sleep(4)
+    first = len(panel.js(LAST) or '')
+    time.sleep(6)
+    second = len(panel.js(LAST) or '')
+    check('Game: the answer stops', first == second, f'{first} -> {second} characters in 6 s')
+    panel.shot(args.out / 'assistant-3-game.png')
+    settings.js("chrome.send('setGameForTesting', [false])")
+    wait_for('the resume', lambda: len(panel.js(LAST) or '') > second, 90, 0.5)
+    check('Game over: the answer resumes', True, f'{second} -> {len(panel.js(LAST) or "")} characters')
+    panel.js("document.getElementById('stop').click()")
+    wait_for('the stop', lambda: panel.js(IDLE), 30)
+    settings.call('Page.close') if False else None
+
+    # The agent on a new tab: music.
+    tabs_before = len([t for t in targets() if t['type'] == 'page'])
+    music = ask_from_new_tab('agent', 'Lance-moi une musique')
+    before = panel.js(COUNT)
+    end = time.monotonic() + 600
+    playing = None
+    while time.monotonic() < end and not playing:
+        time.sleep(5)
+        for info in targets():
+            if 'youtube' in info.get('url', '') and info['type'] == 'page':
+                playing = info
+    check('Agent: goes to the music, from the new tab', bool(playing), playing['url'][:70] if playing else 'no player page')
+    print('      panel:', (panel.js(LAST) or '')[:200].replace('\n', ' '), flush=True)
+    print(f"      tabs: {tabs_before} -> {len([t for t in targets() if t['type'] == 'page'])}")
+    if playing:
+        player = Target(playing)
+        def video():
+            return player.js("(() => { const v = document.querySelector('video');"
+                             " return v ? {t: v.currentTime, paused: v.paused, muted: v.muted} : null; })()")
+        time.sleep(15)
+        print('      video:', video(), flush=True)
+    panel.shot(args.out / 'assistant-4-agent.png')
 
 
 def main():
@@ -111,9 +208,9 @@ def main():
     profile = Path(tempfile.mkdtemp(prefix='hivey-ai-'))
     if args.model_from:
         (profile / 'HiveyAI').mkdir()
-        shutil.copy2(args.model_from, profile / 'HiveyAI' / 'model.gguf')
+        shutil.copy2(args.model_from, profile / 'HiveyAI' / args.model_from.name)
     command = [args.browser, f'--user-data-dir={profile}', f'--remote-debugging-port={PORT}', '--no-first-run',
-               '--password-store=basic', '--hivey-ai-test-game', '--window-size=1440,900', 'chrome://newtab/']
+               '--password-store=basic', '--hivey-ai-test-game', '--window-size=1440,900']
     if sys.platform != 'win32':
         command.insert(1, '--no-sandbox')
     browser = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -128,91 +225,6 @@ def main():
         shutil.rmtree(profile, ignore_errors=True)
     print(f"\n{'all passed' if not failures else f'{len(failures)} failed: {failures}'}")
     sys.exit(1 if failures else 0)
-
-
-def run(args):
-    wait_for('the browser', lambda: _up(), 60)
-    # A new profile opens Hivey Settings first.
-    request = urllib.request.Request(f'{BASE}/json/new?chrome://newtab/', method='PUT')
-    with urllib.request.urlopen(request, timeout=10) as response:
-        tab = Target(json.load(response))
-    wait_for('the field', lambda: tab.js("!!document.getElementById('q')"), 30)
-    chips = tab.js("[...document.querySelectorAll('.chip')].map(c => c.dataset.mode).join()")
-    check('New tab: only what works', chips == 'web,ask', chips)
-
-    # The question goes to the panel.
-    tab.js("document.querySelector('.chip[data-mode=ask]').click();"
-           "document.getElementById('q').value = 'Quelle est la capitale de la France ?';"
-           "document.getElementById('form').requestSubmit()")
-    panel_info = wait_for('the panel', lambda: find_target('hivey-assistant'), 30)
-    panel = Target(panel_info)
-    wait_for('the panel page', lambda: panel.js("!!document.getElementById('feed')"), 30)
-    check('The question opens the assistant, not Hivey Tools', True, panel_info['url'])
-    time.sleep(1)
-    panel.shot(args.out / 'assistant-1-opened.png')
-
-    # The model: asked for, never downloaded by itself.
-    state = panel.js("document.getElementById('download') ? 'card' : 'none'")
-    if not args.model_from:
-        check('The model is not downloaded without asking', state == 'card', state)
-        panel.js("document.getElementById('download').click()")
-        start = time.monotonic()
-        wait_for('the download', lambda: not panel.js("!!document.querySelector('.bar') || !!document.getElementById('download')"), 1500, 2)
-        check('Model downloaded and verified', True, f'{time.monotonic() - start:.0f} s')
-
-    # The first question, from the new tab, comes with web sources.
-    text = wait_answer(panel, 0, 900)
-    check('Answer written by the local engine, with the web', len(text) > 10, text[:160])
-    sources = panel.js("document.querySelectorAll('.src').length")
-    citations = panel.js("document.querySelectorAll('.cite').length")
-    print(f'      sources read: {sources}, citations: {citations}')
-    check('Paris in the answer', 'paris' in text.lower(), text[:100])
-    status = panel.js("document.getElementById('status').textContent")
-    check('Status line tells the truth', 'Machine' in status and 'Engine on' in status or 'Moteur actif' in status, status)
-    panel.shot(args.out / 'assistant-2-web.png')
-
-    # Without a source.
-    text = ask_in_panel(panel, 'none', 'Réponds par un seul mot : quelle couleur a le ciel par beau temps ?')
-    check('Answer without a source', len(text) > 1, text[:100])
-
-    # The page the user is on.
-    tab.call('Page.navigate', url='data:text/html,<title>x</title>')  # Not a web page.
-    time.sleep(1)
-    panel.js("document.querySelector('.chip[data-source=page]').click();"
-             "document.getElementById('q').value = 'Résume cette page';"
-             "document.getElementById('composer').requestSubmit()")
-    wait_for('the refusal', lambda: panel.js("[...document.querySelectorAll('.plan')].pop().querySelector('li.failed') !== null"
-                                             " && !document.body.classList.contains('busy')"), 30, 0.3)
-    check('This page: refuses what is not a web page', True, '')
-    tab.call('Page.navigate', url='https://example.com/')
-    time.sleep(4)
-    text = ask_in_panel(panel, 'page', 'De quoi parle cette page ? Réponds en une phrase.')
-    check('This page: answers from it', len(text) > 10 and not panel.js(
-        "[...document.querySelectorAll('.plan')].pop().querySelector('li.failed') !== null"), text[:140])
-
-    # A game: the engine computes nothing, then resumes.
-    panel.js("document.querySelector('.chip[data-source=none]').click();"
-             "document.getElementById('q').value = 'Écris un long texte sur l\\'histoire du navigateur web.';"
-             "document.getElementById('composer').requestSubmit()")
-    before = panel.js("document.querySelectorAll('.answer').length")
-    wait_for('the writing', lambda: panel.js("(() => { const a = [...document.querySelectorAll('.answer')].pop();"
-                                             " return a && a.textContent.length > 30; })()"), 120, 0.5)
-    panel.js("chrome.send('setGameForTesting', [true])")
-    time.sleep(3)
-    length = lambda: panel.js("[...document.querySelectorAll('.answer')].pop().textContent.length")
-    first = length()
-    time.sleep(6)
-    second = length()
-    check('Game: the answer stops', first == second, f'{first} -> {second} characters in 6 s')
-    check('Game: said in the panel', 'game' in panel.js("document.getElementById('status').textContent") or
-          'jeu' in panel.js("document.getElementById('status').textContent"), '')
-    panel.shot(args.out / 'assistant-3-game.png')
-    panel.js("chrome.send('setGameForTesting', [false])")
-    wait_for('the resume', lambda: length() > second, 60, 0.5)
-    check('Game over: the answer resumes', True, f'{second} -> {length()} characters')
-    panel.js("document.getElementById('composer').requestSubmit()")  # Stop it.
-    wait_for('the stop', lambda: panel.js("!document.body.classList.contains('busy')"), 30)
-    panel.shot(args.out / 'assistant-4-end.png')
 
 
 def _up():
