@@ -1320,6 +1320,59 @@ def _stage_tor():
         raise SystemExit(f'{name}: no tor binary')
 
 
+# llama.cpp, the local AI's engine: the versions and digests of
+# prototypes/local-ai/manifest.json, CPU builds.
+AI_ENGINE_VERSION = 'b12081'
+AI_ENGINE_BUNDLES = {
+    'win': ('llama-b12081-bin-win-cpu-x64.zip', '563d4800833c364be0a0ffc99bb90597c57c9c1b67a85fee593538ea0be8b347'),
+    'linux': ('llama-b12081-bin-ubuntu-x64.tar.gz', '2a773dcda8b301e3650e5832d3e7b014afcdffdb6364d4d4e5cf3a12bcbc2eeb'),
+}
+
+
+def _stage_ai_engine():
+    """llama-server and its libraries next to the browser, in <module dir>/hiveyai
+    ("HiveyAI" on Windows, which the installer packs). No model: the user
+    downloads it from the assistant's panel."""
+    name, sha256 = AI_ENGINE_BUNDLES[TARGET]
+    archive = download(f'https://github.com/ggml-org/llama.cpp/releases/download/{AI_ENGINE_VERSION}/{name}',
+                       BUILD / 'download_cache' / name, sha256)
+    dest = OUT / ('HiveyAI' if TARGET == 'win' else 'hiveyai')
+    shutil.rmtree(dest, ignore_errors=True)
+    dest.mkdir(parents=True)
+    wanted = re.compile(r'^(llama-server(\.exe)?|.*\.dll|.*\.so(\.\d+)*|LICENSE.*)$')
+    if name.endswith('.zip'):
+        with zipfile.ZipFile(archive) as z:
+            for member in z.infolist():
+                base = Path(member.filename).name
+                if not member.is_dir() and wanted.match(base):
+                    with z.open(member) as src, open(dest / base, 'wb') as out:
+                        shutil.copyfileobj(src, out)
+    else:
+        with tarfile.open(archive) as t:
+            links = []
+            for member in t.getmembers():
+                base = Path(member.name).name
+                if not wanted.match(base):
+                    continue
+                if member.issym() or member.islnk():
+                    links.append((base, Path(member.linkname).name))
+                elif member.isfile():
+                    with t.extractfile(member) as src, open(dest / base, 'wb') as out:
+                        shutil.copyfileobj(src, out)
+            # Links to links: each as soon as its target is there.
+            while links:
+                ready = [link for link in links if (dest / link[1]).exists()]
+                if not ready:
+                    sys.exit(f'broken links in {name}: {links}')
+                for link in ready:
+                    shutil.copy2(dest / link[1], dest / link[0])
+                    links.remove(link)
+    exe = dest / ('llama-server.exe' if TARGET == 'win' else 'llama-server')
+    if not exe.exists():
+        sys.exit(f'no llama-server in {name}')
+    exe.chmod(0o755)
+
+
 def _stage_bundled_extensions():
     """Put the .crx files and the GeoIP database where the browser looks for
     them: <module dir>/extensions (the Windows installer packs
@@ -1459,6 +1512,7 @@ def step_build(args):
                '-p', 'MemorySwapMax=0', '-p', 'CPUWeight=10', '-p', 'IOWeight=10', '--'] + cmd
     _stage_bundled_extensions()
     _stage_tor()
+    _stage_ai_engine()
     log(f'building with {jobs} jobs, memory cap {mem_max}'
         + (f', ccache in {CCACHE_DIR}' if _ccache() else ''))
     try:
@@ -1479,7 +1533,7 @@ def step_build(args):
 LINUX_FILES = ['chrome', 'chrome_100_percent.pak', 'chrome_200_percent.pak', 'chrome_crashpad_handler',
                'chrome-wrapper', 'icudtl.dat', 'libEGL.so', 'libGLESv2.so', 'libvk_swiftshader.so',
                'libvulkan.so.1', 'locales', 'product_logo_48.png', 'resources.pak', 'v8_context_snapshot.bin',
-               'vk_swiftshader_icd.json', 'xdg-mime', 'xdg-settings', 'extensions', 'tor']
+               'vk_swiftshader_icd.json', 'xdg-mime', 'xdg-settings', 'extensions', 'tor', 'hiveyai']
 LINUX_REQUIRED = {'chrome', 'resources.pak', 'icudtl.dat', 'locales', 'v8_context_snapshot.bin'}
 
 LINUX_LAUNCHER = """#!/bin/sh
