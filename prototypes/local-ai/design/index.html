@@ -70,28 +70,35 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 body[data-profile="agent"] .tab.agent { display: grid; }
 
 .main { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
-.toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 14px; }
 .nav { display: flex; color: var(--muted); }
-.nav span { width: 30px; height: 30px; display: grid; place-items: center; }
-.command { position: relative; flex: 1; min-width: 0; border-radius: 11px; padding: 1px; background: var(--line); overflow: hidden; isolation: isolate; }
-.command::before { content: ""; position: absolute; left: 50%; top: 50%; width: 120%; aspect-ratio: 1; z-index: -1; opacity: 0; transform: translate(-50%, -50%);
-  background: conic-gradient(transparent 0 58%, var(--fx-3) 72%, var(--fx-2) 86%, var(--fx-1) 97%, transparent); transition: opacity .35s; }
-.busy .command::before { opacity: 1; animation: spin 2.6s linear infinite; }
-.command-in { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 10px; background: var(--bg); min-height: 38px; }
-.command input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 14px; outline: none; }
+.nav span { width: 28px; height: 28px; display: grid; place-items: center; }
+.command { position: relative; flex: 1; min-width: 0; border-radius: 16px; padding: 1px; background: var(--line); --dur: 4.2s; }
+.command-in { display: flex; align-items: center; gap: 10px; padding: 2px 14px; border-radius: 15px; background: var(--bg); min-height: 30px; }
+.command input { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13.5px; outline: none; }
 .command input::placeholder { color: var(--muted); }
 
 .work { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 0; padding: 0 14px 12px; transition: grid-template-columns .5s var(--ease); }
 body.ai-open .work { grid-template-columns: minmax(0, 1fr) 384px; }
 .ai-slot { min-width: 0; min-height: 0; overflow: hidden; display: grid; }
 
+/* The travelling light: dashes along the outline (pathLength 100), so its speed
+   is the same on long sides, short sides and corners. Three lengths with the
+   same head make the fading tail. */
+.trace { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; opacity: 0; transition: opacity .4s; }
+.trace rect { fill: none; stroke: url(#fx-g); stroke-linecap: round; }
+.trace .t1 { --L: 34; opacity: .22; }
+.trace .t2 { --L: 20; opacity: .5; }
+.trace .t3 { --L: 8; }
+.busy .command .trace, .reading .ring .trace.a, .acting .ring .trace, .hero-field.typing .trace { opacity: 1; }
+.busy .command .trace rect, .reading .ring .trace.a rect, .acting .ring .trace rect, .hero-field.typing .trace rect { animation: trace var(--dur) linear infinite; }
+.ring .trace.b rect { animation-delay: calc(var(--dur) * -.5) !important; }
+@keyframes trace { from { stroke-dashoffset: calc(var(--L) * 1px); } to { stroke-dashoffset: calc((var(--L) - 100) * 1px); } }
+
 /* The lens: the travelling light runs on the dark side of the page's edge. */
 .lens-wrap { position: relative; min-height: 0; display: grid; isolation: isolate; }
-.ring { position: absolute; inset: -2px; border-radius: 15px; padding: 2px; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .5s;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; }
-.ring::before { content: ""; position: absolute; left: 50%; top: 50%; width: 170%; aspect-ratio: 1; transform: translate(-50%, -50%);
-  background: conic-gradient(transparent 0 58%, var(--fx-3) 72%, var(--fx-2) 86%, var(--fx-1) 97%, transparent); }
-.reading .ring, .acting .ring { opacity: 1; }
+.ring { position: absolute; inset: -2px; pointer-events: none; --dur: 6s; }
+.acting .ring { --dur: 5s; }
 .lens-wrap::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 13px; opacity: 0; transition: opacity .5s; box-shadow: 0 0 34px color-mix(in srgb, var(--fx-2) 60%, transparent), 0 0 70px color-mix(in srgb, var(--fx-1) 26%, transparent); }
 .reading .lens-wrap::after, .acting .lens-wrap::after { opacity: 1; }
 body.game .lens-wrap::after { opacity: 0; }
@@ -116,12 +123,11 @@ body.game .lens-wrap::after { opacity: 0; }
 .big-hive rect { transform-box: fill-box; transform-origin: center; animation: bar-in .9s var(--ease) backwards; }
 .big-hive rect:nth-child(2) { animation-delay: .07s; } .big-hive rect:nth-child(3) { animation-delay: .14s; } .big-hive rect:nth-child(4) { animation-delay: .21s; }
 .hero { width: min(640px, 100%); display: grid; gap: 12px; }
-.hero-field { position: relative; overflow: hidden; isolation: isolate; padding: 1.5px; border-radius: 30px; background: var(--line-2); box-shadow: 0 8px 40px -14px color-mix(in srgb, var(--fx-2) 70%, transparent); animation: rise .7s var(--ease) .1s backwards; }
-.hero-field::before { content: ""; position: absolute; left: 50%; top: 50%; width: 110%; aspect-ratio: 1; z-index: -1; opacity: 0; transform: translate(-50%, -50%);
-  background: conic-gradient(var(--fx-3), var(--fx-2), var(--fx-1), var(--fx-3)); transition: opacity .3s; }
+.hero-field { position: relative; isolation: isolate; padding: 1.5px; border-radius: 30px; background: var(--line-2); box-shadow: 0 8px 40px -14px color-mix(in srgb, var(--fx-2) 70%, transparent); animation: rise .7s var(--ease) .1s backwards; }
+.hero-field { --dur: 4.2s; }
+.hero-field::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 30px; opacity: 0; background: linear-gradient(90deg, var(--fx-3), var(--fx-2), var(--fx-1)); transition: opacity .3s; }
 .hero-field:hover::before { opacity: .55; }
-.hero-field:focus-within::before, .hero-field.typing::before { opacity: 1; animation: spin 2.4s var(--ease) 1; }
-.hero-field.typing::before { animation: spin 2.4s linear infinite; }
+.hero-field:focus-within::before { opacity: 1; }
 .hero-in { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 8px 6px 20px; border-radius: 29px; background: color-mix(in srgb, var(--studio-bg) 88%, #000); }
 .hero-in > svg { flex: none; color: var(--muted); }
 .hero-in input { flex: 1; min-width: 0; min-height: 40px; border: 0; background: none; color: var(--ink); font: 400 18px var(--display); outline: none; }
@@ -235,11 +241,12 @@ body.game .lens { filter: saturate(.2) brightness(.5); }
 @keyframes word { from { opacity: 0; color: var(--fx-1); } }
 
 /* Intensity. Sober keeps feedback and drops the travelling light. */
-body[data-fx="sobre"] .ring::before, body[data-fx="sobre"] .command::before { animation: none !important; }
+body[data-fx="sobre"] .trace { display: none; }
+body[data-fx="sobre"] .busy .command { background: var(--fx-2); }
 body[data-fx="sobre"] .scan { display: none; }
 body[data-fx="aucun"] *, body[data-fx="aucun"] *::before { animation: none !important; transition: none !important; }
-body[data-fx="aucun"] .scan { display: none; }
-body.game .ring::before, body.game .command::before { animation-play-state: paused !important; }
+body[data-fx="aucun"] .scan, body[data-fx="aucun"] .trace { display: none; }
+body.game .trace { display: none; }
 body.hidden-tab *, body.hidden-tab *::before { animation-play-state: paused !important; }
 
 @media (max-width: 1040px) {
@@ -266,6 +273,9 @@ body.hidden-tab *, body.hidden-tab *::before { animation-play-state: paused !imp
   <defs>
     <linearGradient id="hive-g" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="var(--logo-1)"/><stop offset=".5" stop-color="var(--logo-2)"/><stop offset="1" stop-color="var(--logo-3)"/>
+    </linearGradient>
+    <linearGradient id="fx-g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="var(--fx-3)"/><stop offset=".5" stop-color="var(--fx-2)"/><stop offset="1" stop-color="var(--fx-1)"/>
     </linearGradient>
     <symbol id="mark" viewBox="0 0 96 96"><g fill="url(#hive-g)"><rect x="17" y="9" width="62" height="14" rx="7"/><rect x="8" y="30" width="80" height="14" rx="7"/><rect x="12" y="51" width="72" height="14" rx="7"/><rect x="23" y="72" width="50" height="14" rx="7"/></g></symbol>
   </defs>
@@ -408,6 +418,30 @@ const THEMES = {
   amber: ['#ef4444', '#f97316', '#f59e0b'],
 };
 const body = document.body, browser = $('browser'), feed = $('feed');
+function addTrace(host, radius, width, cls) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'trace ' + (cls || ''));
+  svg.setAttribute('aria-hidden', 'true');
+  for (const [name, length, extra] of [['t1', 34, 1], ['t2', 20, 0.5], ['t3', 8, 0]]) {
+    const r = document.createElementNS(NS, 'rect');
+    r.setAttribute('class', name);
+    r.setAttribute('pathLength', '100');
+    r.setAttribute('stroke-dasharray', `${length} ${100 - length}`);
+    r.setAttribute('stroke-width', String(width + extra));
+    r.setAttribute('x', String(width / 2));
+    r.setAttribute('y', String(width / 2));
+    r.setAttribute('rx', String(radius));
+    r.style.width = `calc(100% - ${width}px)`;
+    r.style.height = `calc(100% - ${width}px)`;
+    svg.append(r);
+  }
+  host.append(svg);
+}
+addTrace($('command'), 15.25, 1.5);
+addTrace(document.querySelector('.ring'), 14, 2.5, 'a');
+addTrace(document.querySelector('.ring'), 14, 2.5, 'b');
+addTrace($('hero-field'), 29, 1.5);
 let runId = 0, autoplay = true, current = 0, gateResolve = null;
 class Cancelled extends Error {}
 
