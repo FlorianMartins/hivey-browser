@@ -3,6 +3,15 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4722 — 5 novembre 2026
+
+### Le panneau de l'assistant, dépouillé comme la maquette
+- **En haut** : le logo, « Assistant », l'historique, le menu et une croix pour fermer. Nouvelle conversation,
+  recherche, outils et paramètres sont dans le menu.
+- **En bas** : un seul champ lumineux, comme celui du nouvel onglet. Pièces jointes, dictée, modèle et options sont
+  rangés derrière son + ; Auto, Chat et Agent sont des pastilles sous le champ.
+- **Pendant que l'IA travaille** : une lumière colorée tourne autour du panneau, avec une lueur d'ambiance.
+
 ## 156.0.8078.4721 — 5 novembre 2026
 
 ### L'assistant retrouve le design de la maquette
