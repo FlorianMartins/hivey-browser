@@ -10,7 +10,9 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
   recherche, outils et paramètres sont dans le menu.
 - **En bas** : un seul champ lumineux, comme celui du nouvel onglet. Pièces jointes, dictée, modèle et options sont
   rangés derrière son + ; Auto, Chat et Agent sont des pastilles sous le champ.
-- **Pendant que l'IA travaille** : une lumière colorée tourne autour du panneau, avec une lueur d'ambiance.
+- **Pendant que l'IA travaille** : une lumière colorée tourne autour du panneau, avec une lueur d'ambiance. Sans
+  accélération matérielle, elle respire simplement et la lumière de la page ralentit, pour laisser le processeur au
+  modèle.
 
 ## 156.0.8078.4721 — 5 novembre 2026
 

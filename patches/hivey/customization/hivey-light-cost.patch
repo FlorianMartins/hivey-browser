@@ -1,0 +1,56 @@
+# Hivey 4722: the browser says whether it has a GPU, and its light slows down without one
+--- a/chrome/browser/ui/hivey/hivey_ai_bridge.cc
++++ b/chrome/browser/ui/hivey/hivey_ai_bridge.cc
+@@ -36,6 +36,7 @@
+ #include "extensions/browser/permissions_manager.h"
+ #include "extensions/common/extension.h"
+ #include "components/prefs/pref_service.h"
++#include "content/public/browser/gpu_data_manager.h"
+ #include "net/http/http_response_headers.h"
+ #include "net/traffic_annotation/network_traffic_annotation.h"
+ #include "services/network/public/cpp/resource_request.h"
+@@ -241,6 +242,8 @@
+       state.Set("key", engine.key());
+     }
+     base::DictValue values;
++    state.Set("accel",
++              content::GpuDataManager::GetInstance()->HardwareAccelerationEnabled());
+     values.Set("hiveyAi", std::move(state));
+     extensions::StorageFrontend::Get(profile_)->Set(
+         base::WrapRefCounted(extension),
+--- a/chrome/browser/ui/views/toolbar/hivey_assistant_panel.cc
++++ b/chrome/browser/ui/views/toolbar/hivey_assistant_panel.cc
+@@ -20,6 +20,7 @@
+ #include "cc/paint/paint_shader.h"
+ #include "cc/paint/path_effect.h"
+ #include "components/sessions/content/session_tab_helper.h"
++#include "content/public/browser/gpu_data_manager.h"
+ #include "content/public/browser/web_contents.h"
+ #include "ui/gfx/font_list.h"
+ #include "ui/gfx/geometry/rect_conversions.h"
+@@ -143,7 +144,16 @@
+   }
+ 
+   // ui::CompositorAnimationObserver:
+-  void OnAnimationStep(base::TimeTicks timestamp) override { SchedulePaint(); }
++  void OnAnimationStep(base::TimeTicks timestamp) override {
++    // Without a GPU the processor paints each frame, next to the model.
++    if (!content::GpuDataManager::GetInstance()
++             ->HardwareAccelerationEnabled() &&
++        timestamp - last_paint_ < base::Milliseconds(66)) {
++      return;
++    }
++    last_paint_ = timestamp;
++    SchedulePaint();
++  }
+   void OnCompositingShuttingDown(ui::Compositor* compositor) override {
+     Stop();
+   }
+@@ -271,6 +281,7 @@
+   raw_ptr<BrowserView> browser_view_;
+   raw_ptr<ui::Compositor> compositor_ = nullptr;
+   base::TimeTicks start_;
++  base::TimeTicks last_paint_;
+   base::ScopedObservation<views::View, views::ViewObserver> parent_observation_{
+       this};
+ };
