@@ -3,6 +3,48 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4720 — 5 novembre 2026
+
+### L'assistant fait maintenant tout ce que faisait la sidebar Hivey
+- **Le mode agent est là** : « Lance-moi une musique » depuis un nouvel onglet est
+  confié à l'agent, qui agit dans le même onglet. Le choix est automatique (Auto),
+  ou forcé avec Chat et Agent.
+- **Historique** : tes conversations sont listées, avec la place qu'elles occupent ;
+  en supprimer rend cette place.
+- **Tous les outils** (traduire, améliorer, image, PDF, sécurité, Wisebase...) sont
+  dans un menu, sans colonne d'onglets. Les **chats web des fournisseurs IA** ont leur
+  propre bouton dans la barre d'outils.
+- **Fournisseurs** : tu peux toujours utiliser un autre modèle, le modèle local est
+  simplement le choix par défaut.
+
+### Des réponses plus précises et mieux structurées
+- **Un modèle plus capable** : Qwen3.5 4B si le PC a au moins 12 Go de mémoire
+  (environ 2,6 Go à télécharger), Qwen3.5 2B sinon.
+- **Les bons passages** : la recherche lit les pages et retient les passages utiles à
+  ta question, au lieu du début de la page (menus, publicités), cause des réponses
+  fausses.
+- **Le fil de la conversation** : « Et en compétition ? » après une question sur
+  Overwatch cherche bien la compétition d'Overwatch.
+- **Une réponse directe d'abord**, puis les détails, avec des citations cliquables et
+  un bloc Sources.
+
+### Ton PC et ta sécurité
+- **L'IA libère la mémoire juste après la réponse** : le modèle est déchargé 15 secondes
+  après la fin de la réponse. La conversation et ses sources restent, la question
+  suivante recharge le modèle (quelques secondes de plus).
+- **L'agent n'a accès aux sites que pendant qu'il travaille** : le reste du temps,
+  aucune page ne peut atteindre l'assistant. Les recherches web passent par le
+  navigateur, sans tes cookies.
+- **« Lance-moi une musique » lance vraiment une musique, avec le son**, sans attendre
+  le modèle.
+
+### Interface
+- **Assistant tout à droite** de la barre d'outils, à côté de son panneau. L'en-tête
+  dit seulement « Assistant ».
+- **Onglets verticaux plus étroits**, et la croix de fermeture passe en haut à gauche :
+  cliquer sur l'icône d'un site ne ferme plus l'onglet.
+- **Paramètres, Performances, Favoris et Historique** en bas de la colonne d'onglets.
+
 ## 156.0.8078.4719 — 4 novembre 2026
 
 ### L'IA locale est dans le navigateur
