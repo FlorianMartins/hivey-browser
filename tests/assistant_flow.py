@@ -109,7 +109,8 @@ def send(panel, text):
 
 def ask_from_new_tab(chip, text):
     tab = Target(new_tab('chrome://newtab/'))
-    wait_for('the field', lambda: tab.js("!!document.getElementById('q')"), 30)
+    # The page's module runs after the field exists: a click before that is lost.
+    wait_for('the field', lambda: tab.js("!!document.querySelector('.chip[aria-pressed=true]')"), 30)
     tab.js(f"document.querySelector('.chip[data-mode={chip}]').click();"
            f"document.getElementById('q').value = {json.dumps(text)};"
            "document.getElementById('form').requestSubmit()")
@@ -261,7 +262,13 @@ def run(args):
               "hasFocus: document.hasFocus(), visible: document.visibilityState})"), flush=True)
         player.shot(args.out / 'assistant-4-player.png')
         moving = bool(first_state and second_state and second_state['t'] > first_state['t'] and not second_state['muted'])
-        check('Agent: the music plays, with sound', moving or args.no_play_check, f'{first_state} -> {second_state}')
+        # YouTube asks machines in a data center to sign in: the player was reached, but nothing can
+        # be said about the sound there. Anything else that does not play is a failure.
+        walled = not moving and player.js("document.body.innerText.includes('confirm you\u2019re not a bot')")
+        if walled:
+            print('NOT VERIFIABLE HERE  Agent: the music plays: YouTube asks this machine to sign in', flush=True)
+        else:
+            check('Agent: the music plays, with sound', moving or args.no_play_check, f'{first_state} -> {second_state}')
     print('      panel at the end:', (panel.js(LAST) or '')[:200].replace('\n', ' '), flush=True)
     panel.shot(args.out / 'assistant-4-agent.png')
 
