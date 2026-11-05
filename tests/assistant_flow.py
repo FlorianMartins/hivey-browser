@@ -109,8 +109,9 @@ def send(panel, text):
 
 def ask_from_new_tab(chip, text):
     tab = Target(new_tab('chrome://newtab/'))
-    # The page's module runs after the field exists: a click before that is lost.
-    wait_for('the field', lambda: tab.js("!!document.querySelector('.chip[aria-pressed=true]')"), 30)
+    # The page's module runs after the field exists: a submit before that reloads the page. The
+    # placeholder is written by that module, right before it listens to the form.
+    wait_for('the field', lambda: tab.js("!!document.getElementById('q')?.placeholder"), 30)
     tab.js(f"document.querySelector('.chip[data-mode={chip}]').click();"
            f"document.getElementById('q').value = {json.dumps(text)};"
            "document.getElementById('form').requestSubmit()")
