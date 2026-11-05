@@ -3,6 +3,27 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4721 — 5 novembre 2026
+
+### L'assistant retrouve le design de la maquette
+- **Fini l'allure d'extension** : le panneau devient une carte à côté de la page, avec le logo qui respire pendant
+  que l'IA travaille, la question en grand, les polices de la maquette et une zone de saisie épurée.
+- **Les étapes en frise lumineuse** : chaque recherche, lecture ou action de l'agent est écrite en clair sur une
+  ligne, avec un point qui s'allume tant qu'elle tourne.
+- **Les sources d'abord, puis la réponse** : les sources numérotées apparaissent dès qu'elles sont lues, la réponse
+  s'écrit ensuite avec ses citations. Un clic sur une citation ouvre la page sur le passage quand il s'y trouve encore.
+- **L'IA se voit sur la page** : le navigateur affiche « L'IA lit cette page » ou « L'agent contrôle cette page »,
+  un halo et un balayage pendant la lecture. Une page ne peut pas imiter ce dessin. Le curseur de l'agent se déplace
+  sur ce qu'il clique ou remplit.
+- **Une demande depuis le nouvel onglet** : le champ s'envole vers la barre d'adresse.
+
+### Barre d'outils et onglets
+- **Icône Web en couleur**, aux couleurs d'Hivey.
+- **Un bouton de navigation privée** remplace le bouton Tor : il propose une fenêtre privée ou une fenêtre avec Tor.
+- **Les addons sont masqués par défaut** de la barre d'outils. Ils restent dans le menu, et Hivey Studio peut
+  réafficher leur bouton.
+- **Nouvel ordre en bas de la barre d'onglets**, de haut en bas : Favoris, Historique, Performances, Paramètres.
+
 ## 156.0.8078.4720 — 5 novembre 2026
 
 ### L'assistant fait maintenant tout ce que faisait la sidebar Hivey

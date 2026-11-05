@@ -1,0 +1,464 @@
+# Hivey 4721: the assistant's look over the page, private button, add-ons out of the toolbar, new order at the bottom of the strip
+--- a/chrome/browser/hivey/hivey_bar_prefs.cc
++++ b/chrome/browser/hivey/hivey_bar_prefs.cc
+@@ -50,7 +50,8 @@
+   registry->RegisterListPref(kHiveyBarApps);
+   registry->RegisterListPref(kHiveyToolbarOrder);
+   registry->RegisterListPref(kHiveyOptionalAddons);
+-  registry->RegisterListPref(kHiveyToolbarHidden);
++  registry->RegisterListPref(kHiveyToolbarHidden,
++                            base::ListValue().Append("extensions"));
+   registry->RegisterBooleanPref(kHiveyGoogleDefaultApplied, false);
+   registry->RegisterBooleanPref(kHiveyBarModernDefaultApplied, false);
+   registry->RegisterBooleanPref(kHiveyTabSearchMoved, false);
+--- a/chrome/browser/resources/hivey_studio/home.js
++++ b/chrome/browser/resources/hivey_studio/home.js
+@@ -98,6 +98,19 @@
+   if (mode !== 'web') {
+     chrome.send('askAssistant', [mode, text]);
+     input.value = '';
++    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
++      const form = document.getElementById('form');
++      form.animate(
++          [
++            {transform: 'none', opacity: 1},
++            {
++              transform: `translateY(${
++                  -form.getBoundingClientRect().top}px) scale(.8)`,
++              opacity: 0,
++            },
++          ],
++          {duration: 480, easing: 'cubic-bezier(.16, 1, .3, 1)'});
++    }
+     return;
+   }
+   location.assign(addressOf(text) ||
+--- a/chrome/browser/resources/hivey_studio/i18n.js
++++ b/chrome/browser/resources/hivey_studio/i18n.js
+@@ -125,7 +125,7 @@
+     toolbarReset: 'Reset the toolbar',
+     tbBack: 'Back', tbForward: 'Forward', tbReload: 'Reload', tbHome: 'Home', tbLocation: 'Address bar',
+     tbExtensions: 'Extensions', tbPinned: 'Pinned buttons', tbAvatar: 'Profile', tbMenu: 'Menu',
+-    tbAssistant: 'Hivey assistant', tbAiWeb: 'Web chats of AI providers', tbPerformance: 'Resources and Gaming mode', tbTor: 'Private window with Tor', tbTabSearch: 'List all tabs',
++    tbAssistant: 'Hivey assistant', tbAiWeb: 'Web chats of AI providers', tbPerformance: 'Resources and Gaming mode', tbTor: 'Private browsing (private window or Tor)', tbTabSearch: 'List all tabs',
+     importSectionHint: 'Bring your bookmarks from the browser you used before.',
+     importHint: 'From Chrome, Edge, Brave, Vivaldi, Opera or Chromium on this computer: each profile goes to a folder of Other bookmarks.',
+     importFind: 'Browsers on this computer',
+@@ -400,7 +400,7 @@
+     toolbarReset: 'Rétablir la barre d’outils',
+     tbBack: 'Retour', tbForward: 'Avancer', tbReload: 'Actualiser', tbHome: 'Accueil', tbLocation: 'Barre d’adresse',
+     tbExtensions: 'Extensions', tbPinned: 'Boutons épinglés', tbAvatar: 'Profil', tbMenu: 'Menu',
+-    tbAssistant: 'Assistant Hivey', tbAiWeb: 'Chats web des fournisseurs IA', tbPerformance: 'Ressources et mode Gaming', tbTor: 'Fenêtre privée avec Tor', tbTabSearch: 'Liste de tous les onglets',
++    tbAssistant: 'Assistant Hivey', tbAiWeb: 'Chats web des fournisseurs IA', tbPerformance: 'Ressources et mode Gaming', tbTor: 'Navigation privée (fenêtre privée ou Tor)', tbTabSearch: 'Liste de tous les onglets',
+     importSectionHint: 'Récupérez les favoris du navigateur que vous utilisiez avant.',
+     importHint: 'Depuis Chrome, Edge, Brave, Vivaldi, Opera ou Chromium sur cet ordinateur : chaque profil va dans un dossier des Autres favoris.',
+     importFind: 'Navigateurs sur cet ordinateur',
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -2314,6 +2314,8 @@
+       "views/toolbar/hivey_assistant_panel.cc",
+       "views/toolbar/hivey_assistant_panel.h",
+       "views/toolbar/hivey_resources_coordinator.cc",
++      "views/toolbar/hivey_private_button.cc",
++      "views/toolbar/hivey_private_button.h",
+       "views/toolbar/hivey_tab_strip_tools.cc",
+       "views/toolbar/hivey_tab_strip_tools.h",
+       "views/toolbar/hivey_resources_coordinator.h",
+--- a/chrome/browser/ui/hivey/hivey_ai_bridge.cc
++++ b/chrome/browser/ui/hivey/hivey_ai_bridge.cc
+@@ -89,6 +89,15 @@
+         HiveyAiEngine::Get().Start();
+       }
+     }
++    if (const base::DictValue* activity = dict->FindDict("hiveyAiActivity")) {
++      const std::string* kind = activity->FindStringByDottedPath("newValue.kind");
++      const std::string* label =
++          activity->FindStringByDottedPath("newValue.label");
++      HiveyAiEngine::Get().SetActivity(
++          kind ? *kind : std::string(),
++          label ? base::UTF8ToUTF16(*label) : std::u16string(),
++          activity->FindIntByDottedPath("newValue.tabId").value_or(-1));
++    }
+     if (const base::DictValue* agent = dict->FindDict("hiveyAiAgent")) {
+       SetAgentSites(agent->FindBool("newValue").value_or(false));
+     }
+--- a/chrome/browser/ui/hivey/hivey_ai_engine.cc
++++ b/chrome/browser/ui/hivey/hivey_ai_engine.cc
+@@ -523,6 +523,14 @@
+   Notify();
+ }
+ 
++void HiveyAiEngine::SetActivity(const std::string& kind,
++                                const std::u16string& label,
++                                int tab_id) {
++  activity_ = kind;
++  activity_label_ = label;
++  activity_tab_ = tab_id;
++}
++
+ void HiveyAiEngine::SetPending(const std::string& text) {
+   pending_ = text;
+   for (Observer& observer : observers_) {
+--- a/chrome/browser/ui/hivey/hivey_ai_engine.h
++++ b/chrome/browser/ui/hivey/hivey_ai_engine.h
+@@ -67,6 +67,15 @@
+   // A question is being answered: no idle stop, the lights are on.
+   void SetBusy(bool busy);
+   void SetPending(const std::string& text);
++  // What the AI does with a page, shown over it: "reading", "acting" or empty,
++  // the words to show, and the tab (-1 when unknown). Read while the light
++  // runs, so this notifies nobody.
++  void SetActivity(const std::string& kind,
++                   const std::u16string& label,
++                   int tab_id);
++  const std::string& activity() const { return activity_; }
++  const std::u16string& activity_label() const { return activity_label_; }
++  int activity_tab() const { return activity_tab_; }
+   std::string TakePending();
+   // For tests: a game is on the screen.
+   void SetGameForTesting(bool game);
+@@ -106,6 +115,9 @@
+   int port_ = 0;
+   std::string key_;
+   bool busy_ = false;
++  std::string activity_;
++  std::u16string activity_label_;
++  int activity_tab_ = -1;
+   bool game_ = false;
+   bool game_for_testing_ = false;
+   std::string pending_;
+--- a/chrome/browser/ui/views/extensions/extensions_toolbar_desktop.cc
++++ b/chrome/browser/ui/views/extensions/extensions_toolbar_desktop.cc
+@@ -18,6 +18,8 @@
+ #include "chrome/app/vector_icons/vector_icons.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/extensions/extension_tab_util.h"
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
++#include "components/prefs/pref_service.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser_element_identifiers.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+@@ -1125,6 +1127,14 @@
+   if (base::CommandLine::ForCurrentProcess()->HasSwitch("hide-extensions-menu"))
+     return false;
+ 
++  // Hivey: out of the toolbar by default, Hivey Studio shows it again.
++  if (browser_->GetProfile()
++          ->GetPrefs()
++          ->GetList(hivey::kHiveyToolbarHidden)
++          .contains("extensions")) {
++    return false;
++  }
++
+   // The container (and extensions-menu button) should not be visible if we have
+   // no extensions.
+   if (!toolbar_view_model_->HasAnyExtensions()) {
+--- a/chrome/browser/ui/views/toolbar/hivey_assistant_panel.cc
++++ b/chrome/browser/ui/views/toolbar/hivey_assistant_panel.cc
+@@ -19,6 +19,11 @@
+ #include "cc/paint/paint_flags.h"
+ #include "cc/paint/paint_shader.h"
+ #include "cc/paint/path_effect.h"
++#include "components/sessions/content/session_tab_helper.h"
++#include "content/public/browser/web_contents.h"
++#include "ui/gfx/font_list.h"
++#include "ui/gfx/geometry/rect_conversions.h"
++#include "ui/gfx/text_utils.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/extensions/extension_side_panel_coordinator.h"
+@@ -128,6 +133,7 @@
+               views::ShapeContextTokens::kContentSeparatorRadius) +
+           1.5f;
+       DrawLight(canvas, rect, radius, 2.5f, t / 6.0);
++      DrawActivity(canvas, rect, radius, t);
+     }
+   }
+ 
+@@ -173,6 +179,60 @@
+     SetVisible(false);
+   }
+ 
++  // Over the page, drawn by the browser: a page cannot imitate it. The badge
++  // says what the AI does with this page; while it reads, a line goes over it.
++  void DrawActivity(gfx::Canvas* canvas,
++                    gfx::RectF rect,
++                    float radius,
++                    double t) {
++    const HiveyAiEngine& engine = HiveyAiEngine::Get();
++    content::WebContents* contents = browser_view_->GetActiveWebContents();
++    if (engine.activity().empty() || !contents ||
++        (engine.activity_tab() != -1 &&
++         sessions::SessionTabHelper::IdForTab(contents).id() !=
++             engine.activity_tab())) {
++      return;
++    }
++    // The halo, along the edges.
++    for (const auto& [width, alpha] :
++         {std::pair<float, float>{28, .05f}, {16, .06f}, {8, .08f}}) {
++      cc::PaintFlags halo = GradientFlags(rect);
++      halo.setStyle(cc::PaintFlags::kStroke_Style);
++      halo.setStrokeWidth(width);
++      halo.setAlphaf(alpha);
++      canvas->DrawPath(SkPath::RRect(gfx::RectFToSkRect(rect), radius, radius),
++                       halo);
++    }
++    if (engine.activity() == "reading") {
++      // Down and up again, slowing at both ends.
++      const double phase = std::fmod(t / 3.2, 2.0);
++      const double there = phase < 1 ? phase : 2 - phase;
++      const double eased = (1 - std::cos(there * std::numbers::pi)) / 2;
++      constexpr float kBand = 120;
++      const float bottom =
++          rect.y() + static_cast<float>(eased) * rect.height();
++      const float top = std::max(rect.y(), bottom - kBand);
++      const SkPoint band[] = {{rect.x(), bottom - kBand}, {rect.x(), bottom}};
++      const SkColor4f band_colors[] = {{kViolet.fR, kViolet.fG, kViolet.fB, 0},
++                                       {kViolet.fR, kViolet.fG, kViolet.fB, .2f}};
++      cc::PaintFlags fill;
++      fill.setShader(cc::PaintShader::MakeLinearGradient(
++          band, band_colors, nullptr, 2, SkTileMode::kClamp));
++      canvas->DrawRect(gfx::RectF(rect.x(), top, rect.width(), bottom - top),
++                       fill);
++      canvas->DrawRect(gfx::RectF(rect.x(), bottom - 2, rect.width(), 2),
++                       GradientFlags(rect));
++    }
++    const gfx::FontList font;
++    const int text_width = gfx::GetStringWidth(engine.activity_label(), font);
++    gfx::RectF badge(rect.right() - 12 - text_width - 18, rect.y() + 12,
++                     text_width + 18, font.GetHeight() + 8);
++    canvas->DrawRoundRect(badge, 6, GradientFlags(badge));
++    canvas->DrawStringRectWithFlags(
++        engine.activity_label(), font, SK_ColorWHITE,
++        gfx::ToEnclosedRect(badge), gfx::Canvas::TEXT_ALIGN_CENTER);
++  }
++
+   void DrawLight(gfx::Canvas* canvas,
+                  gfx::RectF rect,
+                  float radius,
+@@ -260,6 +320,21 @@
+   return ui::ImageModel::FromImageSkia(
+       gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f));
+ }
++
++ui::ImageModel AiWebIcon() {
++  constexpr int kSize = 40;
++  gfx::Canvas canvas(gfx::Size(kSize, kSize), 1.0f, /*is_opaque=*/false);
++  cc::PaintFlags flags = GradientFlags(gfx::RectF(0, 0, kSize, kSize));
++  flags.setStyle(cc::PaintFlags::kStroke_Style);
++  flags.setStrokeWidth(3);
++  flags.setStrokeCap(cc::PaintFlags::kRound_Cap);
++  canvas.DrawPath(SkPath::Oval(SkRect::MakeXYWH(4, 4, 32, 32)), flags);
++  canvas.DrawPath(SkPath::Oval(SkRect::MakeXYWH(13, 4, 14, 32)), flags);
++  canvas.DrawLine(gfx::PointF(5, 15), gfx::PointF(35, 15), flags);
++  canvas.DrawLine(gfx::PointF(5, 25), gfx::PointF(35, 25), flags);
++  return ui::ImageModel::FromImageSkia(
++      gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f));
++}
+ 
+ void AddAssistantLight(BrowserView* browser_view) {
+   AttachHiveyAiBridge(browser_view->GetProfile());
+--- a/chrome/browser/ui/views/toolbar/hivey_assistant_panel.h
++++ b/chrome/browser/ui/views/toolbar/hivey_assistant_panel.h
+@@ -24,6 +24,8 @@
+                           std::string_view mode);
+ // The Hivey mark, for that button.
+ ui::ImageModel AssistantIcon();
++// The AI providers' web chats: a globe in the colors of the mark.
++ui::ImageModel AiWebIcon();
+ // The colored light around the address bar and the page while the AI works.
+ void AddAssistantLight(BrowserView* browser_view);
+ 
+--- a/chrome/browser/ui/views/toolbar/hivey_private_button.cc
++++ b/chrome/browser/ui/views/toolbar/hivey_private_button.cc
+@@ -0,0 +1,66 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#include "chrome/browser/ui/views/toolbar/hivey_private_button.h"
++
++#include "base/functional/bind.h"
++#include "chrome/app/vector_icons/vector_icons.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/ui/browser_commands.h"
++#include "chrome/browser/ui/hivey/hivey_tor.h"
++#include "chrome/grit/generated_resources.h"
++#include "ui/accessibility/platform/ax_platform.h"
++#include "ui/base/l10n/l10n_util.h"
++#include "ui/base/metadata/metadata_impl_macros.h"
++#include "ui/base/mojom/menu_source_type.mojom.h"
++#include "ui/views/accessibility/view_accessibility.h"
++#include "ui/views/controls/menu/menu_runner.h"
++#include "url/gurl.h"
++
++namespace hivey {
++
++namespace {
++enum Choice { kPrivateWindow = 1, kTorWindow };
++}  // namespace
++
++PrivateButton::PrivateButton(Profile* profile, const ui::ImageModel& tor_icon)
++    : ToolbarButton(base::BindRepeating(&PrivateButton::ShowChoices,
++                                        base::Unretained(this))),
++      profile_(profile),
++      choices_(std::make_unique<ui::SimpleMenuModel>(this)) {
++  const std::u16string name =
++      l10n_util::GetStringUTF16(IDS_NEW_INCOGNITO_WINDOW);
++  choices_->AddItemWithIcon(
++      kPrivateWindow, name,
++      ui::ImageModel::FromVectorIcon(kIncognitoIcon, ui::kColorMenuIcon, 16));
++  choices_->AddItemWithIcon(kTorWindow,
++                            l10n_util::GetStringUTF16(IDS_HIVEY_TOR_WINDOW),
++                            tor_icon);
++  SetVectorIcons(kIncognitoIcon, kIncognitoIcon);
++  SetTooltipText(name);
++  GetViewAccessibility().SetName(name);
++}
++
++PrivateButton::~PrivateButton() = default;
++
++void PrivateButton::ShowChoices() {
++  runner_ = std::make_unique<views::MenuRunner>(
++      choices_.get(), views::MenuRunner::HAS_MNEMONICS);
++  runner_->RunMenuAt(GetWidget(), nullptr, GetAnchorBoundsInScreen(),
++                     views::MenuAnchorPosition::kTopRight,
++                     ui::mojom::MenuSourceType::kNone);
++}
++
++void PrivateButton::ExecuteCommand(int command_id, int event_flags) {
++  if (command_id == kPrivateWindow) {
++    chrome::NewIncognitoWindow(profile_);
++  } else {
++    OpenTorWindow(GURL());
++  }
++}
++
++BEGIN_METADATA(PrivateButton)
++END_METADATA
++
++}  // namespace hivey
+--- a/chrome/browser/ui/views/toolbar/hivey_private_button.h
++++ b/chrome/browser/ui/views/toolbar/hivey_private_button.h
+@@ -0,0 +1,46 @@
++// Copyright 2026 The Hivey Browser contributors
++// Use of this source code is governed by the MIT license that can be found in
++// the LICENSE file of the Hivey Browser repository.
++
++#ifndef CHROME_BROWSER_UI_VIEWS_TOOLBAR_HIVEY_PRIVATE_BUTTON_H_
++#define CHROME_BROWSER_UI_VIEWS_TOOLBAR_HIVEY_PRIVATE_BUTTON_H_
++
++#include <memory>
++
++#include "base/memory/raw_ptr.h"
++#include "chrome/browser/ui/views/toolbar/toolbar_button.h"
++#include "ui/base/metadata/metadata_header_macros.h"
++#include "ui/base/models/image_model.h"
++#include "ui/menus/simple_menu_model.h"
++
++class Profile;
++
++namespace views {
++class MenuRunner;
++}
++
++namespace hivey {
++
++// The toolbar's private button: asks for a private window or for Tor.
++class PrivateButton : public ToolbarButton,
++                      public ui::SimpleMenuModel::Delegate {
++  METADATA_HEADER(PrivateButton, ToolbarButton)
++
++ public:
++  PrivateButton(Profile* profile, const ui::ImageModel& tor_icon);
++  ~PrivateButton() override;
++
++  // ui::SimpleMenuModel::Delegate:
++  void ExecuteCommand(int command_id, int event_flags) override;
++
++ private:
++  void ShowChoices();
++
++  raw_ptr<Profile> profile_;
++  std::unique_ptr<ui::SimpleMenuModel> choices_;
++  std::unique_ptr<views::MenuRunner> runner_;
++};
++
++}  // namespace hivey
++
++#endif  // CHROME_BROWSER_UI_VIEWS_TOOLBAR_HIVEY_PRIVATE_BUTTON_H_
+--- a/chrome/browser/ui/views/toolbar/hivey_tab_strip_tools.cc
++++ b/chrome/browser/ui/views/toolbar/hivey_tab_strip_tools.cc
+@@ -46,19 +46,19 @@
+         views::BoxLayout::MainAxisAlignment::kCenter);
+     layout_->set_between_child_spacing(2);
+ 
+-    AddTool(vector_icons::kSettingsIcon, u"Settings",
+-            base::BindRepeating(&TabStripTools::OpenSettings,
+-                                base::Unretained(this)));
+-    resources_ = AddTool(kSpeedIcon,
+-                         l10n_util::GetStringUTF16(IDS_HIVEY_BAR_PERFORMANCE),
+-                         base::BindRepeating(&TabStripTools::OpenResources,
+-                                             base::Unretained(this)));
+     AddTool(kStarIcon, u"Bookmarks",
+             base::BindRepeating(&TabStripTools::OpenBookmarks,
+                                 base::Unretained(this)));
+     AddTool(vector_icons::kHistoryIcon, u"History",
+             base::BindRepeating(&TabStripTools::OpenHistory,
+                                 base::Unretained(this)));
++    resources_ = AddTool(kSpeedIcon,
++                         l10n_util::GetStringUTF16(IDS_HIVEY_BAR_PERFORMANCE),
++                         base::BindRepeating(&TabStripTools::OpenResources,
++                                             base::Unretained(this)));
++    AddTool(vector_icons::kSettingsIcon, u"Settings",
++            base::BindRepeating(&TabStripTools::OpenSettings,
++                                base::Unretained(this)));
+ 
+     OnCollapseChanged(state_controller->GetCollapseState());
+     collapse_subscription_ =
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -7,6 +7,7 @@
+ #include "chrome/browser/hivey/hivey_bar_assets.h"
+ #include "chrome/browser/hivey/hivey_bar_prefs.h"
+ #include "chrome/browser/ui/views/toolbar/hivey_assistant_panel.h"
++#include "chrome/browser/ui/views/toolbar/hivey_private_button.h"
+ #include "chrome/browser/ui/views/toolbar/hivey_resources_coordinator.h"
+ #include "chrome/browser/ui/hivey/hivey_tor.h"
+ #include "components/vector_icons/vector_icons.h"
+@@ -557,7 +558,7 @@
+           hivey::ToggleAssistantPanel(toolbar->browser(), "web");
+         },
+         base::Unretained(this)));
+-    ai_web->SetVectorIcons(vector_icons::kGlobeIcon, vector_icons::kGlobeIcon);
++    ai_web->SetImageModel(views::Button::STATE_NORMAL, hivey::AiWebIcon());
+     const std::u16string web_tooltip = u"Web AI";
+     ai_web->SetTooltipText(web_tooltip);
+     ai_web->GetViewAccessibility().SetName(web_tooltip);
+@@ -589,21 +590,13 @@
+         std::make_unique<ExtensionsToolbarCoordinator>(extensions_container_);
+   }
+ 
+-  // Hivey: a private window with Tor, one click away (like Brave's), right
+-  // of the extensions.
++  // Hivey: one private button, right of the extensions: it asks for a private
++  // window or for Tor.
+   if (display_mode_ == DisplayMode::kNormal) {
+-    auto tor = std::make_unique<ToolbarButton>(
+-        base::BindRepeating(&hivey::OpenTorWindow, GURL()));
+-    // Tor's own onion, in its colors.
+-    tor->SetImageModel(
+-        views::Button::STATE_NORMAL,
++    hivey_tor_button_ = AddChildView(std::make_unique<hivey::PrivateButton>(
++        browser_->GetProfile(),
+         ui::ImageModel::FromImageSkia(gfx::ImageSkia::CreateFromBitmap(
+-            gfx::PNGCodec::Decode(base::span(kHiveyTorLogoPng)), 2.0f)));
+-    const std::u16string tooltip =
+-        l10n_util::GetStringUTF16(IDS_HIVEY_TOR_WINDOW);
+-    tor->SetTooltipText(tooltip);
+-    tor->GetViewAccessibility().SetName(tooltip);
+-    hivey_tor_button_ = AddChildView(std::move(tor));
++            gfx::PNGCodec::Decode(base::span(kHiveyTorLogoPng)), 2.0f))));
+   }
+ 
+   if (toolbar_divider) {

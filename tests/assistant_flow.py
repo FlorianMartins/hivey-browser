@@ -285,6 +285,13 @@ def run(args):
     links = panel.js("[...document.querySelectorAll('#messages .msg.assistant')].pop().querySelectorAll('a[href^=\"http\"]').length")
     check('Web: an answer with its sources', len(text) > 20 and links > 0, f'{links} links: {text[:160]}'.replace('\n', ' '))
     panel.shot(args.out / 'assistant-5-web.png')
+    check('Look: the mock-up\'s font and mark', 'Space Grotesk' in panel.js("getComputedStyle(document.querySelector('.msg.assistant')).fontFamily")
+          and panel.js("getComputedStyle(document.getElementById('hiveMark')).display") != 'none', '')
+    check('Look: the sources come before the answer', panel.js("""(() => {
+        const m = [...document.querySelectorAll('#messages .msg.assistant')].pop();
+        const s = m.querySelector('.web-sources'), b = m.querySelector('.ai-body');
+        return !!s && !!b && s.getBoundingClientRect().top < b.getBoundingClientRect().top; })()"""), '')
+    check('Look: the steps are a timeline in words', panel.js("!!document.querySelector('.web-trace .deep-step') && !document.body.innerText.includes('\\u2192 web_search')"), '')
 
     # Right after the answer, the engine leaves the PC's memory.
     start = time.monotonic()
@@ -310,6 +317,8 @@ def run(args):
     if not opened:
         diagnose(panel, opener)
     wait_for('the end of the turn', lambda: panel.js(IDLE), 600, 2)
+    check('Look: the agent\'s steps say what it does', panel.js("[...document.querySelectorAll('.agent-act-head')].every(x => !x.innerText.includes('({'))"), panel.js("[...document.querySelectorAll('.agent-act-head')].map(x => x.innerText).join(' | ')"))
+    check('Nothing over the page once it is over', not panel.js("chrome.storage.local.get('hiveyAiActivity').then(r => r.hiveyAiActivity && r.hiveyAiActivity.kind)"), '')
     wait_for('the sites taken back', sites_closed, 20)
     check('Agent: the sites are taken back after a real turn', True, '')
 
