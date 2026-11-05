@@ -118,7 +118,13 @@ def ask_from_new_tab(chip, text):
 
 def diagnose(panel, tab):
     """What to know when a question from a new tab did not arrive."""
-    print('      panels:', [t['url'][-40:] for t in targets() if SIDEBAR in t.get('url', '')], flush=True)
+    for info in targets():
+        if SIDEBAR in info.get('url', ''):
+            other = Target(info)
+            print('      panel', info['type'], info['url'][-30:], other.js(
+                "JSON.stringify({visible: document.visibilityState, input: document.getElementById('input')?.value, "
+                "stopHidden: document.getElementById('stop')?.classList.contains('hidden'), "
+                "messages: (document.getElementById('messages')?.innerText || '').slice(-120)})"), flush=True)
     print('      panel url:', panel.js('location.href'), flush=True)
     print('      storage:', panel.js("chrome.storage.local.get(['pendingAction', 'hiveyAi', 'hiveyAiBusy', 'hiveyAiAgent'])"
                                      ".then(r => { if (r.hiveyAi) r.hiveyAi.key = ''; return JSON.stringify(r); })"), flush=True)
@@ -221,12 +227,22 @@ def run(args):
     if watch:
         player = Target(watch)
         video = ("(() => { const v = document.querySelector('video');"
-                 " return v ? {t: v.currentTime, paused: v.paused, muted: v.muted} : null; })()")
+                 " return v ? {t: v.currentTime, paused: v.paused, muted: v.muted, ready: v.readyState, net: v.networkState,"
+                 " error: v.error && v.error.message, src: (v.currentSrc || '').slice(0, 30)} : null; })()")
         time.sleep(8)
         first_state = player.js(video)
-        time.sleep(8)
-        second_state = player.js(video)
+        # A slow machine may take a while to start; it counts once the time moves.
+        second_state = first_state
+        for _ in range(12):
+            time.sleep(5)
+            second_state = player.js(video)
+            if first_state and second_state and second_state['t'] > first_state['t']:
+                break
         print(f'      video: {first_state} -> {second_state}', flush=True)
+        print('      player:', player.js("JSON.stringify({title: document.title, "
+              "message: (document.querySelector('.ytp-error, ytd-player-error-message-renderer, #reason, .ytp-ad-player-overlay')?.innerText || '').slice(0, 200), "
+              "hasFocus: document.hasFocus(), visible: document.visibilityState})"), flush=True)
+        player.shot(args.out / 'assistant-4-player.png')
         moving = bool(first_state and second_state and second_state['t'] > first_state['t'] and not second_state['muted'])
         check('Agent: the music plays, with sound', moving or args.no_play_check, f'{first_state} -> {second_state}')
     print('      panel at the end:', (panel.js(LAST) or '')[:200].replace('\n', ' '), flush=True)
