@@ -219,6 +219,44 @@ def run(args):
     print('      panel at the end:', (panel.js(LAST) or '')[:200].replace('\n', ' '), flush=True)
     panel.shot(args.out / 'assistant-4-agent.png')
 
+    # The agent's access to sites ends with its work.
+    def sites_closed():
+        return panel.js("chrome.permissions.contains({origins: ['<all_urls>']}).then(r => !r)")
+    wait_for('the sites taken back', sites_closed, 20)
+    check('Agent: the sites are taken back after it', True, '')
+
+    # A question for the web: real results, read through the browser, with sources.
+    before = send(panel, 'Quel est le meilleur healer sur Overwatch ?')
+    text = wait_answer(panel, before, 900)
+    links = panel.js("[...document.querySelectorAll('#messages .msg.assistant')].pop().querySelectorAll('a[href^=\"http\"]').length")
+    check('Web: an answer with its sources', len(text) > 20 and links > 0, f'{links} links: {text[:160]}'.replace('\n', ' '))
+    panel.shot(args.out / 'assistant-5-web.png')
+
+    # Right after the answer, the engine leaves the PC's memory.
+    start = time.monotonic()
+    state = "chrome.storage.local.get('hiveyAi').then(r => r.hiveyAi.state)"
+    wait_for('the engine to stop', lambda: panel.js(state) != 'running', 90)
+    check('Engine unloaded after the answer', True, f'{time.monotonic() - start:.0f} s, state {panel.js(state)}')
+
+    # It comes back for the next question, and the conversation is still there.
+    before = send(panel, 'Et en compétition ?')
+    text = wait_answer(panel, before, 900)
+    check('After the unload: the follow-up keeps the topic', any(w in text.lower() for w in ('overwatch', 'healer', 'soin', 'support', 'héros', 'hero')), text[:200].replace('\n', ' '))
+
+    # A real agent turn, through the model and its tools.
+    ask_from_new_tab('agent', 'Ouvre le site example.com')
+    def example_page():
+        return next((t for t in targets() if 'example.com' in t.get('url', '') and t['type'] == 'page'), None)
+    opened = None
+    try:
+        opened = wait_for('the site', example_page, 600, 3)
+    except TimeoutError:
+        pass
+    check('Agent: the model acts on the browser', bool(opened), opened['url'][:60] if opened else (panel.js(LAST) or '')[:200])
+    wait_for('the end of the turn', lambda: panel.js(IDLE), 600, 2)
+    wait_for('the sites taken back', sites_closed, 20)
+    check('Agent: the sites are taken back after a real turn', True, '')
+
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')

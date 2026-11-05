@@ -13,6 +13,28 @@
    return policy::IsOriginInAllowlist(contents->GetURL(), prefs,
                                       prefs::kAutoplayAllowlist,
                                       prefs::kAutoplayAllowed);
+--- a/chrome/browser/hivey/hivey_bar_prefs.cc
++++ b/chrome/browser/hivey/hivey_bar_prefs.cc
+@@ -36,6 +36,7 @@
+   registry->RegisterBooleanPref(kHiveyDesign4718Applied, false);
+   registry->RegisterBooleanPref(kHiveySidebarPinned, false);
+   registry->RegisterBooleanPref(kHiveyToolsUnpinned, false);
++  registry->RegisterBooleanPref(kHiveyAgentSitesOpen, false);
+   registry->RegisterIntegerPref(kHiveyBarSide,
+                                 static_cast<int>(HiveyBarSide::kAuto));
+   registry->RegisterBooleanPref(kHiveyVerticalTabsRight, false);
+--- a/chrome/browser/hivey/hivey_bar_prefs.h
++++ b/chrome/browser/hivey/hivey_bar_prefs.h
+@@ -97,6 +97,9 @@
+ inline constexpr char kHiveySidebarPinned[] = "hivey.sidebar_pinned";
+ // Then unpinned, once: the assistant has the toolbar's button.
+ inline constexpr char kHiveyToolsUnpinned[] = "hivey.tools_unpinned";
++// The agent has the sites right now; if the browser stopped meanwhile, they
++// are taken back at the next start.
++inline constexpr char kHiveyAgentSitesOpen[] = "hivey.agent_sites_open";
+ void ApplyHiveyDesign(PrefService& prefs, PrefService* local_state);
+ 
+ void RegisterHiveyBarProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 --- a/chrome/browser/resources/hivey_studio/home.html
 +++ b/chrome/browser/resources/hivey_studio/home.html
 @@ -45,6 +45,7 @@
@@ -128,14 +150,17 @@
  GURL WithHiveyEmbed(GURL url, bool embedded) {
 --- a/chrome/browser/ui/hivey/hivey_ai_bridge.cc
 +++ b/chrome/browser/ui/hivey/hivey_ai_bridge.cc
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,271 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
 +
 +#include "chrome/browser/ui/hivey/hivey_ai_bridge.h"
 +
++#include <list>
 +#include <map>
++#include <memory>
++#include <optional>
 +#include <string>
 +#include <utility>
 +
@@ -145,10 +170,15 @@
 +#include "base/memory/scoped_refptr.h"
 +#include "base/no_destructor.h"
 +#include "base/scoped_observation.h"
++#include "base/memory/weak_ptr.h"
 +#include "base/strings/string_number_conversions.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/time/time.h"
 +#include "base/values.h"
 +#include "chrome/browser/browser_process.h"
++#include "extensions/browser/permissions/scripting_permissions_modifier.h"
 +#include "chrome/browser/hivey/bundled_extensions.h"
++#include "chrome/browser/hivey/hivey_bar_prefs.h"
 +#include "chrome/browser/profiles/profile.h"
 +#include "chrome/browser/profiles/profile_manager.h"
 +#include "chrome/browser/ui/hivey/hivey_ai_engine.h"
@@ -156,11 +186,38 @@
 +#include "extensions/browser/api/storage/storage_frontend.h"
 +#include "extensions/browser/extension_registry.h"
 +#include "extensions/browser/extension_registry_observer.h"
++#include "extensions/browser/permissions_manager.h"
 +#include "extensions/common/extension.h"
++#include "components/prefs/pref_service.h"
++#include "net/http/http_response_headers.h"
++#include "net/traffic_annotation/network_traffic_annotation.h"
++#include "services/network/public/cpp/resource_request.h"
++#include "services/network/public/cpp/shared_url_loader_factory.h"
++#include "services/network/public/cpp/simple_url_loader.h"
++#include "services/network/public/mojom/url_response_head.mojom.h"
++#include "url/gurl.h"
 +
 +namespace hivey {
 +
 +namespace {
++
++constexpr size_t kMaxPageBytes = 2 * 1024 * 1024;
++
++constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
++    net::DefineNetworkTrafficAnnotation("hivey_assistant_pages", R"(
++      semantics {
++        sender: "Hivey assistant"
++        description: "Searches the web and reads the pages found, for the "
++          "answer the user asked for."
++        trigger: "A question to the assistant that needs the web."
++        data: "The search terms."
++        destination: OTHER
++      }
++      policy {
++        cookies_allowed: NO
++        setting: "The assistant's web settings."
++        policy_exception_justification: "Not implemented."
++      })");
 +
 +class Bridge : public HiveyAiEngine::Observer,
 +               public extensions::ExtensionRegistryObserver {
@@ -185,6 +242,16 @@
 +        HiveyAiEngine::Get().Start();
 +      }
 +    }
++    if (const base::DictValue* agent = dict->FindDict("hiveyAiAgent")) {
++      SetAgentSites(agent->FindBool("newValue").value_or(false));
++    }
++    if (const base::DictValue* fetch = dict->FindDict("hiveyAiFetch")) {
++      const std::string* id = fetch->FindStringByDottedPath("newValue.id");
++      const std::string* url = fetch->FindStringByDottedPath("newValue.url");
++      if (id && url) {
++        Fetch(*id, GURL(*url));
++      }
++    }
 +    if (const base::DictValue* busy = dict->FindDict("hiveyAiBusy")) {
 +      const std::optional<bool> value = busy->FindBool("newValue");
 +      HiveyAiEngine::Get().SetBusy(value.value_or(false));
@@ -199,11 +266,106 @@
 +  void OnExtensionReady(content::BrowserContext* browser_context,
 +                        const extensions::Extension* extension) override {
 +    if (extension->id() == HIVEY_BUNDLED_AI_ID) {
++      // A browser stopped while the agent worked.
++      if (profile_->GetPrefs()->GetBoolean(kHiveyAgentSitesOpen)) {
++        SetAgentSites(false);
++      }
 +      Write();
 +    }
 +  }
 +
 + private:
++  const extensions::Extension* Assistant() {
++    return extensions::ExtensionRegistry::Get(profile_)
++        ->enabled_extensions()
++        .GetByID(HIVEY_BUNDLED_AI_ID);
++  }
++
++  void SetAgentSites(bool open) {
++    const extensions::Extension* extension = Assistant();
++    extensions::PermissionsManager* permissions =
++        extensions::PermissionsManager::Get(profile_);
++    if (!extension || !permissions->CanAffectExtension(*extension)) {
++      return;
++    }
++    // Only what was opened here is taken back: the user may have given it
++    // every site.
++    PrefService* prefs = profile_->GetPrefs();
++    if (open == prefs->GetBoolean(kHiveyAgentSitesOpen) ||
++        (open && !permissions->HasWithheldHostPermissions(*extension))) {
++      return;
++    }
++    prefs->SetBoolean(kHiveyAgentSitesOpen, open);
++    extensions::ScriptingPermissionsModifier(profile_, extension)
++        .SetWithholdHostPermissions(!open);
++    if (!open) {
++      GrantHiveyAssistantHosts(profile_, extension);
++    }
++  }
++
++  void Fetch(const std::string& id, const GURL& url) {
++    if (!url.is_valid() || !url.SchemeIsHTTPOrHTTPS()) {
++      Answer(id, url, nullptr, std::nullopt);
++      return;
++    }
++    auto request = std::make_unique<network::ResourceRequest>();
++    request->url = url;
++    request->credentials_mode = network::mojom::CredentialsMode::kOmit;
++    auto loader = network::SimpleURLLoader::Create(std::move(request),
++                                                   kTrafficAnnotation);
++    loader->SetTimeoutDuration(base::Seconds(15));
++    loader->SetAllowHttpErrorResults(true);
++    auto* raw = loader.get();
++    loaders_.push_back(std::move(loader));
++    raw->DownloadToString(
++        g_browser_process->shared_url_loader_factory().get(),
++        base::BindOnce(
++            [](base::WeakPtr<Bridge> bridge, std::string id, GURL url,
++               std::list<std::unique_ptr<network::SimpleURLLoader>>::iterator
++                   loader,
++               std::optional<std::string> body) {
++              if (bridge) {
++                bridge->Answer(id, url, loader->get(), std::move(body));
++                bridge->loaders_.erase(loader);
++              }
++            },
++            weak_factory_.GetWeakPtr(), id, url, std::prev(loaders_.end())),
++        kMaxPageBytes);
++  }
++
++  void Answer(const std::string& id,
++              const GURL& url,
++              network::SimpleURLLoader* loader,
++              std::optional<std::string> body) {
++    const extensions::Extension* extension = Assistant();
++    if (!extension) {
++      return;
++    }
++    base::DictValue answer;
++    answer.Set("url", url.spec());
++    if (body) {
++      const network::mojom::URLResponseHead* head =
++          loader ? loader->ResponseInfo() : nullptr;
++      answer.Set("status", head && head->headers
++                               ? head->headers->response_code()
++                               : 200);
++      answer.Set("contentType", head ? head->mime_type : std::string());
++      if (loader && loader->GetFinalURL().is_valid()) {
++        answer.Set("url", loader->GetFinalURL().spec());
++      }
++      // Pages are not all valid UTF-8; base::Value must be.
++      answer.Set("body", base::UTF16ToUTF8(base::UTF8ToUTF16(*body)));
++    } else {
++      answer.Set("error", "fetch");
++    }
++    base::DictValue values;
++    values.Set("hiveyAiFetch_" + id, std::move(answer));
++    extensions::StorageFrontend::Get(profile_)->Set(
++        base::WrapRefCounted(extension),
++        extensions::StorageAreaNamespace::kSession, std::move(values),
++        base::DoNothing());
++  }
++
 +  void Write() {
 +    if (!g_browser_process->profile_manager()->IsValidProfile(profile_)) {
 +      return;
@@ -231,9 +393,11 @@
 +  }
 +
 +  raw_ptr<Profile> profile_;
++  std::list<std::unique_ptr<network::SimpleURLLoader>> loaders_;
 +  base::ScopedObservation<extensions::ExtensionRegistry,
 +                          extensions::ExtensionRegistryObserver>
 +      registry_observation_{this};
++  base::WeakPtrFactory<Bridge> weak_factory_{this};
 +};
 +
 +std::map<void*, std::unique_ptr<Bridge>>& Bridges() {
@@ -260,7 +424,7 @@
 +}  // namespace hivey
 --- a/chrome/browser/ui/hivey/hivey_ai_bridge.h
 +++ b/chrome/browser/ui/hivey/hivey_ai_bridge.h
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,35 @@
 +// Copyright 2026 The Hivey Browser contributors
 +// Use of this source code is governed by the MIT license that can be found in
 +// the LICENSE file of the Hivey Browser repository.
@@ -270,6 +434,10 @@
 +
 +class Profile;
 +
++namespace extensions {
++class Extension;
++}
++
 +namespace hivey {
 +
 +// Connects the local AI engine and the Hivey assistant (the bundled extension),
@@ -278,8 +446,16 @@
 +//     runs.
 +//   hiveyAiRequest {action: "download"|"start"} and hiveyAiBusy, written by the
 +//     assistant: what it needs, and whether a model is computing (the light).
++//   hiveyAiAgent, written by the assistant: the agent works. The extension has no
++//     access to sites otherwise, so that a page cannot reach it by itself.
++//   hiveyAiFetch {id, url}, written by the assistant: a page to read, fetched here
++//     without cookies; the answer is in session storage, hiveyAiFetch_<id>.
 +// Once per profile; does nothing until the assistant asks.
 +void AttachHiveyAiBridge(Profile* profile);
++
++// The sites the assistant always has (toolbar_actions_model.cc).
++void GrantHiveyAssistantHosts(Profile* profile,
++                              const extensions::Extension* extension);
 +
 +}  // namespace hivey
 +
@@ -302,7 +478,7 @@
  #include "base/task/thread_pool.h"
  #include "base/time/time.h"
  #include "chrome/browser/browser_process.h"
-@@ -45,13 +47,32 @@
+@@ -45,15 +47,37 @@
  
  namespace {
  
@@ -313,6 +489,8 @@
 -constexpr char kModelSha256[] =
 -    "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897";
 -constexpr int64_t kModelBytes = 1107409472;
+-
+-constexpr base::TimeDelta kIdleStop = base::Minutes(5);
 +// The model, by the PC's memory: the bench (prototypes/local-ai) found the larger
 +// ones no better on a CPU, and much slower.
 +struct Model {
@@ -339,10 +517,15 @@
 +  return base::SysInfo::AmountOfTotalPhysicalMemory().InGiB() < 12 ? kModelSmall
 +                                                               : kModelDefault;
 +}
- 
- constexpr base::TimeDelta kIdleStop = base::Minutes(5);
++
++// Right after the answer, with a margin for what ends a turn (the title of the
++// conversation). Nothing is lost: the assistant keeps the conversation and its
++// sources, and sends them with the next question.
++constexpr base::TimeDelta kIdleStop = base::Seconds(15);
  constexpr base::TimeDelta kGameCheck = base::Seconds(2);
-@@ -80,7 +101,7 @@
+ 
+ #if BUILDFLAG(IS_WIN)
+@@ -80,7 +104,7 @@
        })");
  
  bool HasModel(const base::FilePath& path) {
@@ -351,7 +534,7 @@
  }
  
  // Blocking: size and sha256; a good file takes its final name.
-@@ -89,15 +110,20 @@
+@@ -89,15 +113,20 @@
    {
      base::File file(part, base::File::FLAG_OPEN | base::File::FLAG_READ);
      std::array<uint8_t, crypto::hash::kSha256Size> digest;
@@ -375,7 +558,7 @@
  }
  
  #if BUILDFLAG(IS_WIN)
-@@ -186,7 +212,9 @@
+@@ -186,7 +215,9 @@
  base::FilePath HiveyAiEngine::ModelPath() const {
    base::FilePath user_data;
    base::PathService::Get(chrome::DIR_USER_DATA, &user_data);
@@ -386,7 +569,7 @@
  }
  
  base::DictValue HiveyAiEngine::Describe() const {
-@@ -219,6 +247,10 @@
+@@ -219,6 +250,10 @@
    dict.Set("error", error_);
    dict.Set("busy", busy_);
    dict.Set("game", game_);
@@ -397,7 +580,7 @@
    return dict;
  }
  
-@@ -251,7 +283,7 @@
+@@ -251,7 +286,7 @@
    progress_ = 0;
    error_.clear();
    auto request = std::make_unique<network::ResourceRequest>();
@@ -406,7 +589,7 @@
    request->credentials_mode = network::mojom::CredentialsMode::kOmit;
    loader_ = network::SimpleURLLoader::Create(std::move(request),
                                               kTrafficAnnotation);
-@@ -262,7 +294,7 @@
+@@ -262,7 +297,7 @@
        [](HiveyAiEngine* engine, uint64_t current) {
          // At most one update per percent.
          const double progress =
@@ -415,7 +598,7 @@
          if (progress - engine->progress_ >= 0.01) {
            engine->progress_ = progress;
            engine->Notify();
-@@ -335,10 +367,11 @@
+@@ -335,10 +370,11 @@
    arg("--port", base::NumberToString(port_));
    arg("--api-key", key_);
    arg("-np", "1");
@@ -428,7 +611,7 @@
    command.AppendArg("--no-repack");
    command.AppendArg("--no-webui");
    command.AppendArg("--log-disable");
-@@ -373,7 +406,55 @@
+@@ -373,7 +409,55 @@
    game_timer_.Start(FROM_HERE, kGameCheck, this, &HiveyAiEngine::CheckGame);
    CheckGame();
    RestartIdleTimer();
@@ -484,6 +667,18 @@
  }
  
  void HiveyAiEngine::OnStarted(bool ok) {
+@@ -417,7 +501,10 @@
+   idle_timer_.Start(FROM_HERE, kIdleStop,
+                     base::BindOnce(
+                         [](HiveyAiEngine* engine) {
+-                          if (!engine->busy_) {
++                          // Still loading its model, for a question on its way.
++                          if (engine->state_ == State::kStarting) {
++                            engine->RestartIdleTimer();
++                          } else if (!engine->busy_) {
+                             engine->Kill();
+                             engine->Notify();
+                           }
 --- a/chrome/browser/ui/hivey/hivey_ai_engine.h
 +++ b/chrome/browser/ui/hivey/hivey_ai_engine.h
 @@ -6,6 +6,7 @@
@@ -523,6 +718,28 @@
      case LayoutConstant::kVerticalTabStripUncollapsedVerticalPadding:
        return 12;
      case LayoutConstant::kVerticalTabStripCollapsedVerticalPadding:
+--- a/chrome/browser/ui/toolbar/toolbar_actions_model.cc
++++ b/chrome/browser/ui/toolbar/toolbar_actions_model.cc
+@@ -21,6 +21,7 @@
+ #include "chrome/browser/hivey/bundled_extensions.h"
+ #include "chrome/browser/hivey/hivey_bar_assets.h"
+ #include "chrome/browser/hivey/hivey_bar_prefs.h"
++#include "chrome/browser/ui/hivey/hivey_ai_bridge.h"
+ #include "extensions/browser/permissions/scripting_permissions_modifier.h"
+ #include "extensions/common/manifest_handlers/permissions_parser.h"
+ #include "extensions/common/url_pattern.h"
+@@ -261,6 +262,11 @@
+   }
+ }
+ 
++void hivey::GrantHiveyAssistantHosts(Profile* profile,
++                                     const extensions::Extension* extension) {
++  GrantHiveyToolsHosts(profile, extension);
++}
++
+ // Hivey: Hivey Tools is an extension like the others; the assistant has the
+ // toolbar's button. 4718 pinned its button: unpinned once.
+ void ToolbarActionsModel::PinHiveySidebarOnce() {
 --- a/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
 +++ b/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
 @@ -54,6 +54,7 @@

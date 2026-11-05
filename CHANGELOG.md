@@ -28,6 +28,16 @@ suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1
 - **Une réponse directe d'abord**, puis les détails, avec des citations cliquables et
   un bloc Sources.
 
+### Ton PC et ta sécurité
+- **L'IA libère la mémoire juste après la réponse** : le modèle est déchargé 15 secondes
+  après la fin de la réponse. La conversation et ses sources restent, la question
+  suivante recharge le modèle (quelques secondes de plus).
+- **L'agent n'a accès aux sites que pendant qu'il travaille** : le reste du temps,
+  aucune page ne peut atteindre l'assistant. Les recherches web passent par le
+  navigateur, sans tes cookies.
+- **« Lance-moi une musique » lance vraiment une musique, avec le son**, sans attendre
+  le modèle.
+
 ### Interface
 - **Assistant tout à droite** de la barre d'outils, à côté de son panneau. L'en-tête
   dit seulement « Assistant ».
