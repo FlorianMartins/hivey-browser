@@ -116,6 +116,20 @@ def ask_from_new_tab(chip, text):
     return tab
 
 
+watched_panel = None
+
+
+def diagnose_failure():
+    if not watched_panel:
+        return
+    panel, tab, out = watched_panel
+    try:
+        diagnose(panel, tab)
+        panel.shot(out / 'assistant-failure.png')
+    except Exception as e:
+        print('      diagnosis failed:', repr(e), flush=True)
+
+
 def diagnose(panel, tab):
     """What to know when a question from a new tab did not arrive."""
     for info in targets():
@@ -142,8 +156,11 @@ def run(args):
     panel = Target(panel_info)
     wait_for('the panel page', lambda: panel.js("!!document.getElementById('input')"), 30)
     check('The question opens the assistant', 'embed=hivey' in panel_info['url'], panel_info['url'][-40:])
-    check('No rail in the panel', panel.js("getComputedStyle(document.getElementById('rail')).display") == 'none', '')
     time.sleep(2)
+    wait_for('the stylesheets', lambda: panel.js("document.readyState") == 'complete', 30)
+    check('No rail in the panel', panel.js("getComputedStyle(document.getElementById('rail')).display") == 'none', '')
+    global watched_panel
+    watched_panel = (panel, tab, args.out)
     panel.shot(args.out / 'assistant-1-opened.png')
 
     # The model: asked for, never downloaded by itself.
@@ -312,6 +329,7 @@ def main():
         run(args)
     except Exception as error:  # A failed step ends the run with what it knows.
         traceback.print_exc()
+        diagnose_failure()
         check('the flow went to the end', False, repr(error))
     finally:
         browser.kill()
