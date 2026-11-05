@@ -116,6 +116,17 @@ def ask_from_new_tab(chip, text):
     return tab
 
 
+def diagnose(panel, tab):
+    """What to know when a question from a new tab did not arrive."""
+    print('      panels:', [t['url'][-40:] for t in targets() if SIDEBAR in t.get('url', '')], flush=True)
+    print('      panel url:', panel.js('location.href'), flush=True)
+    print('      storage:', panel.js("chrome.storage.local.get(['pendingAction', 'hiveyAi', 'hiveyAiBusy', 'hiveyAiAgent'])"
+                                     ".then(r => { if (r.hiveyAi) r.hiveyAi.key = ''; return JSON.stringify(r); })"), flush=True)
+    print('      messages:', (panel.js("document.getElementById('messages').innerText") or '')[-300:].replace('\n', ' '), flush=True)
+    print('      new tab:', tab.js("JSON.stringify({url: location.href, value: document.getElementById('q')?.value, "
+                                   "chip: document.querySelector('.chip[aria-pressed=true], .chip.active')?.dataset.mode})"), flush=True)
+
+
 def run(args):
     wait_for('the browser', lambda: _up(), 60)
 
@@ -191,6 +202,8 @@ def run(args):
             if 'youtube' in info.get('url', '') and info['type'] == 'page':
                 playing = info
     check('Agent: goes to the music, from the new tab', bool(playing), playing['url'][:70] if playing else 'no player page')
+    if not playing:
+        diagnose(panel, music)
     print('      panel:', (panel.js(LAST) or '')[:200].replace('\n', ' '), flush=True)
     print(f"      tabs: {tabs_before} -> {len([t for t in targets() if t['type'] == 'page'])}")
     # What was asked: a video that plays, not a list of results.
@@ -244,7 +257,7 @@ def run(args):
     check('After the unload: the follow-up keeps the topic', any(w in text.lower() for w in ('overwatch', 'healer', 'soin', 'support', 'héros', 'hero')), text[:200].replace('\n', ' '))
 
     # A real agent turn, through the model and its tools.
-    ask_from_new_tab('agent', 'Ouvre le site example.com')
+    opener = ask_from_new_tab('agent', 'Ouvre le site example.com')
     def example_page():
         return next((t for t in targets() if 'example.com' in t.get('url', '') and t['type'] == 'page'), None)
     opened = None
@@ -253,6 +266,8 @@ def run(args):
     except TimeoutError:
         pass
     check('Agent: the model acts on the browser', bool(opened), opened['url'][:60] if opened else (panel.js(LAST) or '')[:200])
+    if not opened:
+        diagnose(panel, opener)
     wait_for('the end of the turn', lambda: panel.js(IDLE), 600, 2)
     wait_for('the sites taken back', sites_closed, 20)
     check('Agent: the sites are taken back after a real turn', True, '')
