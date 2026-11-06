@@ -3,6 +3,17 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4724 — 6 novembre 2026
+
+### Un meilleur modèle, et les cartes graphiques courantes
+- **Qwen3.8 27B remplace Qwen3.6 27B** à partir de 14 Go de mémoire vidéo : 28, 30 et 30 sur 30 au banc sur ce fichier
+  précis, et il est plus léger (12,2 Go au lieu de 13,5). L'ancien fichier est supprimé pour rendre la place.
+- **Les cartes courantes comme la GTX 1060 sont prises en charge** : dès 4 Go de mémoire vidéo, le modèle tourne sur la
+  carte autant qu'elle peut le contenir, et il raisonne avant de répondre (environ 24/30 au banc contre 21 sans réflexion).
+  Il quitte la mémoire vidéo pendant un jeu.
+- **Auto** : Qwen3.8 27B à partir de 14 Go de mémoire vidéo, Qwen3.5 4B en dessous. Le 9B, qui n'a pas fait mieux que le
+  4B au banc, reste au choix dans « Modèle local ».
+
 ## 156.0.8078.4723 — 6 novembre 2026
 
 ### Des réponses plus justes
