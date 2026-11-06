@@ -3,6 +3,38 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4723 — 6 novembre 2026
+
+### Des réponses plus justes
+- **La recherche comprend mieux** : une correction (« mais pas du tout… ») cherche le même sujet ; ce qui change dans
+  le temps est cherché avec l'année, parmi les pages récentes d'abord ; traducteurs et chatbots ne sont plus des sources.
+- **Moins d'invention** : le modèle connaît la date du jour, voit la date de chaque page, et dit quand les sources ne
+  répondent pas au lieu de compléter de mémoire.
+- **Sur carte graphique, un bien meilleur modèle** : Qwen3.6 27B avec 14 Go de mémoire vidéo ou plus (26 à 30 sur 30
+  au banc selon les essais), Qwen3.5 9B à partir de 8 Go (21 à 23 sur 30).
+- **L'agent va au bout** : il lit les longues pages en entier, calcule au lieu d'additionner de tête, et regarde tes
+  onglets ouverts avant d'inventer une adresse. Sur les petits modèles, il choisit parmi moins d'outils.
+- **Plusieurs modèles** : Auto choisit selon ton PC, ou tu choisis toi-même ; « Modèle local » dans le menu de
+  l'assistant permet d'en installer, d'en changer et d'en supprimer.
+- **Pendant un jeu**, sur carte graphique, le modèle quitte la mémoire vidéo et revient après.
+
+### Assistant automatique
+- **Un seul champ** sur le nouvel onglet : une adresse ouvre le site, tout le reste va à l'assistant, qui choisit seul
+  entre répondre, chercher sur le web ou agir. Les boutons de mode disparaissent, ici et dans le panneau. Sur carte
+  graphique, le modèle tranche les cas ambigus (« réserve-moi une table »).
+- **Tes messages se distinguent** des réponses, et les boutons sous un message (copier, etc.) restent visibles.
+
+### Lumière et onglets
+- **La lumière quitte la barre d'adresse.** Autour de la page, deux lumières se suivent à l'opposé sur un fin contour :
+  aucun côté n'est plus visible que l'autre.
+- **Onglets verticaux** : plus d'espace entre eux, barre plus étroite, croix de fermeture dans un petit cercle en haut
+  à gauche, bouton « Développer les onglets » en couleur.
+
+### Barre d'outils
+- **Le bouton des addons revient** ; ce sont les addons épinglés par défaut qui disparaissent.
+- **Navigation privée** : bouton en couleur, à gauche de Web AI, et le « & » parasite du libellé est corrigé.
+- **Le premier lancement ouvre l'accueil**, plus les paramètres.
+
 ## 156.0.8078.4722 — 5 novembre 2026
 
 ### Le panneau de l'assistant, dépouillé comme la maquette
