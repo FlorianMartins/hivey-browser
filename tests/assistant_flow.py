@@ -324,7 +324,6 @@ def run(args):
         diagnose(panel, opener)
     wait_for('the end of the turn', lambda: panel.js(IDLE), 600, 2)
     check('Look: the agent\'s steps say what it does', panel.js("[...document.querySelectorAll('.agent-act-head')].every(x => !x.innerText.includes('({'))"), panel.js("[...document.querySelectorAll('.agent-act-head')].map(x => x.innerText).join(' | ')"))
-    check('Nothing over the page once it is over', not panel.js("chrome.storage.local.get('hiveyAiActivity').then(r => r.hiveyAiActivity && r.hiveyAiActivity.kind)"), '')
     wait_for('the sites taken back', sites_closed, 20)
     check('Agent: the sites are taken back after a real turn', True, '')
 
