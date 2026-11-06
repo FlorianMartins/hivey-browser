@@ -1324,7 +1324,8 @@ def _stage_tor():
 # prototypes/local-ai/manifest.json, CPU builds.
 AI_ENGINE_VERSION = 'b12081'
 AI_ENGINE_BUNDLES = {
-    'win': ('llama-b12081-bin-win-cpu-x64.zip', '563d4800833c364be0a0ffc99bb90597c57c9c1b67a85fee593538ea0be8b347'),
+    # Vulkan for the graphics card, and its CPU libraries for a PC without one.
+    'win': ('llama-b12081-bin-win-vulkan-x64.zip', '3acd5ef61102e61cb46a01a7ef29b15bbabac916e9af38f52a57fdeb322801f0'),
     'linux': ('llama-b12081-bin-ubuntu-x64.tar.gz', '2a773dcda8b301e3650e5832d3e7b014afcdffdb6364d4d4e5cf3a12bcbc2eeb'),
 }
 

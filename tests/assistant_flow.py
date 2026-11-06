@@ -112,8 +112,7 @@ def ask_from_new_tab(chip, text):
     # The page's module runs after the field exists: a submit before that reloads the page. The
     # placeholder is written by that module, right before it listens to the form.
     wait_for('the field', lambda: tab.js("!!document.getElementById('q')?.placeholder"), 30)
-    tab.js(f"document.querySelector('.chip[data-mode={chip}]').click();"
-           f"document.getElementById('q').value = {json.dumps(text)};"
+    tab.js(f"document.getElementById('q').value = {json.dumps(text)};"
            "document.getElementById('form').requestSubmit()")
     return tab
 
@@ -243,6 +242,13 @@ def run(args):
     except TimeoutError:
         pass
     check('Agent: opens a video', bool(watch), watch['url'][:70] if watch else 'still on the results')
+    if not watch and playing:
+        results = Target(playing)
+        results.shot(args.out / 'assistant-4-results.png')
+        state = """JSON.stringify({url: location.href, title: document.title,
+            links: document.querySelectorAll('a[href*="/watch?v="]').length, body: document.body.innerText.slice(0, 240)})"""
+        print('      results:', results.js(state), flush=True)
+        print('      panel:', (panel.js(LAST) or '')[:240], flush=True)
     if watch:
         player = Target(watch)
         video = ("(() => { const v = document.querySelector('video');"

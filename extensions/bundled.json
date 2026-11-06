@@ -8,7 +8,7 @@
     "license": "GPL-3.0-or-later",
     "source": "https://github.com/uBlockOrigin/uBOL-home",
     "enable_rulesets": ["adguard-spyware-url", "annoyances-cookies"],
-    "pin": true,
+    "pin": false,
     "setup": {
       "en": "Blocks ads, trackers and cookie banners (uBlock Origin Lite).",
       "fr": "Bloque publicités, traqueurs et bandeaux de cookies (uBlock Origin Lite)."
@@ -38,7 +38,7 @@
     "license": "GPL-3.0",
     "source": "https://github.com/ProtonVPN/proton-vpn-browser-extension",
     "optional": true,
-    "pin": true,
+    "pin": false,
     "setup": {
       "en": "Proton VPN: hides your IP address from sites. Free with a Proton account (Switzerland, no logs, open source).",
       "fr": "Proton VPN : cache votre adresse IP aux sites. Gratuit avec un compte Proton (Suisse, sans journaux, open source)."

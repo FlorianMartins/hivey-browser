@@ -1,0 +1,925 @@
+# Hivey 4723: one field, the light around the page only, tabs, private button, add-ons button back, first start on the home page, the graphics card and several local models
+--- a/chrome/browser/chrome_browser_main.cc
++++ b/chrome/browser/chrome_browser_main.cc
+@@ -1344,8 +1344,7 @@
+   if (first_run::IsChromeFirstRun()) {
+     if (!base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kApp) &&
+         !base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kAppId)) {
+-      // Hivey: welcome the user in Hivey Studio.
+-      browser_creator_->AddFirstRunTabs({GURL("chrome://hivey/")});
++      // Hivey: the first start is the home page, like any other.
+       browser_creator_->AddFirstRunTabs(master_prefs_->new_tabs);
+     }
+   }
+--- a/chrome/browser/hivey/hivey_bar_prefs.cc
++++ b/chrome/browser/hivey/hivey_bar_prefs.cc
+@@ -50,8 +50,8 @@
+   registry->RegisterListPref(kHiveyBarApps);
+   registry->RegisterListPref(kHiveyToolbarOrder);
+   registry->RegisterListPref(kHiveyOptionalAddons);
+-  registry->RegisterListPref(kHiveyToolbarHidden,
+-                            base::ListValue().Append("extensions"));
++  registry->RegisterListPref(kHiveyToolbarHidden);
++  registry->RegisterBooleanPref(kHiveyBundledUnpinned, false);
+   registry->RegisterBooleanPref(kHiveyGoogleDefaultApplied, false);
+   registry->RegisterBooleanPref(kHiveyBarModernDefaultApplied, false);
+   registry->RegisterBooleanPref(kHiveyTabSearchMoved, false);
+--- a/chrome/browser/hivey/hivey_bar_prefs.h
++++ b/chrome/browser/hivey/hivey_bar_prefs.h
+@@ -97,6 +97,8 @@
+ inline constexpr char kHiveySidebarPinned[] = "hivey.sidebar_pinned";
+ // Then unpinned, once: the assistant has the toolbar's button.
+ inline constexpr char kHiveyToolsUnpinned[] = "hivey.tools_unpinned";
++// The extensions that ship with the browser were unpinned once.
++inline constexpr char kHiveyBundledUnpinned[] = "hivey.bundled_unpinned";
+ // The agent has the sites right now; if the browser stopped meanwhile, they
+ // are taken back at the next start.
+ inline constexpr char kHiveyAgentSitesOpen[] = "hivey.agent_sites_open";
+--- a/chrome/browser/resources/hivey_studio/home.css
++++ b/chrome/browser/resources/hivey_studio/home.css
+@@ -138,32 +138,6 @@
+ }
+ .go:hover { transform: scale(1.06); }
+ 
+-.modes {
+-  display: flex;
+-  flex-wrap: wrap;
+-  justify-content: center;
+-  gap: 6px;
+-  animation: rise .7s var(--ease) .18s backwards;
+-}
+-.chip {
+-  min-height: 36px;
+-  padding: 4px 14px;
+-  border: 0;
+-  border-radius: 18px;
+-  color: var(--muted);
+-  background: none;
+-  box-shadow: inset 0 0 0 1px var(--line);
+-  font: inherit;
+-  font-size: 13px;
+-  cursor: pointer;
+-  transition: color .15s;
+-}
+-.chip:hover { color: var(--text); }
+-.chip[aria-pressed="true"] {
+-  color: #fff;
+-  background: linear-gradient(90deg, var(--accent-3), var(--accent), var(--accent-2));
+-  box-shadow: none;
+-}
+ :focus-visible {
+   outline: 2px solid var(--text);
+   outline-offset: 2px;
+--- a/chrome/browser/resources/hivey_studio/home.html
++++ b/chrome/browser/resources/hivey_studio/home.html
+@@ -42,11 +42,6 @@
+           </button>
+         </div>
+       </div>
+-      <div id="modes" class="modes" role="group">
+-        <button type="button" class="chip" data-mode="web" aria-pressed="true"></button>
+-        <button type="button" class="chip" data-mode="ask" aria-pressed="false"></button>
+-        <button type="button" class="chip" data-mode="agent" aria-pressed="false"></button>
+-      </div>
+     </form>
+   </main>
+ </body>
+--- a/chrome/browser/resources/hivey_studio/home.js
++++ b/chrome/browser/resources/hivey_studio/home.js
+@@ -5,45 +5,26 @@
+ // Hivey's new tab: what is typed goes to the web or to the local AI, whose
+ // panel opens only then.
+ 
+-import {sendWithPromise} from 'chrome://resources/js/cr.js';
+ 
+ const STRINGS = {
+   en: {
+     title: 'New Tab',
+-    web: 'Search',
+-    ask: 'Ask the AI',
+-    agent: 'Give to the agent',
+     go: 'Go',
+-    modes: 'What to do with what you type',
+-    placeholder_web: 'Search the web or type an address',
+-    placeholder_ask: 'Ask the AI a question',
+-    placeholder_agent: 'Describe a task for the agent',
++    placeholder: 'Ask, give a task, or type an address',
+   },
+   fr: {
+     title: 'Nouvel onglet',
+-    web: 'Rechercher',
+-    ask: 'Demander à l\'IA',
+-    agent: 'Confier à l\'agent',
+     go: 'Lancer',
+-    modes: 'Que faire de ta saisie',
+-    placeholder_web: 'Rechercher sur le web ou saisir une adresse',
+-    placeholder_ask: 'Poser une question à l\'IA',
+-    placeholder_agent: 'Décrire une tâche à confier à l\'agent',
++    placeholder: 'Demande, confie une tâche ou saisis une adresse',
+   },
+ };
+ const lang = navigator.language.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+ const t = STRINGS[lang];
+-const QUERY = 'HIVEYQUERY';
+-// Only if the browser has no search engine to give.
+-const FALLBACK_SEARCH = `https://duckduckgo.com/?q=${QUERY}`;
+ 
+ const input = document.getElementById('q');
+-const chips = [...document.querySelectorAll('.chip')];
+-let mode = 'web';
+-let searchUrl = FALLBACK_SEARCH;
+ 
+-// An address goes straight to its site; anything else is a search. Only http
+-// and https: "javascript:..." and the like are searched for.
++// An address goes straight to its site; anything else goes to the assistant.
++// Only http and https: "javascript:..." and the like are questions too.
+ function addressOf(text) {
+   if (/\s/.test(text)) {
+     return null;
+@@ -66,27 +47,12 @@
+   }
+ }
+ 
+-function setMode(next) {
+-  mode = next;
+-  for (const chip of chips) {
+-    chip.setAttribute('aria-pressed', String(chip.dataset.mode === next));
+-  }
+-  input.placeholder = t[`placeholder_${next}`];
+-  input.setAttribute('aria-label', t[`placeholder_${next}`]);
+-}
++input.placeholder = t.placeholder;
++input.setAttribute('aria-label', t.placeholder);
+ 
+ document.documentElement.lang = lang;
+ document.title = t.title;
+ document.getElementById('go').setAttribute('aria-label', t.go);
+-document.getElementById('modes').setAttribute('aria-label', t.modes);
+-for (const chip of chips) {
+-  chip.textContent = t[chip.dataset.mode];
+-  chip.addEventListener('click', () => {
+-    setMode(chip.dataset.mode);
+-    input.focus();
+-  });
+-}
+-setMode('web');
+ 
+ document.getElementById('form').addEventListener('submit', event => {
+   event.preventDefault();
+@@ -95,8 +61,9 @@
+     input.focus();
+     return;
+   }
+-  if (mode !== 'web') {
+-    chrome.send('askAssistant', [mode, text]);
++  const address = addressOf(text);
++  if (!address) {
++    chrome.send('askAssistant', ['ask', text]);
+     input.value = '';
+     if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+       const form = document.getElementById('form');
+@@ -113,12 +80,6 @@
+     }
+     return;
+   }
+-  location.assign(addressOf(text) ||
+-                  searchUrl.replace(QUERY, encodeURIComponent(text)));
++  location.assign(address);
+ });
+ 
+-sendWithPromise('getHomeInfo').then(url => {
+-  if (url && url.includes(QUERY)) {
+-    searchUrl = url;
+-  }
+-});
+--- a/chrome/browser/ui/hivey/hivey_ai_bridge.cc
++++ b/chrome/browser/ui/hivey/hivey_ai_bridge.cc
+@@ -84,8 +84,16 @@
+     if (const base::DictValue* request = dict->FindDict("hiveyAiRequest")) {
+       const std::string* action =
+           request->FindStringByDottedPath("newValue.action");
+-      if (action && *action == "download") {
++      const std::string* model =
++          request->FindStringByDottedPath("newValue.model");
++      if (action && *action == "download" && model) {
++        HiveyAiEngine::Get().SelectModel(*model, /*download=*/true);
++      } else if (action && *action == "download") {
+         HiveyAiEngine::Get().DownloadModel();
++      } else if (action && *action == "select" && model) {
++        HiveyAiEngine::Get().SelectModel(*model, /*download=*/false);
++      } else if (action && *action == "remove" && model) {
++        HiveyAiEngine::Get().RemoveModel(*model);
+       } else if (action && *action == "start") {
+         HiveyAiEngine::Get().Start();
+       }
+--- a/chrome/browser/ui/hivey/hivey_ai_engine.cc
++++ b/chrome/browser/ui/hivey/hivey_ai_engine.cc
+@@ -43,12 +43,27 @@
+ #include <sys/resource.h>
+ #endif
+ 
++#if BUILDFLAG(IS_WIN)
++#include <dxgi.h>
++#include <windows.h>
++#include <wrl/client.h>
++#endif
++
++#include <atomic>
++#include <utility>
++#include <vector>
++
++#include "base/files/file_util.h"
++#include "base/task/thread_pool.h"
++
+ namespace hivey {
+ 
+ namespace {
+ 
+-// The model, by the PC's memory: the bench (prototypes/local-ai) found the larger
+-// ones no better on a CPU, and much slower.
++// The model, by what the PC has. On a graphics card a large model answers at
++// once: on the bench Qwen3.6 27B gave 26 to 30 out of 30 depending on the run,
++// Qwen3.5 9B 21 to 23, the 4B 18 to 23. On a CPU the larger ones are far too
++// slow.
+ struct Model {
+   const char* name;
+   const char* url;
+@@ -69,9 +84,122 @@
+     "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+     2740937888, 16384};
+ 
++constexpr Model kModelMedium = {
++    "Qwen3.5 9B",
++    "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/"
++    "3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
++    "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
++    5680522464, 32768};
++constexpr Model kModelLarge = {
++    "Qwen3.6 27B",
++    "https://huggingface.co/unsloth/Qwen3.6-27B-GGUF/resolve/"
++    "82d411acf4a06cfb8d9b073a5211bf410bfc29bf/Qwen3.6-27B-UD-Q3_K_XL.gguf",
++    "cff4a2da6b5350a53f57dc6f798516e0195816f90c196c3f7bd3fd55556632dd",
++    14473431264, 32768};
++
++// The memory of the largest real graphics card, in GiB, 0 when there is none.
++int VideoMemoryGiB() {
++  static const int memory = [] {
++#if BUILDFLAG(IS_WIN)
++    HMODULE dxgi = ::LoadLibraryW(L"dxgi.dll");
++    if (!dxgi) {
++      return 0;
++    }
++    using CreateFactory = HRESULT(WINAPI*)(REFIID, void**);
++    auto create = reinterpret_cast<CreateFactory>(
++        ::GetProcAddress(dxgi, "CreateDXGIFactory1"));
++    Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
++    if (!create || FAILED(create(IID_PPV_ARGS(&factory)))) {
++      return 0;
++    }
++    SIZE_T largest = 0;
++    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
++    for (UINT i = 0;
++         factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
++      DXGI_ADAPTER_DESC1 desc;
++      if (SUCCEEDED(adapter->GetDesc1(&desc)) &&
++          !(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) {
++        largest = std::max(largest, desc.DedicatedVideoMemory);
++      }
++    }
++    // Cards report a little less than they say on the box.
++    return static_cast<int>((largest + (1 << 29)) >> 30);
++#else
++    return 0;
++#endif
++  }();
++  return memory;
++}
++
++bool UsesGpu() {
++  return VideoMemoryGiB() >= 8;
++}
++
++// What suits this machine.
++const Model& AutoModel() {
++  const int memory = base::SysInfo::AmountOfTotalPhysicalMemory().InGiB();
++  if (VideoMemoryGiB() >= 14 && memory >= 16) {
++    return kModelLarge;
++  }
++  if (UsesGpu() && memory >= 12) {
++    return kModelMedium;
++  }
++  return memory < 12 ? kModelSmall : kModelDefault;
++}
++
++constexpr const Model* kModels[] = {&kModelLarge, &kModelMedium, &kModelDefault,
++                                    &kModelSmall};
++
++// What the user chose, null for automatic. Written on the UI thread, read from
++// file tasks that were posted after it.
++std::atomic<const Model*> g_choice{nullptr};
++
+ const Model& ChosenModel() {
+-  return base::SysInfo::AmountOfTotalPhysicalMemory().InGiB() < 12 ? kModelSmall
+-                                                               : kModelDefault;
++  const Model* choice = g_choice.load();
++  return choice ? *choice : AutoModel();
++}
++
++const Model* ModelNamed(const std::string& name) {
++  for (const Model* model : kModels) {
++    if (name == model->name) {
++      return model;
++    }
++  }
++  return nullptr;
++}
++
++base::FilePath ModelDir() {
++  base::FilePath user_data;
++  base::PathService::Get(chrome::DIR_USER_DATA, &user_data);
++  return user_data.AppendASCII("HiveyAI");
++}
++
++base::FilePath PathOf(const Model& model) {
++  return ModelDir().AppendASCII(GURL(model.url).ExtractFileName());
++}
++
++constexpr char kChoiceFile[] = "chosen-model";
++
++// What is on the disk, and the choice kept next to it.
++std::pair<std::string, std::vector<std::string>> ReadModels() {
++  std::string choice;
++  base::ReadFileToString(ModelDir().AppendASCII(kChoiceFile), &choice);
++  std::vector<std::string> installed;
++  for (const Model* model : kModels) {
++    if (base::GetFileSize(PathOf(*model)).value_or(0) == model->bytes) {
++      installed.emplace_back(model->name);
++    }
++  }
++  return {choice, installed};
++}
++
++void WriteChoice(std::string name) {
++  base::CreateDirectory(ModelDir());
++  base::WriteFile(ModelDir().AppendASCII(kChoiceFile), name);
++}
++
++void DeleteModel(base::FilePath path) {
++  base::DeleteFile(path);
+ }
+ 
+ // Right after the answer, with a margin for what ends a turn (the title of the
+@@ -103,10 +231,6 @@
+         policy_exception_justification: "Not implemented."
+       })");
+ 
+-bool HasModel(const base::FilePath& path) {
+-  return base::GetFileSize(path).value_or(0) == ChosenModel().bytes;
+-}
+-
+ // Blocking: size and sha256; a good file takes its final name.
+ bool VerifyModel(const base::FilePath& part, const base::FilePath& path) {
+   bool ok = false;
+@@ -203,21 +327,71 @@
+ }
+ 
+ HiveyAiEngine::HiveyAiEngine() {
++  CheckModels(/*download=*/false);
++}
++
++void HiveyAiEngine::CheckModels(bool download) {
+   base::ThreadPool::PostTaskAndReplyWithResult(
+       FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+-      base::BindOnce(&HasModel, ModelPath()),
+-      base::BindOnce(&HiveyAiEngine::OnModelChecked,
+-                     weak_factory_.GetWeakPtr()));
++      base::BindOnce(&ReadModels),
++      base::BindOnce(&HiveyAiEngine::OnModelsRead, weak_factory_.GetWeakPtr(),
++                     download));
++}
++
++void HiveyAiEngine::OnModelsRead(
++    bool download,
++    std::pair<std::string, std::vector<std::string>> models) {
++  g_choice = ModelNamed(models.first);
++  installed_ = std::move(models.second);
++  if (state_ == State::kChecking) {
++    const bool present = std::ranges::contains(installed_, ChosenModel().name);
++    state_ = present ? State::kOff : State::kNoModel;
++    if (!present && download) {
++      DownloadModel();
++      return;
++    }
++  }
++  Notify();
++}
++
++void HiveyAiEngine::SelectModel(const std::string& name, bool download) {
++  if (state_ == State::kDownloading) {
++    return;
++  }
++  Kill();
++  const Model* model = ModelNamed(name);
++  g_choice = model;
++  error_.clear();
++  state_ = State::kChecking;
++  base::ThreadPool::PostTaskAndReply(
++      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++      base::BindOnce(&WriteChoice, model ? name : std::string()),
++      base::BindOnce(&HiveyAiEngine::CheckModels, weak_factory_.GetWeakPtr(),
++                     download));
++  Notify();
++}
++
++void HiveyAiEngine::RemoveModel(const std::string& name) {
++  const Model* model = ModelNamed(name);
++  if (!model || state_ == State::kDownloading) {
++    return;
++  }
++  if (model == &ChosenModel()) {
++    Kill();
++    state_ = State::kChecking;
++  }
++  base::ThreadPool::PostTaskAndReply(
++      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++      base::BindOnce(&DeleteModel, PathOf(*model)),
++      base::BindOnce(&HiveyAiEngine::CheckModels, weak_factory_.GetWeakPtr(),
++                     false));
++  Notify();
+ }
+ 
+ HiveyAiEngine::~HiveyAiEngine() = default;
+ 
+ base::FilePath HiveyAiEngine::ModelPath() const {
+-  base::FilePath user_data;
+-  base::PathService::Get(chrome::DIR_USER_DATA, &user_data);
+-  // By name: a model from before is removed when this one is in place.
+-  return user_data.AppendASCII("HiveyAI").AppendASCII(
+-      GURL(ChosenModel().url).ExtractFileName());
++  return PathOf(ChosenModel());
+ }
+ 
+ base::DictValue HiveyAiEngine::Describe() const {
+@@ -250,6 +424,20 @@
+   dict.Set("error", error_);
+   dict.Set("busy", busy_);
+   dict.Set("game", game_);
++  dict.Set("gpu", UsesGpu());
++  dict.Set("choice", g_choice.load() ? g_choice.load()->name : "auto");
++  base::ListValue models;
++  for (const Model* model : kModels) {
++    base::DictValue item;
++    item.Set("name", model->name);
++    item.Set("gb", std::round(static_cast<double>(model->bytes) / (1 << 30) * 10) / 10);
++    item.Set("installed", std::ranges::contains(installed_, model->name));
++    item.Set("auto", model == &AutoModel());
++    // Larger than what suits this machine.
++    item.Set("slow", model->bytes > AutoModel().bytes);
++    models.Append(std::move(item));
++  }
++  dict.Set("models", std::move(models));
+   dict.Set("modelName", ChosenModel().name);
+   dict.Set("modelGb",
+            std::round(static_cast<double>(ChosenModel().bytes) / (1 << 30) * 10) /
+@@ -263,13 +451,6 @@
+   }
+ }
+ 
+-void HiveyAiEngine::OnModelChecked(bool present) {
+-  if (state_ == State::kChecking) {
+-    state_ = present ? State::kOff : State::kNoModel;
+-    Notify();
+-  }
+-}
+-
+ void HiveyAiEngine::Fail(const std::string& error) {
+   Kill();
+   state_ = State::kFailed;
+@@ -336,6 +517,9 @@
+   }
+   state_ = State::kOff;
+   progress_ = 1;
++  if (!std::ranges::contains(installed_, ChosenModel().name)) {
++    installed_.emplace_back(ChosenModel().name);
++  }
+   Notify();
+ }
+ 
+@@ -400,8 +584,12 @@
+   }
+   // Below everything the user is doing.
+ #if BUILDFLAG(IS_WIN)
+-  process_.SetPriority(base::Process::Priority::kBestEffort);
+-  SetEfficiencyMode(process_);
++  // On the graphics card the model is what is awaited, and the processor has
++  // little to do: slowing it down would only slow the answer.
++  if (!UsesGpu()) {
++    process_.SetPriority(base::Process::Priority::kBestEffort);
++    SetEfficiencyMode(process_);
++  }
+ #else
+   setpriority(PRIO_PROCESS, process_.Pid(), 19);
+ #endif
+@@ -555,7 +743,27 @@
+   if (game_ == game) {
+     return;
+   }
++  // On a graphics card a suspended process keeps its memory, which the game
++  // needs: it goes, and comes back after the game if a question was waiting.
++  if (UsesGpu() && game && process_.IsValid()) {
++    restart_after_game_ = busy_;
++    Kill();
++    game_ = true;
++    if (restart_after_game_) {
++      state_ = State::kStarting;
++      game_timer_.Start(FROM_HERE, kGameCheck, this,
++                        &HiveyAiEngine::CheckGame);
++    }
++    Notify();
++    return;
++  }
+   game_ = game;
++  if (!game && restart_after_game_) {
++    restart_after_game_ = false;
++    state_ = State::kOff;
++    Start();
++    return;
++  }
+   if (process_.IsValid()) {
+     SuspendProcess(process_, game);
+     RestartIdleTimer();
+--- a/chrome/browser/ui/hivey/hivey_ai_engine.h
++++ b/chrome/browser/ui/hivey/hivey_ai_engine.h
+@@ -8,6 +8,8 @@
+ #include <memory>
+ #include <optional>
+ #include <string>
++#include <utility>
++#include <vector>
+ 
+ #include "base/files/file_path.h"
+ #include "base/memory/weak_ptr.h"
+@@ -61,6 +63,10 @@
+   // process talks to the engine.
+   base::DictValue Describe() const;
+   void DownloadModel();
++  // A model by its name, anything else for automatic; `download` fetches it if
++  // it is not there. Several models can be on the disk.
++  void SelectModel(const std::string& name, bool download);
++  void RemoveModel(const std::string& name);
+   void Start();
+   // The page saw the engine answer, or gave up on it.
+   void OnStarted(bool ok);
+@@ -98,7 +104,9 @@
+ 
+   base::FilePath ModelPath() const;
+   void Notify();
+-  void OnModelChecked(bool present);
++  void CheckModels(bool download);
++  void OnModelsRead(bool download,
++                    std::pair<std::string, std::vector<std::string>> models);
+   void OnDownloaded(base::FilePath path);
+   void OnVerified(bool ok);
+   void Fail(const std::string& error);
+@@ -119,6 +127,8 @@
+   std::u16string activity_label_;
+   int activity_tab_ = -1;
+   bool game_ = false;
++  bool restart_after_game_ = false;
++  std::vector<std::string> installed_;
+   bool game_for_testing_ = false;
+   std::string pending_;
+   base::Process process_;
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -162,7 +162,7 @@
+     case LayoutConstant::kVerticalTabMinWidth:
+       return 32;
+     case LayoutConstant::kVerticalTabStripHorizontalPadding:
+-      return 8;
++      return 6;
+     case LayoutConstant::kVerticalTabStripUncollapsedVerticalPadding:
+       return 12;
+     case LayoutConstant::kVerticalTabStripCollapsedVerticalPadding:
+--- a/chrome/browser/ui/startup/startup_browser_creator_impl.cc
++++ b/chrome/browser/ui/startup/startup_browser_creator_impl.cc
+@@ -623,17 +623,6 @@
+     hivey::ApplyHiveyDesign(*profile_->GetPrefs(),
+                             g_browser_process->local_state());
+   }
+-  // Hivey: the first start after installing opens Hivey Settings (on the
+-  // first run, the first run tabs do; on a profile from before, it opens
+-  // with the restored tabs).
+-  PrefService* local_state = g_browser_process->local_state();
+-  if (!is_incognito_or_guest && local_state &&
+-      !local_state->GetBoolean(hivey::kHiveyWelcomeShown)) {
+-    local_state->SetBoolean(hivey::kHiveyWelcomeShown, true);
+-    if (!first_run::IsChromeFirstRun()) {
+-      tabs.emplace_back(GURL("chrome://hivey/"));
+-    }
+-  }
+   LaunchResult launch_result =
+       tabs.empty() ? LaunchResult::kNormally : LaunchResult::kWithGivenUrls;
+ 
+--- a/chrome/browser/ui/tabs/vertical_tab_strip_state_controller_impl.cc
++++ b/chrome/browser/ui/tabs/vertical_tab_strip_state_controller_impl.cc
+@@ -364,8 +364,9 @@
+       actions::ActionManager::Get().FindAction(kActionToggleCollapseVertical,
+                                                root_action_item_);
+   if (collapse_action) {
+-    collapse_action->SetImage(
+-        ui::ImageModel::FromVectorIcon(icon, ui::kColorIcon));
++    // Hivey: in the mark's violet.
++    collapse_action->SetImage(ui::ImageModel::FromVectorIcon(
++        icon, ui::ColorVariant(SkColorSetRGB(0x8b, 0x5c, 0xf6))));
+     collapse_action->SetText(
+         chrome::GetCleanTitleAndTooltipText(l10n_util::GetStringUTF16(text)));
+ 
+--- a/chrome/browser/ui/toolbar/toolbar_actions_model.cc
++++ b/chrome/browser/ui/toolbar/toolbar_actions_model.cc
+@@ -271,13 +271,24 @@
+ // toolbar's button. 4718 pinned its button: unpinned once.
+ void ToolbarActionsModel::PinHiveySidebarOnce() {
+   PrefService* prefs = profile_->GetPrefs();
+-  if (!actions_initialized_ || prefs->GetBoolean(hivey::kHiveyToolsUnpinned) ||
+-      !HasAction(HIVEY_BUNDLED_AI_ID)) {
++  if (!actions_initialized_ || !HasAction(HIVEY_BUNDLED_AI_ID) ||
++      (prefs->GetBoolean(hivey::kHiveyToolsUnpinned) &&
++       prefs->GetBoolean(hivey::kHiveyBundledUnpinned))) {
+     return;
+   }
+-  prefs->SetBoolean(hivey::kHiveyToolsUnpinned, true);
+-  if (IsActionPinned(HIVEY_BUNDLED_AI_ID)) {
+-    SetActionVisibility(HIVEY_BUNDLED_AI_ID, false);
++  if (!prefs->GetBoolean(hivey::kHiveyToolsUnpinned)) {
++    prefs->SetBoolean(hivey::kHiveyToolsUnpinned, true);
++    if (IsActionPinned(HIVEY_BUNDLED_AI_ID)) {
++      SetActionVisibility(HIVEY_BUNDLED_AI_ID, false);
++    }
++  }
++  if (!prefs->GetBoolean(hivey::kHiveyBundledUnpinned)) {
++    prefs->SetBoolean(hivey::kHiveyBundledUnpinned, true);
++    for (const HiveyBundledExtension& bundled : kHiveyBundledExtensions) {
++      if (HasAction(bundled.id) && IsActionPinned(bundled.id)) {
++        SetActionVisibility(bundled.id, false);
++      }
++    }
+   }
+ }
+ 
+--- a/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.h
++++ b/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.h
+@@ -70,7 +70,7 @@
+   // TODO(crbug.com/465832180): Replace constant based width final max width for
+   // view.
+   static constexpr int kUncollapsedMaxWidth = 400;
+-  static constexpr int kCollapsedWidth = 48;
++  static constexpr int kCollapsedWidth = 44;
+   // TODO(crbug.com/465833741): Determine snapping behavior.
+   static constexpr int kCollapseSnapWidth =
+       (kUncollapsedMinWidth + kCollapsedWidth) / 2;
+--- a/chrome/browser/ui/views/tabs/common/tab_view_vertical_layout.cc
++++ b/chrome/browser/ui/views/tabs/common/tab_view_vertical_layout.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "chrome/browser/ui/views/tabs/common/tab_view_vertical_layout.h"
+ 
++#include "ui/views/background.h"
++
+ #include "base/command_line.h"
+ #include "chrome/browser/glic/browser_ui/tab_underline_view.h"
+ #include "chrome/browser/ui/layout_constants.h"
+@@ -28,6 +30,9 @@
+ 
+ void TabViewVerticalLayout::OnInstalled(views::View* host) {
+   TabView::LayoutManager::OnInstalled(host);
++  // Hivey: the close button is a small round one, in the corner.
++  TabView().close_button_->SetBackground(views::CreateRoundedRectBackground(
++      SkColorSetRGB(0x2a, 0x2a, 0x30), 8));
+   tab_children_configs_ = {
+       TabChildConfig(TabView().close_button_, kIconDesignWidth, kDefaultPadding,
+                      /*align_leading=*/false,
+@@ -67,7 +72,7 @@
+   for (const auto& child : tab_children_configs_) {
+     if (is_centered && TabView().collapsed_ && !TabView().pinned_ &&
+         child.view == TabView().close_button_) {
+-      constexpr int kCornerCloseSize = 18;
++      constexpr int kCornerCloseSize = 16;
+       layouts.child_layouts.emplace_back(
+           child.view.get(), IsChildVisible(child.view, width),
+           gfx::Rect(0, 0, kCornerCloseSize, kCornerCloseSize));
+--- a/chrome/browser/ui/views/tabs/common/unpinned_tab_container_view_layout.cc
++++ b/chrome/browser/ui/views/tabs/common/unpinned_tab_container_view_layout.cc
+@@ -25,7 +25,7 @@
+ #include "ui/views/view_utils.h"
+ 
+ namespace {
+-constexpr int kTabVerticalPadding = 2;
++constexpr int kTabVerticalPadding = 6;
+ }  // namespace
+ 
+ UnpinnedTabContainerViewLayout::UnpinnedTabContainerViewLayout(
+--- a/chrome/browser/ui/views/tabs/vertical/top_container_button.cc
++++ b/chrome/browser/ui/views/tabs/vertical/top_container_button.cc
+@@ -57,8 +57,13 @@
+     return;
+   }
+ 
++  // Hivey: the button that opens the tabs keeps the mark's violet.
++  const SkColor kViolet = SkColorSetRGB(0x8b, 0x5c, 0xf6);
+   const ui::ImageModel image_model = ui::ImageModel::FromVectorIcon(
+-      *icon_image.GetVectorIcon().vector_icon(), GetForegroundColor(),
++      *icon_image.GetVectorIcon().vector_icon(),
++      icon_image.GetVectorIcon().color() == kViolet
++          ? ui::ColorVariant(kViolet)
++          : ui::ColorVariant(GetForegroundColor()),
+       GetLayoutConstant(LayoutConstant::kVerticalTabStripButtonIconSize));
+ 
+   SetImageModel(views::Button::STATE_NORMAL, image_model);
+--- a/chrome/browser/ui/views/toolbar/hivey_assistant_panel.cc
++++ b/chrome/browser/ui/views/toolbar/hivey_assistant_panel.cc
+@@ -24,6 +24,8 @@
+ #include "content/public/browser/web_contents.h"
+ #include "ui/gfx/font_list.h"
+ #include "ui/gfx/geometry/rect_conversions.h"
++#include "ui/gfx/paint_vector_icon.h"
++#include "ui/gfx/vector_icon_types.h"
+ #include "ui/gfx/text_utils.h"
+ #include "chrome/browser/hivey/bundled_extensions.h"
+ #include "chrome/browser/profiles/profile.h"
+@@ -120,22 +122,23 @@
+   // views::View:
+   void OnPaint(gfx::Canvas* canvas) override {
+     const double t = (base::TimeTicks::Now() - start_).InSecondsF();
+-    if (LocationBarView* location = browser_view_->GetLocationBarView()) {
+-      gfx::RectF rect(location->GetLocalBounds());
+-      views::View::ConvertRectToTarget(location, this, &rect);
+-      DrawLight(canvas, rect, rect.height() / 2, 1.5f, t / 4.2);
+-    }
+-    if (views::View* page = browser_view_->multi_contents_view()) {
+-      gfx::RectF rect(page->GetLocalBounds());
+-      views::View::ConvertRectToTarget(page, this, &rect);
+-      rect.Outset(1.5f);
+-      const float radius =
+-          views::LayoutProvider::Get()->GetCornerRadiusMetric(
+-              views::ShapeContextTokens::kContentSeparatorRadius) +
+-          1.5f;
+-      DrawLight(canvas, rect, radius, 2.5f, t / 6.0);
+-      DrawActivity(canvas, rect, radius, t);
++    const gfx::RectF rect = PageRect();
++    if (rect.IsEmpty()) {
++      return;
+     }
++    const float radius = views::LayoutProvider::Get()->GetCornerRadiusMetric(
++        views::ShapeContextTokens::kContentSeparatorRadius);
++    // A thin line all around, so that no side looks forgotten; the two lights
++    // run on it, half a turn apart.
++    cc::PaintFlags line = GradientFlags(rect);
++    line.setStyle(cc::PaintFlags::kStroke_Style);
++    line.setStrokeWidth(1);
++    line.setAlphaf(.45f);
++    canvas->DrawPath(SkPath::RRect(gfx::RectFToSkRect(rect), radius, radius),
++                     line);
++    DrawLight(canvas, rect, radius, 2, t / 7.0);
++    DrawLight(canvas, rect, radius, 2, t / 7.0 + .5);
++    DrawActivity(canvas, rect, radius, t);
+   }
+ 
+   // views::ViewObserver:
+@@ -152,7 +155,19 @@
+       return;
+     }
+     last_paint_ = timestamp;
+-    SchedulePaint();
++    // Only the page's edges, unless something is drawn over the page.
++    const gfx::Rect edge = gfx::ToEnclosingRect(PageRect());
++    if (!HiveyAiEngine::Get().activity().empty() || edge.IsEmpty()) {
++      SchedulePaint();
++      return;
++    }
++    constexpr int kEdge = 8;
++    SchedulePaintInRect(gfx::Rect(edge.x(), edge.y(), edge.width(), kEdge));
++    SchedulePaintInRect(
++        gfx::Rect(edge.x(), edge.bottom() - kEdge, edge.width(), kEdge));
++    SchedulePaintInRect(gfx::Rect(edge.x(), edge.y(), kEdge, edge.height()));
++    SchedulePaintInRect(
++        gfx::Rect(edge.right() - kEdge, edge.y(), kEdge, edge.height()));
+   }
+   void OnCompositingShuttingDown(ui::Compositor* compositor) override {
+     Stop();
+@@ -170,6 +185,19 @@
+   void OnHiveyAiPending() override {}
+ 
+  private:
++  // The page, inside what the window shows: part of it was drawn outside.
++  gfx::RectF PageRect() {
++    views::View* page = browser_view_->multi_contents_view();
++    if (!page) {
++      return gfx::RectF();
++    }
++    gfx::RectF rect(page->GetLocalBounds());
++    views::View::ConvertRectToTarget(page, this, &rect);
++    rect.Intersect(gfx::RectF(GetLocalBounds()));
++    rect.Inset(1.5f);
++    return rect;
++  }
++
+   void Start() {
+     if (compositor_ || !GetWidget() || !GetWidget()->GetCompositor()) {
+       return;
+@@ -263,7 +291,7 @@
+       float length;
+       float alpha;
+       float extra;
+-    } kLayers[] = {{0.34f, 0.22f, 1.0f}, {0.20f, 0.5f, 0.5f}, {0.08f, 1.0f, 0}};
++    } kLayers[] = {{0.20f, 0.25f, 1.0f}, {0.12f, 0.55f, 0.5f}, {0.05f, 1.0f, 0}};
+     for (const auto& layer : kLayers) {
+       const float on = layer.length * perimeter;
+       const float intervals[] = {on, perimeter - on};
+@@ -331,6 +359,17 @@
+   return ui::ImageModel::FromImageSkia(
+       gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f));
+ }
++
++ui::ImageModel GradientIcon(const gfx::VectorIcon& icon) {
++  constexpr int kSize = 40;
++  gfx::Canvas canvas(gfx::Size(kSize, kSize), 1.0f, /*is_opaque=*/false);
++  gfx::PaintVectorIcon(&canvas, icon, kSize, SK_ColorWHITE);
++  cc::PaintFlags flags = GradientFlags(gfx::RectF(0, 0, kSize, kSize));
++  flags.setBlendMode(SkBlendMode::kSrcIn);
++  canvas.DrawRect(gfx::RectF(0, 0, kSize, kSize), flags);
++  return ui::ImageModel::FromImageSkia(
++      gfx::ImageSkia::CreateFromBitmap(canvas.GetBitmap(), 2.0f));
++}
+ 
+ ui::ImageModel AiWebIcon() {
+   constexpr int kSize = 40;
+--- a/chrome/browser/ui/views/toolbar/hivey_assistant_panel.h
++++ b/chrome/browser/ui/views/toolbar/hivey_assistant_panel.h
+@@ -12,6 +12,10 @@
+ class BrowserView;
+ class BrowserWindowInterface;
+ 
++namespace gfx {
++struct VectorIcon;
++}
++
+ namespace hivey {
+ 
+ // Shows the assistant's side panel in this window, in a mode of the bundled
+@@ -26,6 +30,8 @@
+ ui::ImageModel AssistantIcon();
+ // The AI providers' web chats: a globe in the colors of the mark.
+ ui::ImageModel AiWebIcon();
++// A vector icon in the colors of the mark.
++ui::ImageModel GradientIcon(const gfx::VectorIcon& icon);
+ // The colored light around the address bar and the page while the AI works.
+ void AddAssistantLight(BrowserView* browser_view);
+ 
+--- a/chrome/browser/ui/views/toolbar/hivey_private_button.cc
++++ b/chrome/browser/ui/views/toolbar/hivey_private_button.cc
+@@ -5,6 +5,8 @@
+ #include "chrome/browser/ui/views/toolbar/hivey_private_button.h"
+ 
+ #include "base/functional/bind.h"
++#include "base/strings/string_util.h"
++#include "chrome/browser/ui/views/toolbar/hivey_assistant_panel.h"
+ #include "chrome/app/vector_icons/vector_icons.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser_commands.h"
+@@ -29,15 +31,17 @@
+                                         base::Unretained(this))),
+       profile_(profile),
+       choices_(std::make_unique<ui::SimpleMenuModel>(this)) {
+-  const std::u16string name =
+-      l10n_util::GetStringUTF16(IDS_NEW_INCOGNITO_WINDOW);
++  const std::u16string item = l10n_util::GetStringUTF16(IDS_NEW_INCOGNITO_WINDOW);
++  // The menu's "&" is a shortcut: not in a tooltip.
++  std::u16string name = item;
++  base::ReplaceSubstringsAfterOffset(&name, 0, u"&", u"");
+   choices_->AddItemWithIcon(
+-      kPrivateWindow, name,
++      kPrivateWindow, item,
+       ui::ImageModel::FromVectorIcon(kIncognitoIcon, ui::kColorMenuIcon, 16));
+   choices_->AddItemWithIcon(kTorWindow,
+                             l10n_util::GetStringUTF16(IDS_HIVEY_TOR_WINDOW),
+                             tor_icon);
+-  SetVectorIcons(kIncognitoIcon, kIncognitoIcon);
++  SetImageModel(views::Button::STATE_NORMAL, GradientIcon(kIncognitoIcon));
+   SetTooltipText(name);
+   GetViewAccessibility().SetName(name);
+ }
+--- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
+@@ -2264,10 +2264,10 @@
+       {"tabsearch", hivey_tab_search_button_},
+       {"performance", hivey_performance_button_},
+       {"extensions", extensions_container_},
+-      {"tor", hivey_tor_button_},
+       {"pinned", pinned_toolbar_actions_container_},
+       {"avatar", avatar_},
+       {"menu", app_menu_button_},
++      {"tor", hivey_tor_button_},
+       {"aiweb", hivey_ai_web_button_},
+       {"assistant", hivey_assistant_button_},
+   };
