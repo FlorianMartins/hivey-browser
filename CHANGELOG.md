@@ -3,6 +3,24 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4725 — 6 novembre 2026
+
+### Un agent qui agit
+- **Plus de réflexion sur les modèles locaux** : environ 25 % de temps en moins par tâche d'agent avec Qwen3.8 27B, à
+  précision égale (15 à 16 sur 16 au banc). Le petit modèle Qwen3.5 4B perd environ 2 points sur 30 au banc : c'est le
+  prix de la vitesse, et le chantier suivant.
+- **« Lance la musique… »** part directement sur le lecteur, même tapé vite (« lanc ela musique… »).
+- **La détection de l'agent** laisse au modèle le temps de se charger, au lieu d'abandonner et de partir en recherche web.
+
+### Le modèle s'installe avec le navigateur
+- **Téléchargement automatique au premier lancement**, en arrière-plan, du modèle adapté à ton PC. Il vient de Hugging
+  Face et c'est la seule requête ajoutée au démarrage : une fois seulement, et rien sur toi n'est envoyé (vérifié en CI).
+- **Nouvelle section « IA locale » dans les paramètres** : Auto ou un modèle au choix, à installer, utiliser ou supprimer.
+
+### Animations
+- **Sur la page, l'effet du mode agent** quand l'IA prend le contrôle, et rien d'autre : plus de lumière du navigateur.
+- **Dans le panneau, seule la zone de saisie s'anime**, sans défaut dans les angles. **Le bouton Stop est rouge.**
+
 ## 156.0.8078.4724 — 6 novembre 2026
 
 ### Un meilleur modèle, et les cartes graphiques courantes

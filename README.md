@@ -6,7 +6,8 @@ A modern, deeply customizable, **privacy-first** web browser for Windows and
 Linux, built on [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium).
 
 - **Private by construction.** No Google services, no telemetry, no crash or
-  usage reporting, no field trials, no request at startup (checked in CI).
+  usage reporting, no field trials, no request at startup (checked in CI). The
+  only exception is the local AI model, downloaded once on the very first start.
 - **Blocks more than ads.** uBlock Origin Lite is built in: ads, trackers,
   cookie banners, tracking parameters in links, malware sites, with cosmetic
   filtering and a blocked-requests counter.

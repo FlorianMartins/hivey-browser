@@ -4,12 +4,15 @@
 
 1. **Nothing leaves the machine unless the user asked for it.** No
    telemetry, no usage statistics, no crash reports, no field trials, no
-   "phone home" at startup.
+   "phone home" at startup. The one download you did not ask for by a click is
+   the local AI model, on the very first start: the assistant cannot work
+   without it. It sends nothing about you.
 2. **No accounts required.** No Google sign-in or sync.
 3. **Features that talk to a server say so** and can be turned off (the
    update check, the Hivey AI sidebar when it comes).
 4. **Claims are checked, not assumed.** `tests/startup_requests.py` starts a
-   fresh profile with a NetLog capture and fails on any request;
+   fresh profile with a NetLog capture, then starts it again, and fails on any
+   request but the model's on the first start;
    `tests/cdp_checks.py` measures each protection on a running browser. Both
    run on Windows and Linux before every release.
 
@@ -115,6 +118,7 @@ still work: Chromium opens their login page without secure DNS.
 | --- | --- | --- | --- |
 | Encrypted DNS probe to `dns.quad9.net` | at startup in secure DNS mode | a DNS query for a probe name, no browsing data | Settings > Security > secure DNS |
 | Proxy auto-discovery (`wpad`, Windows) | at startup, when Windows' *Automatically detect settings* is on | a DNS lookup on the local network only | Windows Settings > Network > Proxy |
+| Local AI model from Hugging Face (`huggingface.co`, redirects to its `hf.co` storage) | once, on the very first start, then only when you ask for another model in Hivey Settings > Local AI | a plain GET for the model file, no browsing data | close the browser while it downloads: it does not start again by itself |
 | Update check: `hivey-update.json` (+ signature) from GitHub releases | 10 minutes after start, then every 12 hours | a plain GET without cookies | Hivey Settings > About > Automatic updates |
 | Update download (installer) | only when a newer, correctly signed release exists | a plain GET without cookies | same |
 
