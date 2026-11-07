@@ -3,6 +3,17 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4726 — 7 novembre 2026
+
+### Le navigateur fait le travail, l'IA décide
+- **Un agent bien plus rapide** : une page arrive avec ses liens et ses boutons, une action avec la page qu'elle ouvre,
+  un formulaire se remplit en un seul geste, et la recherche web rend ses sources directement. Avec Qwen3.8 27B, une tâche
+  d'agent prend environ 15 s au lieu de 80 sur nos essais ; avec Qwen3.5 4B, environ 5 s, et elle réussit plus souvent.
+- **L'agent connaît la date du jour** : « le week-end prochain » n'est plus deviné.
+- **Les formulaires des vrais sites sont mieux compris** : les libellés des champs sont enfin lus.
+- **Les pages piégées** : le texte qu'une page adresse aux assistants IA est retiré avant d'arriver au modèle.
+- **Fini les boucles** : une action qui ramène deux fois la même page n'est plus répétée.
+
 ## 156.0.8078.4725 — 6 novembre 2026
 
 ### Un agent qui agit
