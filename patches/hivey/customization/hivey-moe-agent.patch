@@ -1,0 +1,329 @@
+# Hivey 4727: a mixture-of-experts model from 16 GB, the Hivey agent 4B below, models in parts
+--- a/chrome/browser/ui/hivey/hivey_ai_engine.cc
++++ b/chrome/browser/ui/hivey/hivey_ai_engine.cc
+@@ -62,43 +62,83 @@
+ 
+ namespace {
+ 
+-// The model, by what the PC has. On a graphics card a large model answers at
+-// once: on the bench this very file of Qwen3.8 27B gave 28, 30 and 30 out of 30
+-// with its reasoning. With reasoning the 4B gave 24, 24, 25 and the 9B 22, 24,
+-// 25: the 9B stays a choice, not what Auto takes. On a CPU the larger ones are
+-// far too slow.
+-struct Model {
+-  const char* name;
++// The model, by what the PC has, from the browser's own agent tasks (three
++// runs each, RTX 3090). Qwen3.6 35B-A3B is a mixture of experts: 35B
++// parameters, 3B at work for each word, so it writes on a processor as fast as
++// a 4B. In 2 bits (11.5 GB) it scored 27, 28 and 30 out of 30 on the bench and
++// 12/12 on unseen agent tasks, the 27B's level at twice its speed. Below 16 GB
++// of memory, the Hivey agent 4B: Qwen3.5 4B trained for these tasks (26, 24,
++// 27; the original 4B 23, 25, 21). A file GitHub keeps comes in parts of less
++// than 2 GiB; llama.cpp loads them all from the first.
++struct Part {
+   const char* url;
+   const char* sha256;
+   int64_t bytes;
++};
++struct Model {
++  const char* name;
++  std::array<Part, 2> parts;
++  size_t count;
+   int context;
++
++  int64_t bytes() const {
++    int64_t total = 0;
++    for (size_t i = 0; i < count; ++i) {
++      total += parts[i].bytes;
++    }
++    return total;
++  }
+ };
+ constexpr Model kModelSmall = {
+     "Qwen3.5 2B",
+-    "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/"
+-    "f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf",
+-    "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+-    1280835840, 8192};
++    {{{"https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/"
++       "f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf",
++       "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
++       1280835840}}},
++    1,
++    8192};
+ constexpr Model kModelDefault = {
+     "Qwen3.5 4B",
+-    "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/"
+-    "e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
+-    "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+-    2740937888, 16384};
+-
++    {{{"https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/"
++       "e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
++       "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
++       2740937888}}},
++    1,
++    16384};
++constexpr Model kModelAgent = {
++    "Hivey agent 4B",
++    {{{"https://github.com/FlorianMartins/hivey-finetune/releases/download/models-1/hivey-agent-4b-Q4_K_M-00001-of-00002.gguf",
++       "b792449bc5b4791c14111b7232d8da9994a8b994ad9e47ad61e74ce358c0fd75",
++       1803653824},
++      {"https://github.com/FlorianMartins/hivey-finetune/releases/download/models-1/hivey-agent-4b-Q4_K_M-00002-of-00002.gguf",
++       "c71a863904cae09d34620789da578b8dabbf678c40a5c0d9cb46ec9199d3e9f1",
++       905150464}}},
++    2,
++    16384};
+ constexpr Model kModelMedium = {
+     "Qwen3.5 9B",
+-    "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/"
+-    "3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
+-    "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+-    5680522464, 32768};
++    {{{"https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/"
++       "3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
++       "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
++       5680522464}}},
++    1,
++    32768};
+ constexpr Model kModelLarge = {
+     "Qwen3.8 27B",
+-    "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/"
+-    "4ca720788d1e01f1bff70c033e0d0028fd02e502/Qwen3.8-27B-UD-Q3_K_XL.gguf",
+-    "8c2a45ff85e7674ca185ec8eb6cdeab0e617ed9d8018caed0b64380eb2a67a5e",
+-    13146393504, 32768};
++    {{{"https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/"
++       "4ca720788d1e01f1bff70c033e0d0028fd02e502/Qwen3.8-27B-UD-Q3_K_XL.gguf",
++       "8c2a45ff85e7674ca185ec8eb6cdeab0e617ed9d8018caed0b64380eb2a67a5e",
++       13146393504}}},
++    1,
++    32768};
++constexpr Model kModelMoe = {
++    "Qwen3.6 35B-A3B",
++    {{{"https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/"
++       "a483e9e6cbd595906af30beda3187c2663a1118c/Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
++       "2be7ef1ed7e1af8b10d3829102cf9a6c2bd5ddb64d675b4ece23a60799403d43",
++       11522702304}}},
++    1,
++    32768};
+ 
+ // The memory of the largest real graphics card, in GiB, 0 when there is none.
+ int VideoMemoryGiB() {
+@@ -140,17 +180,17 @@
+   return VideoMemoryGiB() >= 4;
+ }
+ 
+-// What suits this machine.
++// What suits this machine, by its memory: a "16 GB" PC reports a little less.
+ const Model& AutoModel() {
+-  const int memory = base::SysInfo::AmountOfTotalPhysicalMemory().InGiB();
+-  if (VideoMemoryGiB() >= 14 && memory >= 16) {
+-    return kModelLarge;
++  const int64_t mib = base::SysInfo::AmountOfTotalPhysicalMemory().InMiB();
++  if (mib >= 15 * 1024) {
++    return kModelMoe;
+   }
+-  return memory < 12 ? kModelSmall : kModelDefault;
++  return mib < 6 * 1024 ? kModelSmall : kModelAgent;
+ }
+ 
+-constexpr const Model* kModels[] = {&kModelLarge, &kModelMedium, &kModelDefault,
+-                                    &kModelSmall};
++constexpr const Model* kModels[] = {&kModelMoe,   &kModelLarge,   &kModelMedium,
++                                    &kModelAgent, &kModelDefault, &kModelSmall};
+ 
+ // What the user chose, null for automatic. Written on the UI thread, read from
+ // file tasks that were posted after it.
+@@ -176,8 +216,23 @@
+   return user_data.AppendASCII("HiveyAI");
+ }
+ 
++base::FilePath PathOf(const Part& part) {
++  return ModelDir().AppendASCII(GURL(part.url).ExtractFileName());
++}
++
++// The file llama.cpp is given: the first part, which names the others.
+ base::FilePath PathOf(const Model& model) {
+-  return ModelDir().AppendASCII(GURL(model.url).ExtractFileName());
++  return PathOf(model.parts[0]);
++}
++
++bool IsInstalled(const Model& model) {
++  for (size_t i = 0; i < model.count; ++i) {
++    if (base::GetFileSize(PathOf(model.parts[i])).value_or(0) !=
++        model.parts[i].bytes) {
++      return false;
++    }
++  }
++  return true;
+ }
+ 
+ constexpr char kChoiceFile[] = "chosen-model";
+@@ -190,7 +245,7 @@
+   base::ReadFileToString(ModelDir().AppendASCII(kChoiceFile), &choice);
+   std::vector<std::string> installed;
+   for (const Model* model : kModels) {
+-    if (base::GetFileSize(PathOf(*model)).value_or(0) == model->bytes) {
++    if (IsInstalled(*model)) {
+       installed.emplace_back(model->name);
+     }
+   }
+@@ -202,8 +257,10 @@
+   base::WriteFile(ModelDir().AppendASCII(kChoiceFile), name);
+ }
+ 
+-void DeleteModel(base::FilePath path) {
+-  base::DeleteFile(path);
++void DeleteModel(std::vector<base::FilePath> paths) {
++  for (const base::FilePath& path : paths) {
++    base::DeleteFile(path);
++  }
+ }
+ 
+ // Right after the answer, with a margin for what ends a turn (the title of the
+@@ -236,15 +293,17 @@
+       })");
+ 
+ // Blocking: size and sha256; a good file takes its final name.
+-bool VerifyModel(const base::FilePath& part, const base::FilePath& path) {
++bool VerifyModel(const base::FilePath& part,
++                 const base::FilePath& path,
++                 int64_t bytes,
++                 std::string sha256) {
+   bool ok = false;
+   {
+     base::File file(part, base::File::FLAG_OPEN | base::File::FLAG_READ);
+     std::array<uint8_t, crypto::hash::kSha256Size> digest;
+-    ok = file.IsValid() && file.GetLength() == ChosenModel().bytes &&
++    ok = file.IsValid() && file.GetLength() == bytes &&
+          crypto::hash::HashFile(crypto::hash::kSha256, &file, digest) &&
+-         base::EqualsCaseInsensitiveASCII(base::HexEncode(digest),
+-                                          ChosenModel().sha256);
++         base::EqualsCaseInsensitiveASCII(base::HexEncode(digest), sha256);
+   }
+   if (!ok) {
+     base::DeleteFile(part);
+@@ -386,9 +445,13 @@
+     Kill();
+     state_ = State::kChecking;
+   }
++  std::vector<base::FilePath> paths;
++  for (size_t i = 0; i < model->count; ++i) {
++    paths.push_back(PathOf(model->parts[i]));
++  }
+   base::ThreadPool::PostTaskAndReply(
+       FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+-      base::BindOnce(&DeleteModel, PathOf(*model)),
++      base::BindOnce(&DeleteModel, std::move(paths)),
+       base::BindOnce(&HiveyAiEngine::CheckModels, weak_factory_.GetWeakPtr(),
+                      false));
+   Notify();
+@@ -436,17 +499,17 @@
+   for (const Model* model : kModels) {
+     base::DictValue item;
+     item.Set("name", model->name);
+-    item.Set("gb", std::round(static_cast<double>(model->bytes) / (1 << 30) * 10) / 10);
++    item.Set("gb", std::round(static_cast<double>(model->bytes()) / (1 << 30) * 10) / 10);
+     item.Set("installed", std::ranges::contains(installed_, model->name));
+     item.Set("auto", model == &AutoModel());
+     // Larger than what suits this machine.
+-    item.Set("slow", model->bytes > AutoModel().bytes);
++    item.Set("slow", model->bytes() > AutoModel().bytes());
+     models.Append(std::move(item));
+   }
+   dict.Set("models", std::move(models));
+   dict.Set("modelName", ChosenModel().name);
+   dict.Set("modelGb",
+-           std::round(static_cast<double>(ChosenModel().bytes) / (1 << 30) * 10) /
++           std::round(static_cast<double>(ChosenModel().bytes()) / (1 << 30) * 10) /
+                10);
+   return dict;
+ }
+@@ -472,8 +535,16 @@
+   state_ = State::kDownloading;
+   progress_ = 0;
+   error_.clear();
++  part_ = 0;
++  done_bytes_ = 0;
++  DownloadPart();
++}
++
++// One part after the other, each checked before the next is fetched.
++void HiveyAiEngine::DownloadPart() {
++  const Model& model = ChosenModel();
+   auto request = std::make_unique<network::ResourceRequest>();
+-  request->url = GURL(ChosenModel().url);
++  request->url = GURL(model.parts[part_].url);
+   request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+   loader_ = network::SimpleURLLoader::Create(std::move(request),
+                                              kTrafficAnnotation);
+@@ -483,15 +554,17 @@
+   loader_->SetOnDownloadProgressCallback(base::BindRepeating(
+       [](HiveyAiEngine* engine, uint64_t current) {
+         // At most one update per percent.
+-        const double progress =
+-            std::min(0.99, static_cast<double>(current) / ChosenModel().bytes);
++        const double progress = std::min(
++            0.99, static_cast<double>(engine->done_bytes_ + current) /
++                      ChosenModel().bytes());
+         if (progress - engine->progress_ >= 0.01) {
+           engine->progress_ = progress;
+           engine->Notify();
+         }
+       },
+       base::Unretained(this)));
+-  const base::FilePath part = ModelPath().AddExtensionASCII("part");
++  const base::FilePath part =
++      PathOf(model.parts[part_]).AddExtensionASCII("part");
+   base::ThreadPool::PostTask(
+       FROM_HERE, {base::MayBlock()},
+       base::BindOnce(
+@@ -510,9 +583,11 @@
+     Fail("download");
+     return;
+   }
++  const Part& part = ChosenModel().parts[part_];
+   base::ThreadPool::PostTaskAndReplyWithResult(
+       FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
+-      base::BindOnce(&VerifyModel, path, ModelPath()),
++      base::BindOnce(&VerifyModel, path, PathOf(part), part.bytes,
++                     std::string(part.sha256)),
+       base::BindOnce(&HiveyAiEngine::OnVerified, weak_factory_.GetWeakPtr()));
+ }
+ 
+@@ -521,6 +596,15 @@
+     Fail("verification");
+     return;
+   }
++  const Model& model = ChosenModel();
++  if (part_ < model.count) {
++    done_bytes_ += model.parts[part_].bytes;
++    ++part_;
++    if (part_ < model.count) {
++      DownloadPart();
++      return;
++    }
++  }
+   state_ = State::kOff;
+   progress_ = 1;
+   if (!std::ranges::contains(installed_, ChosenModel().name)) {
+--- a/chrome/browser/ui/hivey/hivey_ai_engine.h
++++ b/chrome/browser/ui/hivey/hivey_ai_engine.h
+@@ -98,6 +98,7 @@
+   void CheckModels(bool download);
+   void OnModelsRead(bool download,
+                     std::pair<std::string, std::vector<std::string>> models);
++  void DownloadPart();
+   void OnDownloaded(base::FilePath path);
+   void OnVerified(bool ok);
+   void Fail(const std::string& error);
+@@ -125,6 +126,9 @@
+   base::win::ScopedHandle job_;
+ #endif
+   std::unique_ptr<network::SimpleURLLoader> loader_;
++  // The part being downloaded, and the bytes of the parts before it.
++  size_t part_ = 0;
++  int64_t done_bytes_ = 0;
+   base::OneShotTimer idle_timer_;
+   base::RepeatingTimer game_timer_;
+   std::unique_ptr<network::SimpleURLLoader> health_loader_;

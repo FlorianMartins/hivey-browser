@@ -11,7 +11,7 @@ start after the first one looks like. Allowed: browser-internal URLs
 (dns.quad9.net), and on Windows the proxy auto-discovery lookup (wpad, local
 network only, when the system's "Automatically detect settings" is on). None
 carries user data. On the very first start only, the local AI model's download
-from Hugging Face is allowed too. Anything else fails the check.
+from Hugging Face or GitHub is allowed too. Anything else fails the check.
 
 Linux CI runs it under xvfb-run; Windows CI runs it on the installed
 browser.
@@ -31,9 +31,10 @@ INTERNAL_SCHEMES = {'chrome', 'chrome-extension', 'chrome-untrusted', 'data', 'b
 # The encrypted DNS probe, and Windows' proxy auto-discovery (WPAD), which
 # follows the system setting and only asks the local network.
 ALLOWED_HOSTS = {'dns.quad9.net', 'wpad'}
-# The local AI model, fetched once on the very first start, and where Hugging
-# Face redirects the file to.
-MODEL_DOMAINS = ('huggingface.co', 'hf.co')
+# The local AI model, fetched once on the very first start: from Hugging Face
+# (and its storage), or the Hivey agent model from a GitHub release (and the
+# storage GitHub redirects to).
+MODEL_DOMAINS = ('huggingface.co', 'hf.co', 'github.com', 'githubusercontent.com')
 
 
 def load_netlog(path):

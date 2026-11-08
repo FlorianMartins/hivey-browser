@@ -333,15 +333,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('browser')
     parser.add_argument('out', type=Path)
-    parser.add_argument('--model-from', type=Path)
+    # Its parts, when the model comes in several (the Hivey agent 4B).
+    parser.add_argument('--model-from', type=Path, nargs='+')
     # For a machine where the site itself refuses to play (this project's server).
     parser.add_argument('--no-play-check', action='store_true')
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     profile = Path(tempfile.mkdtemp(prefix='hivey-ai-'))
-    if args.model_from:
-        (profile / 'HiveyAI').mkdir()
-        shutil.copy2(args.model_from, profile / 'HiveyAI' / args.model_from.name)
+    # The small agent model, whatever Auto would take on this machine: the MoE it takes from 16 GB is
+    # 11.5 GB, far too much for a CI runner's processor.
+    (profile / 'HiveyAI').mkdir()
+    (profile / 'HiveyAI' / 'chosen-model').write_text('Hivey agent 4B')
+    for part in args.model_from or []:
+        shutil.copy2(part, profile / 'HiveyAI' / part.name)
     command = [args.browser, f'--user-data-dir={profile}', f'--remote-debugging-port={PORT}', '--no-first-run',
                '--password-store=basic', '--hivey-ai-test-game', '--window-size=1440,900']
     if sys.platform != 'win32':
