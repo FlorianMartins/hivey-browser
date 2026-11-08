@@ -3,6 +3,18 @@
 Chaque version publiée de Hivey Browser, ce qui change pour vous. Les versions
 suivent Chromium : `156.0.8078.4701` = Chromium 156.0.8078.47, révision Hivey 1.
 
+## 156.0.8078.4727 — 9 novembre 2026
+
+### Une IA locale bien plus précise, même sans carte graphique
+- **Dès 16 Go de mémoire : Qwen3.6 35B-A3B.** C'est un modèle « à experts » : 35 milliards de paramètres, mais
+  seulement 3 milliards au travail pour chaque mot. Il égale Qwen3.8 27B sur nos tâches d'agent (27 à 30 sur 30 au
+  banc, 12/12 sur des tâches jamais vues), deux fois plus vite, et tourne sans carte graphique à la vitesse d'un petit
+  modèle. Fichier de 11,5 Go.
+- **En dessous de 16 Go : le Hivey agent 4B**, Qwen3.5 4B entraîné pour l'agent du navigateur : recherches web avec
+  sources, comparaisons, formulaires, musique. 26 sur 30 au banc contre 23 pour le 4B d'origine, et au niveau de
+  Qwen3.8 27B sur des tâches jamais vues. Fichier de 2,7 Go, téléchargé depuis les releases GitHub du projet.
+- Les autres modèles restent au choix dans **Paramètres Hivey > IA locale**.
+
 ## 156.0.8078.4726 — 7 novembre 2026
 
 ### Le navigateur fait le travail, l'IA décide

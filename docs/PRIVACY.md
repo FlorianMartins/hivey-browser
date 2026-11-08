@@ -118,7 +118,7 @@ still work: Chromium opens their login page without secure DNS.
 | --- | --- | --- | --- |
 | Encrypted DNS probe to `dns.quad9.net` | at startup in secure DNS mode | a DNS query for a probe name, no browsing data | Settings > Security > secure DNS |
 | Proxy auto-discovery (`wpad`, Windows) | at startup, when Windows' *Automatically detect settings* is on | a DNS lookup on the local network only | Windows Settings > Network > Proxy |
-| Local AI model from Hugging Face (`huggingface.co`, redirects to its `hf.co` storage) | once, on the very first start, then only when you ask for another model in Hivey Settings > Local AI | a plain GET for the model file, no browsing data | close the browser while it downloads: it does not start again by itself |
+| Local AI model from Hugging Face (`huggingface.co`, redirects to its `hf.co` storage), or the Hivey agent model from this project's GitHub releases (`github.com`, redirects to `githubusercontent.com`) | once, on the very first start, then only when you ask for another model in Hivey Settings > Local AI | a plain GET for the model file, no browsing data | close the browser while it downloads: it does not start again by itself |
 | Update check: `hivey-update.json` (+ signature) from GitHub releases | 10 minutes after start, then every 12 hours | a plain GET without cookies | Hivey Settings > About > Automatic updates |
 | Update download (installer) | only when a newer, correctly signed release exists | a plain GET without cookies | same |
 
